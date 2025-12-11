@@ -2,20 +2,20 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { LayoutGrid, FileText, Folder, Users, Moon, Sun, LogOut } from "lucide-react"
+import { LayoutGrid, Folder, Wrench, Users, Moon, Sun, LogOut, User } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   {
+    title: "Room",
+    url: "/room",
+    icon: User,
+  },
+  {
     title: "Dashboard",
     url: "/dashboard",
     icon: LayoutGrid,
-  },
-  {
-    title: "Documents",
-    url: "/documents",
-    icon: FileText,
   },
   {
     title: "Projects",
@@ -23,8 +23,13 @@ const navItems = [
     icon: Folder,
   },
   {
-    title: "Team",
-    url: "/team",
+    title: "Revue Tool",
+    url: "/revue-tool",
+    icon: Wrench,
+  },
+  {
+    title: "Clients",
+    url: "/clients",
     icon: Users,
   },
 ]
@@ -71,7 +76,10 @@ export function AppSidebar({ user }: AppSidebarProps) {
         {navItems.map((item) => (
           <button
             key={item.title}
-            onClick={() => setActiveItem(item.title)}
+            onClick={() => {
+              setActiveItem(item.title)
+              router.push(item.url)
+            }}
             className={cn(
               "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
               activeItem === item.title
