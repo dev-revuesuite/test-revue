@@ -153,7 +153,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
   return (
     <header className="flex items-center justify-end h-16 px-6 border-b bg-background gap-4">
       {/* Add button */}
-      <Button className="bg-[#334AC0] hover:bg-[#2a3da6] text-white gap-2 h-9">
+      <Button className="bg-black hover:bg-gray-800 text-white gap-2 h-9">
         <Plus className="w-4 h-4" />
         Add
       </Button>
@@ -166,7 +166,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
             onClick={() => setMessageDialogOpen(true)}
           >
             <MessageSquare className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-[#334AC0] rounded-full text-white text-[10px] flex items-center justify-center font-medium px-1">
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-black rounded-full text-white text-[10px] flex items-center justify-center font-medium px-1">
               {messages.filter(m => !m.read).length}
             </span>
           </button>
@@ -180,7 +180,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
               <div key={msg.id} className={`p-3 border-b last:border-0 hover:bg-muted/50 cursor-pointer ${!msg.read ? 'bg-muted/30' : ''}`}>
                 <div className="flex items-start gap-3">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-[#334AC0] text-white text-xs">
+                    <AvatarFallback className="bg-black text-white text-xs">
                       {msg.sender.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
@@ -212,7 +212,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
               <div key={msg.id} className={`p-3 border-b last:border-0 hover:bg-muted/50 cursor-pointer rounded-lg ${!msg.read ? 'bg-muted/30' : ''}`}>
                 <div className="flex items-start gap-3">
                   <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-[#334AC0] text-white text-sm">
+                    <AvatarFallback className="bg-black text-white text-sm">
                       {msg.sender.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
@@ -238,7 +238,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
             onClick={() => setNotificationDialogOpen(true)}
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-[#334AC0] rounded-full text-white text-[10px] flex items-center justify-center font-medium px-1">
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-black rounded-full text-white text-[10px] flex items-center justify-center font-medium px-1">
               {notifications.filter(n => !n.read).length}
             </span>
           </button>
@@ -251,7 +251,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
             {notifications.slice(0, 3).map((notif) => (
               <div key={notif.id} className={`p-3 border-b last:border-0 hover:bg-muted/50 cursor-pointer ${!notif.read ? 'bg-muted/30' : ''}`}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${!notif.read ? 'bg-[#334AC0]' : 'bg-transparent'}`} />
+                  <div className={`w-2 h-2 rounded-full mt-2 ${!notif.read ? 'bg-black' : 'bg-transparent'}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{notif.title}</p>
                     <p className="text-xs text-muted-foreground truncate">{notif.description}</p>
@@ -279,7 +279,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
             {notifications.map((notif) => (
               <div key={notif.id} className={`p-3 border-b last:border-0 hover:bg-muted/50 cursor-pointer rounded-lg ${!notif.read ? 'bg-muted/30' : ''}`}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${!notif.read ? 'bg-[#334AC0]' : 'bg-gray-300'}`} />
+                  <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${!notif.read ? 'bg-black' : 'bg-gray-300'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium">{notif.title}</p>
@@ -300,7 +300,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
             <button className="flex items-center justify-center rounded-full hover:opacity-80 transition-opacity">
               <Avatar className="h-8 w-8 rounded-full">
                 <AvatarImage src={user.avatar} alt={user.name} className="rounded-full" />
-                <AvatarFallback className="bg-[#334AC0] text-white text-sm rounded-full">
+                <AvatarFallback className="bg-black text-white text-sm rounded-full">
                   {getInitials(user.name)}
                 </AvatarFallback>
               </Avatar>
@@ -311,7 +311,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="bg-[#334AC0] text-white">
+                  <AvatarFallback className="bg-black text-white">
                     {getInitials(user.name)}
                   </AvatarFallback>
                 </Avatar>

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { LayoutGrid, Folder, Wrench, Users, Moon, Sun, LogOut, User } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -44,7 +44,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ user }: AppSidebarProps) {
   const router = useRouter()
-  const [activeItem, setActiveItem] = React.useState(navItems[0].title)
+  const pathname = usePathname()
   const [isDark, setIsDark] = React.useState(false)
 
   React.useEffect(() => {
@@ -73,24 +73,24 @@ export function AppSidebar({ user }: AppSidebarProps) {
     <aside className="flex flex-col h-svh w-16 border-r bg-background">
       {/* Navigation Items */}
       <nav className="flex flex-col items-center gap-2 py-4 flex-1">
-        {navItems.map((item) => (
-          <button
-            key={item.title}
-            onClick={() => {
-              setActiveItem(item.title)
-              router.push(item.url)
-            }}
-            className={cn(
-              "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
-              activeItem === item.title
-                ? "bg-[#334AC0] text-white"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            title={item.title}
-          >
-            <item.icon className="w-5 h-5" />
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = pathname === item.url
+          return (
+            <button
+              key={item.title}
+              onClick={() => router.push(item.url)}
+              className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
+                isActive
+                  ? "bg-[#334AC0] text-white"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              title={item.title}
+            >
+              <item.icon className="w-5 h-5" />
+            </button>
+          )
+        })}
       </nav>
 
       {/* Bottom Actions */}
