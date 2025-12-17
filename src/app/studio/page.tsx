@@ -2,9 +2,9 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
-import { RoomContent } from "@/components/room/room-content"
+import { StudioContent } from "@/components/studio/studio-content"
 
-export default async function RoomPage() {
+export default async function StudioPage() {
   const supabase = await createClient()
 
   const {
@@ -26,7 +26,7 @@ export default async function RoomPage() {
       <StudioHeader user={userData} />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
-        <RoomContent />
+        <StudioContent user={userData} />
       </div>
     </div>
   )

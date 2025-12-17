@@ -336,7 +336,7 @@ export function RevueToolContainer({
     setIsReuploadModalOpen(true)
   }
 
-  const handleReuploadConfirm = useCallback((completedFeedbackIds: string[]) => {
+  const handleReuploadConfirm = useCallback((completedFeedbackIds: string[], file: File) => {
     // Mark feedbacks as completed
     setFeedbacks((prev) =>
       prev.map((f) => ({
@@ -345,8 +345,21 @@ export function RevueToolContainer({
       }))
     )
     setIsReuploadModalOpen(false)
-    // TODO: Trigger file upload dialog here
+
+    // Create a preview URL for the uploaded file
+    const imageUrl = URL.createObjectURL(file)
+
+    // TODO: Upload file to storage and get permanent URL
+    // For now, log the upload details
+    console.log("Creating new iteration with file:", file.name, file.size)
     console.log("Completed feedbacks:", completedFeedbackIds)
+    console.log("Image preview URL:", imageUrl)
+
+    // In production, you would:
+    // 1. Upload the file to your storage (Supabase, S3, etc.)
+    // 2. Create a new iteration record in the database
+    // 3. Carry over uncompleted feedbacks to the new iteration
+    // 4. Update the iterations state with the new iteration
   }, [])
 
   const handleMarkerClick = useCallback((markerId: string) => {
@@ -420,13 +433,17 @@ export function RevueToolContainer({
     setHighlightedFeedbackId(null)
   }, [])
 
-  const handleReply = useCallback((feedbackId: string, content: string) => {
+  const handleReply = useCallback((feedbackId: string, content: string, quotedComment?: { user_name: string; content: string }) => {
     const newComment = {
       id: `comment-${Date.now()}`,
       feedback_id: feedbackId,
       content,
       user_name: "You",
       created_at: new Date().toISOString(),
+      ...(quotedComment && {
+        quoted_text: quotedComment.content,
+        quoted_user: quotedComment.user_name,
+      }),
     }
     setFeedbacks((prev) =>
       prev.map((f) =>

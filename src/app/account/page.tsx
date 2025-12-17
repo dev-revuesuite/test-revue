@@ -2,10 +2,19 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
-import { RoomContent } from "@/components/room/room-content"
+import { AccountContent } from "@/components/account/account-content"
 
-export default async function RoomPage() {
+type TabType = "profile" | "settings" | "team" | "organisations" | "billing" | "roles"
+
+const validTabs: TabType[] = ["profile", "settings", "team", "organisations", "billing", "roles"]
+
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
   const supabase = await createClient()
+  const params = await searchParams
 
   const {
     data: { user },
@@ -21,12 +30,16 @@ export default async function RoomPage() {
     avatar: user.user_metadata?.avatar_url || "",
   }
 
+  // Validate and get the tab from URL params
+  const tabParam = params.tab as TabType | undefined
+  const defaultTab: TabType = tabParam && validTabs.includes(tabParam) ? tabParam : "profile"
+
   return (
     <div className="flex flex-col h-svh">
       <StudioHeader user={userData} />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
-        <RoomContent />
+        <AccountContent user={userData} defaultTab={defaultTab} />
       </div>
     </div>
   )

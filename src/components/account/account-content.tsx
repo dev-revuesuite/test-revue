@@ -1,0 +1,1676 @@
+"use client"
+
+import * as React from "react"
+import { useState } from "react"
+import {
+  User,
+  Building2,
+  Shield,
+  Settings,
+  Plus,
+  Search,
+  ChevronDown,
+  Check,
+  Trash2,
+  MapPin,
+  X,
+  Pencil,
+  ArrowUpDown,
+  BarChart3,
+  CreditCard,
+  Receipt,
+  Download
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface AccountContentProps {
+  user: {
+    name: string
+    email: string
+    avatar: string
+  }
+  defaultTab?: TabType
+}
+
+type TabType = "profile" | "settings" | "team" | "organisations" | "billing" | "roles"
+
+// Mock data for team members
+const mockTeamMembers = [
+  { id: "1", name: "Aashish Soni", email: "aashishsoni910@gmail.com", phone: "+91 9876543210", role: "Team admin", designation: "Creative Director", avatar: "https://i.pravatar.cc/150?img=1", status: "active", organisations: ["Revue Studios", "StreamCorn Media"], stats: { qcMistake: { current: 5, total: 7 }, avgTime: { current: 60, total: 120 }, feedback: { current: 8, total: 12 } }, mostBriefFrom: "Senshi", mostCommonIssue: "Alignment", workingOn: [{ client: "Balwaan", projects: ["B2C Project", "CRM tool", "Customer mapping"] }, { client: "Senshi", projects: ["Logo designing"] }, { client: "Opt-culture", projects: ["Branding"] }] },
+  { id: "2", name: "Stream Corn", email: "streamcorn@gmail.com", phone: "+91 8765432109", role: "Member", designation: "Graphic Designer", avatar: "https://i.pravatar.cc/150?img=2", status: "active", organisations: ["StreamCorn Media"], stats: { qcMistake: { current: 3, total: 10 }, avgTime: { current: 45, total: 90 }, feedback: { current: 9, total: 10 } }, mostBriefFrom: "Balwaan", mostCommonIssue: "Typography", workingOn: [{ client: "Balwaan", projects: ["Social Media"] }] },
+  { id: "3", name: "Liam Patel", email: "liam@example.com", phone: "+44 1234567890", role: "Editor", designation: "Video Editor", avatar: "https://i.pravatar.cc/150?img=3", status: "inactive", organisations: ["Design Labs"], stats: { qcMistake: { current: 2, total: 8 }, avgTime: { current: 120, total: 180 }, feedback: { current: 7, total: 8 } }, mostBriefFrom: "Design Labs", mostCommonIssue: "Color grading", workingOn: [{ client: "Design Labs", projects: ["Product Video"] }] },
+  { id: "4", name: "Ava Sharma", email: "ava@example.com", phone: "+91 7654321098", role: "Viewer", designation: "UI/UX Designer", avatar: "https://i.pravatar.cc/150?img=4", status: "active", organisations: ["Revue Studios", "Design Labs"], stats: { qcMistake: { current: 4, total: 6 }, avgTime: { current: 80, total: 100 }, feedback: { current: 10, total: 12 } }, mostBriefFrom: "Senshi", mostCommonIssue: "Spacing", workingOn: [{ client: "Senshi", projects: ["App Redesign", "Website"] }] },
+  { id: "5", name: "Ethan Gupta", email: "ethan@example.com", phone: "+91 6543210987", role: "Editor", designation: "Content Creator", avatar: "https://i.pravatar.cc/150?img=5", status: "active", organisations: ["Revue Studios"], stats: { qcMistake: { current: 1, total: 5 }, avgTime: { current: 30, total: 60 }, feedback: { current: 8, total: 9 } }, mostBriefFrom: "Opt-culture", mostCommonIssue: "Grammar", workingOn: [{ client: "Opt-culture", projects: ["Blog posts", "Social copy"] }] },
+  { id: "6", name: "Olivia Singh", email: "olivia@example.com", phone: "+91 5432109876", role: "Member", designation: "Social Media Manager", avatar: "https://i.pravatar.cc/150?img=6", status: "active", organisations: ["StreamCorn Media", "Revue Studios"], stats: { qcMistake: { current: 2, total: 4 }, avgTime: { current: 25, total: 50 }, feedback: { current: 9, total: 10 } }, mostBriefFrom: "Balwaan", mostCommonIssue: "Hashtags", workingOn: [{ client: "Balwaan", projects: ["Instagram", "LinkedIn"] }] },
+]
+
+const mockRoles = [
+  { id: "1", name: "Team admin", description: "Full access to all features and settings", members: 2, permissions: ["manage_team", "manage_billing", "manage_roles", "edit_content", "view_content"] },
+  { id: "2", name: "Editor", description: "Can edit and publish content", members: 5, permissions: ["edit_content", "view_content"] },
+  { id: "3", name: "Viewer", description: "Can only view content", members: 12, permissions: ["view_content"] },
+  { id: "4", name: "Member", description: "Standard team member access", members: 8, permissions: ["edit_content", "view_content"] },
+]
+
+const mockOrganisations = [
+  { id: "1", name: "Revue Studios", email: "contact@revuestudios.com", phone: "+91 9876543210", website: "revuestudios.com", industry: "Design & Creative", size: "11-50", country: "India", state: "Uttar Pradesh", logo: "" },
+  { id: "2", name: "StreamCorn Media", email: "hello@streamcorn.com", phone: "+91 8765432109", website: "streamcorn.com", industry: "Technology", size: "1-10", country: "India", state: "Maharashtra", logo: "" },
+  { id: "3", name: "Design Labs", email: "info@designlabs.io", phone: "+44 2012345678", website: "designlabs.io", industry: "Design & Creative", size: "51-200", country: "United Kingdom", state: "London", logo: "" },
+]
+
+const allPermissions = [
+  { id: "manage_team", label: "Manage Team", description: "Add, remove and manage team members" },
+  { id: "manage_billing", label: "Manage Billing", description: "Access billing and subscription settings" },
+  { id: "manage_roles", label: "Manage Roles", description: "Create and edit roles" },
+  { id: "edit_content", label: "Edit Content", description: "Create and edit projects and files" },
+  { id: "view_content", label: "View Content", description: "View projects and files" },
+  { id: "delete_content", label: "Delete Content", description: "Delete projects and files" },
+  { id: "manage_clients", label: "Manage Clients", description: "Add and manage clients" },
+  { id: "export_data", label: "Export Data", description: "Export data and reports" },
+]
+
+export function AccountContent({ user, defaultTab = "profile" }: AccountContentProps) {
+  const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
+
+  const tabs: { id: TabType; label: string }[] = [
+    { id: "profile", label: "Profile" },
+    { id: "settings", label: "Settings" },
+    { id: "team", label: "Team" },
+    { id: "organisations", label: "Organisations" },
+    { id: "billing", label: "Billing" },
+    { id: "roles", label: "Manage Roles" },
+  ]
+
+  return (
+    <main className="flex-1 overflow-auto bg-background">
+      <div className="w-full px-8 py-8">
+        {/* Page Title */}
+        <h1 className="text-2xl font-semibold text-foreground mb-6">
+          {user.name}&apos;s account
+        </h1>
+
+        {/* Tabs - Notion style */}
+        <div className="border-b border-border mb-8">
+          <nav className="flex gap-0">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "px-4 py-2.5 text-sm transition-colors relative",
+                  activeTab === tab.id
+                    ? "text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab.label}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-foreground" />
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="animate-in fade-in duration-200">
+          {activeTab === "profile" && <ProfileTab user={user} />}
+          {activeTab === "settings" && <SettingsTab />}
+          {activeTab === "team" && <TeamTab />}
+          {activeTab === "organisations" && <OrganisationsTab />}
+          {activeTab === "billing" && <BillingTab />}
+          {activeTab === "roles" && <RolesTab />}
+        </div>
+      </div>
+    </main>
+  )
+}
+
+// Section Header Component
+function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-1 mt-8 first:mt-0">
+      {icon}
+      <h2 className="text-base font-semibold text-foreground">{title}</h2>
+    </div>
+  )
+}
+
+// Editable Row Component
+function EditableRow({
+  label,
+  value,
+  onSave,
+  type = "text"
+}: {
+  label: string
+  value: string
+  onSave: (value: string) => void
+  type?: "text" | "email" | "tel"
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState(value)
+
+  const handleSave = () => {
+    onSave(editValue)
+    setIsEditing(false)
+  }
+
+  const handleCancel = () => {
+    setEditValue(value)
+    setIsEditing(false)
+  }
+
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-border">
+      <span className="text-sm text-foreground">{label}</span>
+      <div className="flex items-center gap-3">
+        {isEditing ? (
+          <div className="flex items-center gap-2">
+            <input
+              type={type}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="px-3 py-1.5 border border-border rounded bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              autoFocus
+            />
+            <button onClick={handleSave} className="text-sm text-[#5C6ECD] font-medium">Save</button>
+            <button onClick={handleCancel} className="text-sm text-muted-foreground font-medium">Cancel</button>
+          </div>
+        ) : (
+          <>
+            <span className="text-sm text-muted-foreground">{value}</span>
+            <button onClick={() => setIsEditing(true)} className="text-sm text-foreground hover:text-muted-foreground font-medium">
+              Edit
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Profile Tab
+function ProfileTab({ user }: { user: { name: string; email: string; avatar: string } }) {
+  const [profile, setProfile] = useState({
+    fullName: user.name,
+    email: user.email,
+    phone: "+91 9876543210",
+    designation: "Graphic Designer",
+    industries: ["Technology", "Design"],
+    country: "India",
+    state: "Uttar Pradesh",
+  })
+
+  return (
+    <div className="w-full">
+      {/* Profile Photo */}
+      <SectionHeader title="Profile Photo" />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-4 border-b border-border">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-muted overflow-hidden">
+              {user.avatar ? (
+                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-2xl font-semibold text-muted-foreground">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Upload a photo to personalize your account</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
+            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Personal Information */}
+      <SectionHeader title="Personal Information" icon={<User className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <EditableRow label="Full Name" value={profile.fullName} onSave={(v) => setProfile({...profile, fullName: v})} />
+        <EditableRow label="Email Address" value={profile.email} onSave={(v) => setProfile({...profile, email: v})} type="email" />
+        <EditableRow label="Phone Number" value={profile.phone} onSave={(v) => setProfile({...profile, phone: v})} type="tel" />
+        <EditableRow label="Designation" value={profile.designation} onSave={(v) => setProfile({...profile, designation: v})} />
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Industries</span>
+          <div className="flex items-center gap-2">
+            {profile.industries.map((industry, idx) => (
+              <span key={idx} className="px-2 py-1 text-xs bg-muted rounded">{industry}</span>
+            ))}
+            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Location */}
+      <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Country</span>
+          <Dropdown
+            value={profile.country}
+            options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
+            onChange={(v) => setProfile({...profile, country: v})}
+          />
+        </div>
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">State</span>
+          <Dropdown
+            value={profile.state}
+            options={["Uttar Pradesh", "Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"]}
+            onChange={(v) => setProfile({...profile, state: v})}
+          />
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <SectionHeader title="Danger zone" />
+      <div className="border-t border-border">
+        <div className="py-4">
+          <p className="text-sm text-muted-foreground mb-3">
+            Closing your Account will permanently delete all your account information and you will no longer be able to use any of the services.
+          </p>
+          <button className="text-sm text-destructive hover:text-destructive/80 font-medium">
+            Delete my account
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Settings Tab
+function SettingsTab() {
+  const [settings, setSettings] = useState({
+    appearance: "System",
+    timezone: "(GMT +05:30) India Standard Time",
+  })
+
+  return (
+    <div className="w-full">
+      {/* Preferences */}
+      <SectionHeader title="Preferences" icon={<Settings className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Appearance</span>
+          <Dropdown
+            value={settings.appearance}
+            options={["System", "Light", "Dark"]}
+            onChange={(v) => setSettings({...settings, appearance: v})}
+          />
+        </div>
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Timezone</span>
+          <Dropdown
+            value={settings.timezone}
+            options={["(GMT +05:30) India Standard Time", "(GMT +00:00) UTC", "(GMT -05:00) Eastern Time", "(GMT -08:00) Pacific Time"]}
+            onChange={(v) => setSettings({...settings, timezone: v})}
+          />
+        </div>
+      </div>
+
+      {/* Notifications */}
+      <SectionHeader title="Notifications" />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <div>
+            <span className="text-sm text-foreground">Email notifications</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Receive email updates about activity</p>
+          </div>
+          <Toggle checked={true} onChange={() => {}} />
+        </div>
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <div>
+            <span className="text-sm text-foreground">Push notifications</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Receive push notifications on your devices</p>
+          </div>
+          <Toggle checked={true} onChange={() => {}} />
+        </div>
+      </div>
+
+      {/* Security */}
+      <SectionHeader title="Security" icon={<Shield className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <div>
+            <span className="text-sm text-foreground">Two-factor authentication</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Add an extra layer of security to your account</p>
+          </div>
+          <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Set up</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Team Tab - Matching the reference design
+function TeamTab() {
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("Active")
+  const [groupFilter, setGroupFilter] = useState("All")
+  const [members, setMembers] = useState(mockTeamMembers)
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([])
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [performanceMember, setPerformanceMember] = useState<typeof mockTeamMembers[0] | null>(null)
+  const [editingMember, setEditingMember] = useState<typeof mockTeamMembers[0] | null>(null)
+
+  const roleOptions = ["Team admin", "Editor", "Viewer", "Member"]
+
+  const filteredMembers = members.filter((member) => {
+    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === "All" ||
+      (statusFilter === "Active" && member.status === "active") ||
+      (statusFilter === "Inactive" && member.status === "inactive")
+    return matchesSearch && matchesStatus
+  })
+
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    if (sortOrder === "asc") return a.name.localeCompare(b.name)
+    return b.name.localeCompare(a.name)
+  })
+
+  const toggleSelectAll = () => {
+    if (selectedMembers.length === sortedMembers.length) {
+      setSelectedMembers([])
+    } else {
+      setSelectedMembers(sortedMembers.map(m => m.id))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    if (selectedMembers.includes(id)) {
+      setSelectedMembers(selectedMembers.filter(m => m !== id))
+    } else {
+      setSelectedMembers([...selectedMembers, id])
+    }
+  }
+
+  const updateMemberRole = (id: string, newRole: string) => {
+    setMembers(members.map(m => m.id === id ? { ...m, role: newRole } : m))
+  }
+
+  const deleteMember = (id: string) => {
+    setMembers(members.filter(m => m.id !== id))
+    setSelectedMembers(selectedMembers.filter(m => m !== id))
+  }
+
+  const updateMember = (updatedMember: typeof mockTeamMembers[0]) => {
+    setMembers(members.map(m => m.id === updatedMember.id ? updatedMember : m))
+  }
+
+  return (
+    <div className="w-full">
+      {/* Filter Bar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Filter by:</span>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 w-48 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <FilterDropdown
+            label="Status"
+            value={statusFilter}
+            options={["Active", "Inactive", "All"]}
+            onChange={setStatusFilter}
+            filled
+          />
+          <FilterDropdown
+            label="Group"
+            value={groupFilter}
+            options={["All", "Admins", "Editors", "Viewers"]}
+            onChange={setGroupFilter}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          {selectedMembers.length > 0 && (
+            <button
+              onClick={() => {
+                setMembers(members.filter(m => !selectedMembers.includes(m.id)))
+                setSelectedMembers([])
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete ({selectedMembers.length})
+            </button>
+          )}
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Invite Member
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="border-t border-border">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-3 pr-4 w-8">
+                <Checkbox
+                  checked={selectedMembers.length === sortedMembers.length && sortedMembers.length > 0}
+                  onChange={toggleSelectAll}
+                />
+              </th>
+              <th className="text-left py-3 px-4">
+                <button
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                  className="flex items-center gap-1 text-sm font-medium text-foreground hover:text-muted-foreground"
+                >
+                  Name
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                </button>
+              </th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Role</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Email</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Organisations</th>
+              <th className="text-left py-3 px-4 w-32 text-sm font-medium text-muted-foreground">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedMembers.map((member) => (
+              <tr key={member.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                <td className="py-3 pr-4">
+                  <Checkbox
+                    checked={selectedMembers.includes(member.id)}
+                    onChange={() => toggleSelect(member.id)}
+                  />
+                </td>
+                <td className="py-3 px-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-muted overflow-hidden">
+                      <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">{member.name}</p>
+                  </div>
+                </td>
+                <td className="py-3 px-4">
+                  <Dropdown
+                    value={member.role}
+                    options={roleOptions}
+                    onChange={(newRole) => updateMemberRole(member.id, newRole)}
+                  />
+                </td>
+                <td className="py-3 px-4 text-sm text-muted-foreground">{member.email}</td>
+                <td className="py-3 px-4">
+                  <div className="flex flex-wrap gap-1 max-w-[200px]">
+                    {member.organisations.slice(0, 2).map((org, idx) => (
+                      <span key={idx} className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-border">
+                        {org}
+                      </span>
+                    ))}
+                    {member.organisations.length > 2 && (
+                      <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-border">
+                        +{member.organisations.length - 2}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="py-3 px-4">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPerformanceMember(member)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                      title="View Performance"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingMember(member)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                      title="Edit Member"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteMember(member.id)}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete Member"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Invite Member Modal */}
+      {showInviteModal && (
+        <InviteMemberModal onClose={() => setShowInviteModal(false)} />
+      )}
+
+      {/* Performance Modal */}
+      {performanceMember && (
+        <PerformanceModal
+          member={performanceMember}
+          onClose={() => setPerformanceMember(null)}
+          onDelete={() => {
+            deleteMember(performanceMember.id)
+            setPerformanceMember(null)
+          }}
+        />
+      )}
+
+      {/* Edit Member Modal */}
+      {editingMember && (
+        <EditMemberModal
+          member={editingMember}
+          onClose={() => setEditingMember(null)}
+          onSave={(updatedMember) => {
+            updateMember(updatedMember)
+            setEditingMember(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Edit Member Modal
+function EditMemberModal({
+  member,
+  onClose,
+  onSave
+}: {
+  member: typeof mockTeamMembers[0]
+  onClose: () => void
+  onSave: (member: typeof mockTeamMembers[0]) => void
+}) {
+  const [name, setName] = useState(member.name)
+  const [email, setEmail] = useState(member.email)
+  const [phone, setPhone] = useState(member.phone)
+  const [designation, setDesignation] = useState(member.designation)
+  const [role, setRole] = useState(member.role)
+  const [organisations, setOrganisations] = useState(member.organisations.join(", "))
+
+  const handleSave = () => {
+    onSave({
+      ...member,
+      name,
+      email,
+      phone,
+      designation,
+      role,
+      organisations: organisations.split(",").map(i => i.trim()).filter(Boolean)
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-foreground">Edit Team Member</h2>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Full Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter full name"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Email Address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter email address"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Phone Number</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Enter phone number"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Designation</label>
+            <input
+              type="text"
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              placeholder="e.g. Graphic Designer"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
+            <Dropdown
+              value={role}
+              options={["Team admin", "Editor", "Viewer", "Member"]}
+              onChange={setRole}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Organisations</label>
+            <input
+              type="text"
+              value={organisations}
+              onChange={(e) => setOrganisations(e.target.value)}
+              placeholder="e.g. Revue Studios, Design Labs"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Separate multiple organisations with commas</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim() || !email.trim()}
+            className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Invite Member Modal
+function InviteMemberModal({ onClose }: { onClose: () => void }) {
+  const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
+  const [designation, setDesignation] = useState("")
+  const [role, setRole] = useState("Member")
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-foreground">Invite Team Member</h2>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Full Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter full name"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Email Address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter email address"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Designation</label>
+            <input
+              type="text"
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              placeholder="e.g. Graphic Designer"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
+            <Dropdown
+              value={role}
+              options={["Team admin", "Editor", "Viewer", "Member"]}
+              onChange={setRole}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!email.trim() || !name.trim()}
+            className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Send Invite
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Performance Modal
+function PerformanceModal({
+  member,
+  onClose,
+  onDelete
+}: {
+  member: typeof mockTeamMembers[0]
+  onClose: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-muted overflow-hidden">
+              <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <span className="text-base font-semibold text-foreground">{member.name}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>{member.designation}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{member.email}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{member.phone}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onDelete}
+              className="text-sm text-destructive hover:text-destructive/80 font-medium"
+            >
+              REMOVE
+            </button>
+            <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+              <X className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto px-6 py-4">
+          {/* Organisation Tags */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {member.organisations.map((org, idx) => (
+              <span
+                key={idx}
+                className="px-3 py-1.5 text-sm bg-background border border-border rounded-full text-foreground"
+              >
+                {org}
+              </span>
+            ))}
+          </div>
+
+          {/* Brief & Issue Info */}
+          <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+            <div>
+              <span className="text-muted-foreground">Most brief from :</span>
+              <a href="#" className="ml-2 text-[#5C6ECD] hover:underline">{member.mostBriefFrom}</a>
+            </div>
+            <div className="text-right">
+              <span className="text-muted-foreground">Most common QC issue :</span>
+              <span className="ml-2 text-foreground">{member.mostCommonIssue}</span>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-6 mb-8">
+            <div className="text-center">
+              <div className="flex items-end justify-center gap-1 mb-2">
+                <div className="w-12 bg-muted rounded-t-lg relative overflow-hidden" style={{ height: '80px' }}>
+                  <div
+                    className="absolute bottom-0 left-0 right-0 bg-[#5C6ECD] rounded-t-lg"
+                    style={{ height: `${(member.stats.qcMistake.current / member.stats.qcMistake.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                {member.stats.qcMistake.current}/{member.stats.qcMistake.total}
+              </p>
+              <p className="text-xs text-muted-foreground">Average QC Mistake<br />per Iteration</p>
+            </div>
+            <div className="text-center">
+              <div className="flex items-end justify-center gap-1 mb-2">
+                <div className="w-12 bg-muted rounded-t-lg relative overflow-hidden" style={{ height: '80px' }}>
+                  <div
+                    className="absolute bottom-0 left-0 right-0 bg-[#5C6ECD] rounded-t-lg flex items-center justify-center"
+                    style={{ height: `${(member.stats.avgTime.current / member.stats.avgTime.total) * 100}%` }}
+                  >
+                    <span className="text-white text-xs font-medium">{member.stats.avgTime.current}m</span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                {member.stats.avgTime.current}m/{member.stats.avgTime.total}
+              </p>
+              <p className="text-xs text-muted-foreground">Average Time for<br />per feedback</p>
+            </div>
+            <div className="text-center">
+              <div className="flex items-end justify-center gap-1 mb-2">
+                <div className="w-12 bg-muted rounded-t-lg relative overflow-hidden" style={{ height: '80px' }}>
+                  <div
+                    className="absolute bottom-0 left-0 right-0 bg-[#5C6ECD] rounded-t-lg"
+                    style={{ height: `${(member.stats.feedback.current / member.stats.feedback.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                {member.stats.feedback.current}/{member.stats.feedback.total}
+              </p>
+              <p className="text-xs text-muted-foreground">Average feedback<br />received</p>
+            </div>
+          </div>
+
+          {/* Working On */}
+          <div>
+            <h3 className="text-sm font-semibold text-[#5C6ECD] mb-3">Working on :</h3>
+            <div className="border border-border rounded-lg divide-y divide-border">
+              {member.workingOn.map((work, idx) => (
+                <div key={idx} className="flex items-center justify-between px-4 py-3">
+                  <span className="text-sm font-medium text-foreground">{work.client}</span>
+                  <span className="text-sm text-muted-foreground text-right">
+                    {work.projects.join(", ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Organisations Tab
+function OrganisationsTab() {
+  const [orgs, setOrgs] = useState(mockOrganisations)
+  const [selectedOrgId, setSelectedOrgId] = useState(mockOrganisations[0]?.id || "")
+
+  const selectedOrg = orgs.find(org => org.id === selectedOrgId)
+
+  const updateOrg = (id: string, field: string, value: string) => {
+    setOrgs(orgs.map(org => org.id === id ? { ...org, [field]: value } : org))
+  }
+
+  return (
+    <div className="w-full">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Organisations</h2>
+            <p className="text-sm text-muted-foreground">Manage your organisations</p>
+          </div>
+          {/* Organisation Selector */}
+          <OrgSelector
+            orgs={orgs}
+            selectedId={selectedOrgId}
+            onChange={setSelectedOrgId}
+          />
+        </div>
+        <button className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors">
+          <Plus className="w-4 h-4" />
+          Add Organisation
+        </button>
+      </div>
+
+      {/* Selected Organisation Details */}
+      {selectedOrg && (
+        <div>
+          {/* Organisation Logo */}
+          <SectionHeader title="Organisation Logo" />
+          <div className="border-t border-border">
+            <div className="flex items-center justify-between py-4 border-b border-border">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                  {selectedOrg.logo ? (
+                    <img src={selectedOrg.logo} alt={selectedOrg.name} className="w-full h-full object-cover rounded-lg" />
+                  ) : (
+                    <Building2 className="w-8 h-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Upload your organisation logo</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Upload</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Organisation Information */}
+          <SectionHeader title="Organisation Information" icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
+          <div className="border-t border-border">
+            <EditableRow label="Organisation Name" value={selectedOrg.name} onSave={(v) => updateOrg(selectedOrg.id, "name", v)} />
+            <EditableRow label="Email Address" value={selectedOrg.email} onSave={(v) => updateOrg(selectedOrg.id, "email", v)} type="email" />
+            <EditableRow label="Phone Number" value={selectedOrg.phone} onSave={(v) => updateOrg(selectedOrg.id, "phone", v)} type="tel" />
+            <EditableRow label="Website" value={selectedOrg.website} onSave={(v) => updateOrg(selectedOrg.id, "website", v)} />
+            <div className="flex items-center justify-between py-3 border-b border-border">
+              <span className="text-sm text-foreground">Industry</span>
+              <Dropdown
+                value={selectedOrg.industry}
+                options={["Design & Creative", "Technology", "Marketing", "Finance", "Healthcare", "Education"]}
+                onChange={(v) => updateOrg(selectedOrg.id, "industry", v)}
+              />
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border">
+              <span className="text-sm text-foreground">Organisation Size</span>
+              <Dropdown
+                value={selectedOrg.size}
+                options={["1-10", "11-50", "51-200", "201-500", "500+"]}
+                onChange={(v) => updateOrg(selectedOrg.id, "size", v)}
+              />
+            </div>
+          </div>
+
+          {/* Location */}
+          <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
+          <div className="border-t border-border">
+            <div className="flex items-center justify-between py-3 border-b border-border">
+              <span className="text-sm text-foreground">Country</span>
+              <Dropdown
+                value={selectedOrg.country}
+                options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
+                onChange={(v) => updateOrg(selectedOrg.id, "country", v)}
+              />
+            </div>
+            <div className="flex items-center justify-between py-3 border-b border-border">
+              <span className="text-sm text-foreground">State</span>
+              <Dropdown
+                value={selectedOrg.state}
+                options={["Uttar Pradesh", "Maharashtra", "Karnataka", "Tamil Nadu", "Delhi", "London"]}
+                onChange={(v) => updateOrg(selectedOrg.id, "state", v)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Billing Tab
+function BillingTab() {
+  const mockInvoices = [
+    { id: "INV-001", date: "Dec 1, 2024", amount: "₹4,999", status: "Paid" },
+    { id: "INV-002", date: "Nov 1, 2024", amount: "₹4,999", status: "Paid" },
+    { id: "INV-003", date: "Oct 1, 2024", amount: "₹4,999", status: "Paid" },
+    { id: "INV-004", date: "Sep 1, 2024", amount: "₹4,999", status: "Paid" },
+  ]
+
+  return (
+    <div className="w-full">
+      {/* Current Plan */}
+      <SectionHeader title="Current Plan" icon={<CreditCard className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <div className="py-6 border-b border-border">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-lg font-semibold text-foreground">Pro Plan</h3>
+                <span className="px-2 py-0.5 text-xs bg-[#DBFE52] text-black rounded-full font-medium">Active</span>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Unlimited projects, team members, and advanced features
+              </p>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-bold text-foreground">₹4,999</span>
+                <span className="text-sm text-muted-foreground">/month</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
+                Change Plan
+              </button>
+              <button className="px-4 py-2 text-sm text-destructive hover:text-destructive/80 font-medium">
+                Cancel Subscription
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Method */}
+      <SectionHeader title="Payment Method" icon={<CreditCard className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-4 border-b border-border">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-8 rounded bg-gradient-to-r from-[#1a1f71] to-[#2b3990] flex items-center justify-center">
+              <span className="text-white text-xs font-bold">VISA</span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">•••• •••• •••• 4242</p>
+              <p className="text-xs text-muted-foreground">Expires 12/2026</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
+            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Remove</button>
+          </div>
+        </div>
+        <button className="flex items-center gap-2 py-3 text-sm text-[#5C6ECD] hover:text-[#5C6ECD]/80 font-medium">
+          <Plus className="w-4 h-4" />
+          Add payment method
+        </button>
+      </div>
+
+      {/* Billing History */}
+      <SectionHeader title="Billing History" icon={<Receipt className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Invoice</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
+              <th className="text-left py-3 px-4 w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {mockInvoices.map((invoice) => (
+              <tr key={invoice.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                <td className="py-3 px-4 text-sm font-medium text-foreground">{invoice.id}</td>
+                <td className="py-3 px-4 text-sm text-muted-foreground">{invoice.date}</td>
+                <td className="py-3 px-4 text-sm text-foreground">{invoice.amount}</td>
+                <td className="py-3 px-4">
+                  <span className="px-2 py-0.5 text-xs bg-[#10b981]/10 text-[#10b981] rounded-full font-medium">
+                    {invoice.status}
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors">
+                    <Download className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// Roles Tab - Similar design to Team
+function RolesTab() {
+  const [roles, setRoles] = useState(mockRoles)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([])
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+
+  const filteredRoles = roles.filter((role) =>
+    role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    role.description.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const sortedRoles = [...filteredRoles].sort((a, b) => {
+    if (sortOrder === "asc") return a.name.localeCompare(b.name)
+    return b.name.localeCompare(a.name)
+  })
+
+  const toggleSelectAll = () => {
+    if (selectedRoles.length === sortedRoles.length) {
+      setSelectedRoles([])
+    } else {
+      setSelectedRoles(sortedRoles.map(r => r.id))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    if (selectedRoles.includes(id)) {
+      setSelectedRoles(selectedRoles.filter(r => r !== id))
+    } else {
+      setSelectedRoles([...selectedRoles, id])
+    }
+  }
+
+  const handleCreateRole = (newRole: { name: string; description: string; permissions: string[] }) => {
+    const role = {
+      id: String(roles.length + 1),
+      ...newRole,
+      members: 0
+    }
+    setRoles([...roles, role])
+    setShowCreateModal(false)
+  }
+
+  const deleteRole = (id: string) => {
+    setRoles(roles.filter(r => r.id !== id))
+  }
+
+  return (
+    <div className="w-full">
+      {/* Filter Bar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Filter by:</span>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search roles..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 w-48 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Create Role
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="border-t border-border">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-3 pr-4 w-8">
+                <Checkbox
+                  checked={selectedRoles.length === sortedRoles.length && sortedRoles.length > 0}
+                  onChange={toggleSelectAll}
+                />
+              </th>
+              <th className="text-left py-3 px-4">
+                <button
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                  className="flex items-center gap-1 text-sm font-medium text-foreground hover:text-muted-foreground"
+                >
+                  Role Name
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                </button>
+              </th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Description</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Members</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Permissions</th>
+              <th className="text-left py-3 px-4 w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRoles.map((role) => (
+              <tr key={role.id} className="border-b border-border hover:bg-muted/30 transition-colors">
+                <td className="py-3 pr-4">
+                  <Checkbox
+                    checked={selectedRoles.includes(role.id)}
+                    onChange={() => toggleSelect(role.id)}
+                  />
+                </td>
+                <td className="py-3 px-4">
+                  <p className="text-sm font-medium text-foreground">{role.name}</p>
+                </td>
+                <td className="py-3 px-4 text-sm text-muted-foreground max-w-xs truncate">{role.description}</td>
+                <td className="py-3 px-4 text-sm text-muted-foreground">{role.members} members</td>
+                <td className="py-3 px-4">
+                  <button className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded text-sm hover:bg-muted transition-colors">
+                    <Pencil className="w-3.5 h-3.5" />
+                    Manage access
+                  </button>
+                </td>
+                <td className="py-3 px-4">
+                  <MoreDropdown onDelete={() => deleteRole(role.id)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Create Role Modal */}
+      {showCreateModal && (
+        <CreateRoleModal
+          onClose={() => setShowCreateModal(false)}
+          onCreate={handleCreateRole}
+        />
+      )}
+    </div>
+  )
+}
+
+// Create Role Modal
+function CreateRoleModal({
+  onClose,
+  onCreate
+}: {
+  onClose: () => void
+  onCreate: (role: { name: string; description: string; permissions: string[] }) => void
+}) {
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
+
+  const togglePermission = (id: string) => {
+    if (selectedPermissions.includes(id)) {
+      setSelectedPermissions(selectedPermissions.filter(p => p !== id))
+    } else {
+      setSelectedPermissions([...selectedPermissions, id])
+    }
+  }
+
+  const handleSubmit = () => {
+    if (name.trim()) {
+      onCreate({ name, description, permissions: selectedPermissions })
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-foreground">Create Role</h2>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Title</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter role title"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter role description"
+              rows={3}
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-3">Access Levels / Permissions</label>
+            <div className="space-y-2">
+              {allPermissions.map((permission) => (
+                <label
+                  key={permission.id}
+                  className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/30 transition-colors"
+                >
+                  <Checkbox
+                    checked={selectedPermissions.includes(permission.id)}
+                    onChange={() => togglePermission(permission.id)}
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{permission.label}</p>
+                    <p className="text-xs text-muted-foreground">{permission.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+            className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Create Role
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Filter Dropdown Component
+function FilterDropdown({
+  label,
+  value,
+  options,
+  onChange,
+  filled = false
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+  filled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+          filled
+            ? "bg-foreground text-background"
+            : "border border-border bg-background text-foreground hover:bg-muted"
+        )}
+      >
+        {label}: {value}
+        <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 min-w-[160px] bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
+          {options.map((option) => (
+            <button
+              key={option}
+              onClick={() => {
+                onChange(option)
+                setOpen(false)
+              }}
+              className={cn(
+                "w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
+                value === option && "text-[#5C6ECD] font-medium"
+              )}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// More Dropdown Component
+function MoreDropdown({ onDelete }: { onDelete?: () => void }) {
+  const [open, setOpen] = useState(false)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 px-2 py-1 text-sm text-foreground hover:bg-muted rounded transition-colors"
+      >
+        More
+        <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 min-w-[140px] bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
+          <button className="w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors">
+            Edit
+          </button>
+          <button className="w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors">
+            Duplicate
+          </button>
+          {onDelete && (
+            <button
+              onClick={() => {
+                onDelete()
+                setOpen(false)
+              }}
+              className="w-full px-3 py-2 text-sm text-left text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Toggle Component
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "w-9 h-5 rounded-full transition-colors relative",
+        checked ? "bg-[#5C6ECD]" : "bg-muted-foreground/30"
+      )}
+    >
+      <div
+        className={cn(
+          "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm",
+          checked ? "translate-x-4" : "translate-x-0.5"
+        )}
+      />
+    </button>
+  )
+}
+
+// Checkbox Component
+function Checkbox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        onChange()
+      }}
+      className={cn(
+        "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0",
+        checked
+          ? "bg-[#5C6ECD] border-[#5C6ECD]"
+          : "border-muted-foreground/50 hover:border-muted-foreground"
+      )}
+    >
+      {checked && <Check className="w-3 h-3 text-white" />}
+    </button>
+  )
+}
+
+// Dropdown Component
+function Dropdown({
+  value,
+  options,
+  onChange
+}: {
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState(value)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-background text-sm text-foreground hover:bg-muted/50 transition-colors"
+      >
+        {selected}
+        <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 min-w-[180px] bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
+          {options.map((option) => (
+            <button
+              key={option}
+              onClick={() => {
+                setSelected(option)
+                onChange(option)
+                setOpen(false)
+              }}
+              className={cn(
+                "w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
+                selected === option && "text-[#5C6ECD] font-medium"
+              )}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Organisation Selector Component
+function OrgSelector({
+  orgs,
+  selectedId,
+  onChange
+}: {
+  orgs: typeof mockOrganisations
+  selectedId: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+
+  const selectedOrg = orgs.find(org => org.id === selectedId)
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors"
+      >
+        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+          {selectedOrg?.logo ? (
+            <img src={selectedOrg.logo} alt={selectedOrg.name} className="w-full h-full object-cover rounded-lg" />
+          ) : (
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+          )}
+        </div>
+        <span className="text-sm font-medium text-foreground">{selectedOrg?.name || "Select organisation"}</span>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 min-w-[280px] bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
+          {orgs.map((org) => (
+            <button
+              key={org.id}
+              onClick={() => {
+                onChange(org.id)
+                setOpen(false)
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors",
+                selectedId === org.id && "bg-muted"
+              )}
+            >
+              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                {org.logo ? (
+                  <img src={org.logo} alt={org.name} className="w-full h-full object-cover rounded-lg" />
+                ) : (
+                  <Building2 className="w-4 h-4 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{org.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{org.industry} · {org.size} employees</p>
+              </div>
+              {selectedId === org.id && (
+                <Check className="w-4 h-4 text-[#5C6ECD] shrink-0" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

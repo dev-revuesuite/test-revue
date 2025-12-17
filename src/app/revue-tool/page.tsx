@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
-import { DashboardHeader } from "@/components/dashboard-header"
+import { StudioHeader } from "@/components/studio-header"
 import { RevueToolContainer } from "@/components/revue-tool/revue-tool-container"
 
 export default async function RevueToolPage() {
@@ -25,7 +25,7 @@ export default async function RevueToolPage() {
     <div className="flex h-svh">
       <AppSidebar user={userData} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <DashboardHeader user={userData} />
+        <StudioHeader user={userData} />
         <main className="flex-1 overflow-hidden bg-gray-50">
           <RevueToolContainer />
         </main>

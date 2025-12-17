@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
-import { DashboardHeader } from "@/components/dashboard-header"
+import { StudioHeader } from "@/components/studio-header"
 
 export default async function ProjectsPage() {
   const supabase = await createClient()
@@ -24,7 +24,7 @@ export default async function ProjectsPage() {
     <div className="flex h-svh">
       <AppSidebar user={userData} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <DashboardHeader user={userData} />
+        <StudioHeader user={userData} />
         <main className="flex-1 overflow-auto">
           <div className="p-6">
             <div className="mb-6">

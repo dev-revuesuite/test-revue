@@ -1,13 +1,13 @@
 "use client"
 
 import { FeedbackCard } from "./feedback-card"
-import type { Feedback } from "@/types/revue-tool"
+import type { Feedback, Comment } from "@/types/revue-tool"
 
 interface FeedbackPanelProps {
   feedbacks: Feedback[]
   highlightedFeedbackId?: string | null
   onMarkerClick: (markerId: string) => void
-  onReply: (feedbackId: string, content: string) => void
+  onReply: (feedbackId: string, content: string, quotedComment?: Comment) => void
   onDelete: (feedbackId: string) => void
   onToggleComplete: (feedbackId: string, isCompleted: boolean) => void
 }

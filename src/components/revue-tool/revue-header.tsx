@@ -2,7 +2,6 @@
 
 import { Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/theme-toggle"
 
 interface RevueHeaderProps {
   briefTitle: string
@@ -23,7 +22,6 @@ export function RevueHeader({ briefTitle, shareLink, onReUpload }: RevueHeaderPr
     <div className="flex items-center justify-between px-6 py-4 bg-background border-b border-border">
       <h1 className="text-2xl font-semibold text-foreground">{briefTitle}</h1>
       <div className="flex items-center gap-3">
-        <ThemeToggle />
         <Button variant="outline" onClick={handleCopyLink}>
           <Copy className="size-4" />
           Copy Link

@@ -102,7 +102,7 @@ export function OtpVerificationForm({
     }
 
     sessionStorage.removeItem("verifyEmail")
-    router.push("/dashboard")
+    router.push("/studio")
     router.refresh()
   }
 

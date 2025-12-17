@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Protected routes
-  const protectedRoutes = ['/dashboard']
+  const protectedRoutes = ['/studio']
   const authRoutes = ['/login', '/signup', '/verify-otp']
 
   const isProtectedRoute = protectedRoutes.some(route =>
@@ -52,7 +52,7 @@ export async function updateSession(request: NextRequest) {
   // Redirect authenticated users away from auth pages
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = '/studio'
     return NextResponse.redirect(url)
   }
 

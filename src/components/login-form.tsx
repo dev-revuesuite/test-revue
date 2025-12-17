@@ -10,16 +10,12 @@ import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import { Send } from "lucide-react"
 
-type LoginMode = "initial" | "password" | "otp"
-
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
-  const [mode, setMode] = useState<LoginMode>("initial")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -57,7 +53,6 @@ export function LoginForm({
       return
     }
 
-    setMode("otp")
     setOtpSent(true)
     setResendCooldown(60)
     setLoading(false)
@@ -119,33 +114,7 @@ export function LoginForm({
       return
     }
 
-    router.push("/dashboard")
-    router.refresh()
-  }
-
-  const handlePasswordLogin = async () => {
-    if (!email || !password) {
-      setError("Please enter email and password")
-      return
-    }
-
-    setError(null)
-    setLoading(true)
-
-    const supabase = createClient()
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-      return
-    }
-
-    router.push("/dashboard")
+    router.push("/studio")
     router.refresh()
   }
 
@@ -170,9 +139,7 @@ export function LoginForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (mode === "password") {
-      handlePasswordLogin()
-    } else if (mode === "otp" && otpSent) {
+    if (otpSent) {
       handleOtpLogin()
     }
   }
@@ -201,7 +168,7 @@ export function LoginForm({
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Email field */}
         <div className="flex flex-col gap-2">
-          {mode === "otp" && otpSent ? (
+          {otpSent ? (
             <div className="flex items-center gap-3">
               <Label htmlFor="email" className="w-24 shrink-0 text-base">Email</Label>
               <div className="relative flex-1">
@@ -240,24 +207,8 @@ export function LoginForm({
           )}
         </div>
 
-        {/* Password field - only in password mode */}
-        {mode === "password" && (
-          <div className="flex items-center gap-3">
-            <Label htmlFor="password" className="w-24 shrink-0 text-base">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-12 text-base"
-              required
-            />
-          </div>
-        )}
-
         {/* OTP fields - only when OTP is sent */}
-        {mode === "otp" && otpSent && (
+        {otpSent && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
               <Label className="w-24 shrink-0 text-base">Verification code</Label>
@@ -293,7 +244,7 @@ export function LoginForm({
         )}
 
         {/* Main action button */}
-        {mode === "initial" && (
+        {!otpSent ? (
           <Button
             type="button"
             onClick={handleSendOtp}
@@ -302,19 +253,7 @@ export function LoginForm({
           >
             {loading ? "Sending..." : "Login"}
           </Button>
-        )}
-
-        {mode === "password" && (
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full h-12 text-base bg-[#DBFE52] hover:bg-[#c9eb40] text-black font-medium border border-gray-400"
-          >
-            {loading ? "Logging in..." : "Login"}
-          </Button>
-        )}
-
-        {mode === "otp" && otpSent && (
+        ) : (
           <Button
             type="submit"
             disabled={loading}
@@ -372,37 +311,6 @@ export function LoginForm({
             Create new
           </a>
         </p>
-
-        {/* Mode toggle - small text link */}
-        {mode !== "initial" && (
-          <p className="text-center text-sm text-muted-foreground">
-            {mode === "password" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("otp")
-                  setOtpSent(false)
-                  setOtp(["", "", "", "", "", ""])
-                }}
-                className="underline hover:text-primary"
-              >
-                Use verification code instead
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("password")
-                  setOtpSent(false)
-                  setOtp(["", "", "", "", "", ""])
-                }}
-                className="underline hover:text-primary"
-              >
-                Use password instead
-              </button>
-            )}
-          </p>
-        )}
       </form>
     </div>
   )

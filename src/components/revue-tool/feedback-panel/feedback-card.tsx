@@ -5,14 +5,14 @@ import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CommentThread } from "./comment-thread"
 import { ReplyInput } from "./reply-input"
-import type { Feedback } from "@/types/revue-tool"
+import type { Feedback, Comment } from "@/types/revue-tool"
 
 interface FeedbackCardProps {
   feedback: Feedback
   isHighlighted?: boolean
   isExpanded?: boolean
   onMarkerClick?: (markerId: string) => void
-  onReply: (feedbackId: string, content: string) => void
+  onReply: (feedbackId: string, content: string, quotedComment?: Comment) => void
   onDelete: (feedbackId: string) => void
   onToggleComplete: (feedbackId: string, isCompleted: boolean) => void
 }
@@ -36,9 +36,14 @@ export function FeedbackCard({
   onToggleComplete,
 }: FeedbackCardProps) {
   const [isExpanded, setIsExpanded] = useState(true) // Default to expanded
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
 
-  const handleReply = (content: string) => {
-    onReply(feedback.id, content)
+  const handleReply = (content: string, quotedComment?: Comment) => {
+    onReply(feedback.id, content, quotedComment)
+  }
+
+  const handleReplyToComment = (comment: Comment) => {
+    setReplyingTo(comment)
   }
 
   const toggleExpanded = () => {
@@ -120,11 +125,18 @@ export function FeedbackCard({
 
           {/* Comments thread */}
           {feedback.comments && feedback.comments.length > 0 && (
-            <CommentThread comments={feedback.comments} />
+            <CommentThread
+              comments={feedback.comments}
+              onReplyToComment={handleReplyToComment}
+            />
           )}
 
           {/* Reply input */}
-          <ReplyInput onSubmit={handleReply} />
+          <ReplyInput
+            onSubmit={handleReply}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+          />
         </div>
       </div>
     </div>

@@ -2,30 +2,35 @@
 
 import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutGrid, Folder, Wrench, Users, Moon, Sun, LogOut, User } from "lucide-react"
+import { LayoutGrid, FileText, FolderOpen, Plus, Users, LogOut, PanelLeftClose, PanelLeft, HardDrive } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   {
-    title: "Room",
-    url: "/room",
-    icon: User,
+    title: "Studio",
+    url: "/studio",
+    icon: LayoutGrid,
   },
   {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutGrid,
+    title: "Master Drive",
+    url: "/master-drive",
+    icon: HardDrive,
   },
   {
     title: "Projects",
     url: "/projects",
-    icon: Folder,
+    icon: FileText,
   },
   {
     title: "Revue Tool",
     url: "/revue-tool",
-    icon: Wrench,
+    icon: FolderOpen,
+  },
+  {
+    title: "Create",
+    url: "/create",
+    icon: Plus,
   },
   {
     title: "Clients",
@@ -45,22 +50,7 @@ interface AppSidebarProps {
 export function AppSidebar({ user }: AppSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const [isDark, setIsDark] = React.useState(false)
-
-  React.useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains("dark")
-    setIsDark(isDarkMode)
-  }, [])
-
-  const toggleTheme = () => {
-    const newIsDark = !isDark
-    setIsDark(newIsDark)
-    if (newIsDark) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
-  }
+  const [isExpanded, setIsExpanded] = React.useState(false)
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -70,44 +60,75 @@ export function AppSidebar({ user }: AppSidebarProps) {
   }
 
   return (
-    <aside className="flex flex-col h-svh w-16 border-r bg-background">
-      {/* Navigation Items */}
-      <nav className="flex flex-col items-center gap-2 py-4 flex-1">
+    <aside className={cn(
+      "flex flex-col h-full border-r border-[#e6e6e6] dark:border-[#333] bg-white dark:bg-[#1a1a1a] transition-all duration-300",
+      isExpanded ? "w-52" : "w-16"
+    )}>
+      {/* Navigation Items - Top */}
+      <nav className="flex flex-col items-center gap-2 py-4 px-2">
         {navItems.map((item) => {
-          const isActive = pathname === item.url
+          const isActive = pathname === item.url || pathname.startsWith(item.url + "/")
           return (
             <button
               key={item.title}
               onClick={() => router.push(item.url)}
               className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-full transition-colors",
+                "flex items-center gap-3 rounded-xl transition-all duration-200",
+                isExpanded ? "w-full px-3 py-3 justify-start" : "w-12 h-12 justify-center",
                 isActive
-                  ? "bg-[#334AC0] text-white"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-[#DBFE52] text-black shadow-md shadow-[#DBFE52]/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
               )}
-              title={item.title}
+              title={!isExpanded ? item.title : undefined}
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-6 h-6 shrink-0" strokeWidth={1.5} />
+              {isExpanded && (
+                <span className="text-sm font-medium">{item.title}</span>
+              )}
             </button>
           )
         })}
       </nav>
 
-      {/* Bottom Actions */}
-      <div className="flex flex-col items-center gap-2 py-4">
-        <button
-          onClick={toggleTheme}
-          className="flex items-center justify-center w-10 h-10 rounded-full text-muted-foreground hover:text-foreground transition-colors"
-          title={isDark ? "Light mode" : "Dark mode"}
-        >
-          {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Divider */}
+      <div className="mx-3 border-t border-border" />
+
+      {/* Bottom Actions - Logout & Expand */}
+      <div className="flex flex-col items-center gap-2 py-4 px-2">
         <button
           onClick={handleLogout}
-          className="flex items-center justify-center w-10 h-10 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          className={cn(
+            "flex items-center gap-3 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200",
+            isExpanded ? "w-full px-3 py-3 justify-start" : "w-12 h-12 justify-center"
+          )}
           title="Logout"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="w-6 h-6 shrink-0" strokeWidth={1.5} />
+          {isExpanded && (
+            <span className="text-sm font-medium">Logout</span>
+          )}
+        </button>
+
+        {/* Expand/Collapse Button */}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={cn(
+            "flex items-center gap-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200",
+            isExpanded ? "w-full px-3 py-3 justify-start" : "w-12 h-12 justify-center"
+          )}
+          title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          {isExpanded ? (
+            <>
+              <PanelLeftClose className="w-6 h-6 shrink-0" strokeWidth={1.5} />
+              <span className="text-sm font-medium">Collapse</span>
+            </>
+          ) : (
+            <PanelLeft className="w-6 h-6" strokeWidth={1.5} />
+          )}
         </button>
       </div>
     </aside>
