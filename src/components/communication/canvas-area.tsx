@@ -485,7 +485,11 @@ export function CanvasArea({
     <div
       ref={canvasRef}
       className={cn(
-        "h-full w-full relative overflow-hidden bg-[#f5f5f5]",
+        "h-full w-full relative overflow-hidden canvas-pattern",
+        // Light mode: subtle gray
+        "bg-[#f5f5f5]",
+        // Dark mode: dark background
+        "dark:bg-[#0d0d0d]",
         isPanning ? "cursor-grabbing" :
         selectedTool === "draw" ? "cursor-crosshair" :
         selectedTool === "shape" ? "cursor-crosshair" :
