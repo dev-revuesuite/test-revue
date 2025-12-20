@@ -300,6 +300,30 @@ export function CanvasArea({
     return baseWidth * (100 / zoom);
   }, [zoom]);
 
+  // Draw smooth line using quadratic curves for better quality
+  const drawSmoothLine = useCallback((ctx: CanvasRenderingContext2D, points: { x: number; y: number }[]) => {
+    if (points.length < 2) return;
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    if (points.length === 2) {
+      // Just two points, draw a line
+      ctx.lineTo(points[1].x, points[1].y);
+    } else {
+      // Use quadratic curves for smooth lines
+      for (let i = 1; i < points.length - 1; i++) {
+        const midX = (points[i].x + points[i + 1].x) / 2;
+        const midY = (points[i].y + points[i + 1].y) / 2;
+        ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+      }
+      // Draw the last segment
+      const lastPoint = points[points.length - 1];
+      ctx.lineTo(lastPoint.x, lastPoint.y);
+    }
+    ctx.stroke();
+  }, []);
+
   // Redraw all drawings
   const redrawCanvas = useCallback(() => {
     const ctx = getContext();
@@ -307,6 +331,10 @@ export function CanvasArea({
     if (!ctx || !canvas) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Enable anti-aliasing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
     // Draw all saved drawings
     drawings.forEach((drawing) => {
@@ -317,20 +345,12 @@ export function CanvasArea({
       ctx.lineJoin = "round";
 
       if (drawing.type === "draw" && drawing.points) {
-        ctx.beginPath();
-        drawing.points.forEach((point, index) => {
-          if (index === 0) {
-            ctx.moveTo(point.x, point.y);
-          } else {
-            ctx.lineTo(point.x, point.y);
-          }
-        });
-        ctx.stroke();
+        drawSmoothLine(ctx, drawing.points);
       } else if (drawing.type === "shape" && drawing.rect) {
         ctx.strokeRect(drawing.rect.x, drawing.rect.y, drawing.rect.width, drawing.rect.height);
       }
     });
-  }, [drawings, getContext, getAdjustedStrokeWidth]);
+  }, [drawings, getContext, getAdjustedStrokeWidth, drawSmoothLine]);
 
   // Update canvas size when image loads and track displayed size with ResizeObserver
   useEffect(() => {
@@ -422,7 +442,7 @@ export function CanvasArea({
       const ctx = getContext();
       if (ctx) {
         ctx.strokeStyle = drawingColor;
-        ctx.lineWidth = getAdjustedStrokeWidth(1);
+        ctx.lineWidth = getAdjustedStrokeWidth(3);
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.beginPath();
@@ -459,7 +479,7 @@ export function CanvasArea({
 
         // Draw current shape preview
         ctx.strokeStyle = drawingColor;
-        ctx.lineWidth = getAdjustedStrokeWidth(1);
+        ctx.lineWidth = getAdjustedStrokeWidth(3);
         ctx.setLineDash([5, 5]);
         ctx.strokeRect(
           shapeStart.x,
@@ -488,7 +508,7 @@ export function CanvasArea({
         type: "draw",
         points: currentPath,
         color: drawingColor,
-        strokeWidth: 1,
+        strokeWidth: 3,
       };
       onDrawingsChange?.([...drawings, newDrawing]);
       setCurrentDrawing(newDrawing);
@@ -524,7 +544,7 @@ export function CanvasArea({
             height: Math.abs(height),
           },
           color: drawingColor,
-          strokeWidth: 1,
+          strokeWidth: 3,
         };
         onDrawingsChange?.([...drawings, newDrawing]);
         setCurrentDrawing(newDrawing);
