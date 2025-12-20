@@ -1,12 +1,7 @@
 "use client"
 
 import * as React from "react"
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -24,6 +19,7 @@ import {
   ArrowRight,
   Upload,
   Camera,
+  ChevronDown,
 } from "lucide-react"
 
 interface TeamMember {
@@ -208,48 +204,84 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
       .slice(0, 2)
   }
 
+  if (!open) return null
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent
-        className="max-w-2xl w-[90vw] p-0 gap-0 overflow-hidden"
-        showCloseButton={false}
-      >
-        <DialogTitle className="sr-only">Create New Organization</DialogTitle>
-        <DialogDescription className="sr-only">Set up a new organization with team members</DialogDescription>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-[90vw] h-[90vh] bg-white dark:bg-[#0a0a0a] flex flex-col shadow-2xl">
+        {/* Header - Same as NewBriefDialog */}
+        <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
+          <div className="flex items-center justify-between">
+            {/* Logo - Figma style */}
+            <div className="flex items-center gap-3">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <rect width="10" height="10" rx="2" fill="#F24E1E"/>
+                <rect x="11" width="10" height="10" rx="2" fill="#FF7262"/>
+                <rect x="22" width="10" height="10" rx="2" fill="#A259FF"/>
+                <rect y="11" width="10" height="10" rx="2" fill="#1ABCFE"/>
+                <rect x="11" y="11" width="10" height="10" rx="2" fill="#0ACF83"/>
+                <rect x="22" y="11" width="10" height="10" rx="2" fill="#5C6ECD"/>
+                <rect y="22" width="10" height="10" rx="2" fill="#F24E1E"/>
+                <rect x="11" y="22" width="10" height="10" rx="2" fill="#FF7262"/>
+                <rect x="22" y="22" width="10" height="10" rx="2" fill="#A259FF"/>
+              </svg>
+              <span className="text-lg font-semibold text-[#1a1a1a] dark:text-white">Revue</span>
+            </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e6e6e6] dark:border-[#333]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#4262FF] flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-white" />
+            {/* Steps Indicator */}
+            <div className="flex items-center gap-6">
+              {[
+                { num: 1, label: "Basic Info" },
+                { num: 2, label: "Team Members" },
+                { num: 3, label: "Invite" }
+              ].map((s, i) => (
+                <div key={s.num} className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium transition-colors",
+                        step > s.num
+                          ? "bg-[#5C6ECD] text-white"
+                          : step === s.num
+                          ? "bg-[#5C6ECD] text-white"
+                          : "bg-[#e5e5e5] dark:bg-[#333] text-[#999]"
+                      )}
+                    >
+                      {step > s.num ? <Check className="w-4 h-4" /> : s.num}
+                    </div>
+                    <span
+                      className={cn(
+                        "text-sm hidden md:block",
+                        step >= s.num
+                          ? "text-[#1a1a1a] dark:text-white font-medium"
+                          : "text-[#999]"
+                      )}
+                    >
+                      {s.label}
+                    </span>
+                  </div>
+                  {i < 2 && (
+                    <div className={cn(
+                      "w-12 h-[2px]",
+                      step > s.num ? "bg-[#5C6ECD]" : "bg-[#e5e5e5] dark:bg-[#333]"
+                    )} />
+                  )}
+                </div>
+              ))}
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-[#1a1a1a] dark:text-white">
-                Create New Organization
-              </h2>
-              <p className="text-xs text-[#7a7a7a] dark:text-[#999]">
-                Step {step} of {totalSteps}
-              </p>
-            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={handleClose}
+              className="w-10 h-10 flex items-center justify-center hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
+            >
+              <X className="w-5 h-5 text-[#666] dark:text-[#999]" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
-          >
-            <X className="w-4 h-4 text-[#7a7a7a]" />
-          </button>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="h-1 bg-[#f0f0f0] dark:bg-[#2a2a2a]">
-          <div
-            className="h-full bg-[#4262FF] transition-all duration-300"
-            style={{ width: `${(step / totalSteps) * 100}%` }}
-          />
-        </div>
+        </header>
 
         {/* Content */}
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-8 py-6">
           {/* Step 1: Basic Info */}
           {step === 1 && (
             <div className="space-y-6">
@@ -260,8 +292,8 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                     className={cn(
                       "w-24 h-24 border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors",
                       logoPreview
-                        ? "border-[#4262FF] bg-[#4262FF]/5"
-                        : "border-[#e6e6e6] dark:border-[#444] hover:border-[#4262FF]"
+                        ? "border-[#5C6ECD] bg-[#5C6ECD]/5"
+                        : "border-[#e6e6e6] dark:border-[#444] hover:border-[#5C6ECD]"
                     )}
                   >
                     {logoPreview ? (
@@ -329,8 +361,8 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                       className={cn(
                         "px-4 py-2 text-sm font-medium border transition-all",
                         industry === option
-                          ? "border-[#4262FF] bg-[#4262FF]/10 text-[#4262FF]"
-                          : "border-[#e6e6e6] dark:border-[#444] text-[#7a7a7a] hover:border-[#4262FF] hover:text-[#4262FF]"
+                          ? "border-[#5C6ECD] bg-[#5C6ECD]/10 text-[#5C6ECD]"
+                          : "border-[#e6e6e6] dark:border-[#444] text-[#7a7a7a] hover:border-[#5C6ECD] hover:text-[#5C6ECD]"
                       )}
                     >
                       {option}
@@ -352,8 +384,8 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                       className={cn(
                         "px-4 py-2 text-sm font-medium border transition-all",
                         companySize === option
-                          ? "border-[#4262FF] bg-[#4262FF]/10 text-[#4262FF]"
-                          : "border-[#e6e6e6] dark:border-[#444] text-[#7a7a7a] hover:border-[#4262FF] hover:text-[#4262FF]"
+                          ? "border-[#5C6ECD] bg-[#5C6ECD]/10 text-[#5C6ECD]"
+                          : "border-[#e6e6e6] dark:border-[#444] text-[#7a7a7a] hover:border-[#5C6ECD] hover:text-[#5C6ECD]"
                       )}
                     >
                       {option}
@@ -402,7 +434,7 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                     >
                       <Avatar className="h-6 w-6">
                         <AvatarImage src={member.avatar} />
-                        <AvatarFallback className="text-[10px] bg-[#4262FF] text-white">
+                        <AvatarFallback className="text-[10px] bg-[#5C6ECD] text-white">
                           {getInitials(member.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -440,7 +472,7 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                     >
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={member.avatar} />
-                        <AvatarFallback className="bg-[#4262FF] text-white text-sm">
+                        <AvatarFallback className="bg-[#5C6ECD] text-white text-sm">
                           {getInitials(member.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -452,7 +484,7 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                           {member.email} - {member.role}
                         </p>
                       </div>
-                      <Plus className="w-5 h-5 text-[#4262FF]" />
+                      <Plus className="w-5 h-5 text-[#5C6ECD]" />
                     </button>
                   ))
                 ) : (
@@ -494,7 +526,7 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                 </div>
                 <Button
                   onClick={handleAddInviteEmail}
-                  className="h-11 px-5 bg-[#4262FF] hover:bg-[#3651d4] text-white"
+                  className="h-11 px-5 bg-[#5C6ECD] hover:bg-[#3651d4] text-white"
                 >
                   Add
                 </Button>
@@ -530,7 +562,7 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
                   {logoPreview ? (
                     <img src={logoPreview} alt="Logo" className="w-12 h-12 object-cover" />
                   ) : (
-                    <div className="w-12 h-12 bg-[#4262FF] flex items-center justify-center">
+                    <div className="w-12 h-12 bg-[#5C6ECD] flex items-center justify-center">
                       <span className="text-white font-bold text-lg">{orgAbbr || "?"}</span>
                     </div>
                   )}
@@ -555,35 +587,37 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6e6e6] dark:border-[#333] bg-[#fafafa] dark:bg-[#1a1a1a]">
-          <Button
-            variant="outline"
-            onClick={step > 1 ? handleBack : handleClose}
-            className="h-10 px-5 border-[#d9d9d9] dark:border-[#444] text-[#1a1a1a] dark:text-white"
-          >
-            {step > 1 ? "Back" : "Cancel"}
-          </Button>
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!canContinue()}
-            className={cn(
-              "group flex items-center gap-2 px-8 py-2.5 font-medium transition-all",
-              canContinue()
-                ? "bg-[#4262FF] hover:bg-[#3651d4] text-white shadow-lg shadow-[#4262FF]/25"
-                : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
-            )}
-          >
-            {step === totalSteps ? "Create Organization" : "Continue"}
-            <ArrowRight
+        <footer className="shrink-0 px-8 py-5 border-t border-[#e5e5e5] dark:border-[#333] bg-[#fafafa] dark:bg-[#1a1a1a]">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              onClick={step > 1 ? handleBack : handleClose}
+              className="h-10 px-5 border-[#d9d9d9] dark:border-[#444] text-[#1a1a1a] dark:text-white"
+            >
+              {step > 1 ? "Back" : "Cancel"}
+            </Button>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!canContinue()}
               className={cn(
-                "w-4 h-4 transition-transform duration-200",
-                canContinue() && "group-hover:translate-x-1"
+                "group flex items-center gap-2 px-8 py-2.5 font-medium transition-all",
+                canContinue()
+                  ? "bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white shadow-lg shadow-[#5C6ECD]/25"
+                  : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
               )}
-            />
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
+            >
+              {step === totalSteps ? "Create Organization" : "Continue"}
+              <ArrowRight
+                className={cn(
+                  "w-4 h-4 transition-transform duration-200",
+                  canContinue() && "group-hover:translate-x-1"
+                )}
+              />
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
   )
 }

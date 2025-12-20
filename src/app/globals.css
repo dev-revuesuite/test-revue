@@ -101,7 +101,7 @@
   --popover-foreground: #fafafa;
 
   /* Blue primary accent - Dark mode */
-  --primary: #4262FF;
+  --primary: #5C6ECD;
   --primary-foreground: #ffffff;
 
   --secondary: #2a2a2a;
@@ -116,10 +116,10 @@
   --destructive: #ef4444;
   --border: #333333;
   --input: #333333;
-  --ring: #4262FF;
+  --ring: #5C6ECD;
 
   /* Chart colors - Dark mode */
-  --chart-1: #4262FF;
+  --chart-1: #5C6ECD;
   --chart-2: #10b981;
   --chart-3: #f59e0b;
   --chart-4: #8b5cf6;
@@ -128,12 +128,12 @@
   /* Sidebar - Dark grey */
   --sidebar: #1e1e1e;
   --sidebar-foreground: #fafafa;
-  --sidebar-primary: #4262FF;
+  --sidebar-primary: #5C6ECD;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #2a2a2a;
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: #333333;
-  --sidebar-ring: #4262FF;
+  --sidebar-ring: #5C6ECD;
 }
 
 @layer base {

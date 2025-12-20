@@ -459,7 +459,8 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-white dark:bg-[#0a0a0a] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-[90vw] h-[90vh] bg-white dark:bg-[#0a0a0a] flex flex-col shadow-2xl">
       {/* Header */}
       <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
         <div className="flex items-center justify-between">
@@ -1190,6 +1191,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
           </button>
         </div>
       </footer>
+      </div>
     </div>
   )
 }

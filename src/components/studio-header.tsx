@@ -271,7 +271,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
         <Popover>
           <PopoverTrigger asChild>
             <button className="flex items-center gap-2.5 h-full px-4 hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors">
-              <div className="w-7 h-7 rounded bg-[#4262FF] flex items-center justify-center">
+              <div className="w-7 h-7 rounded bg-[#5C6ECD] flex items-center justify-center">
                 <span className="text-white font-semibold text-xs">{selectedOrg.abbr}</span>
               </div>
               <div className="text-left">
@@ -293,7 +293,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                     : "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]"
                 )}
               >
-                <div className="w-7 h-7 rounded bg-[#4262FF] flex items-center justify-center">
+                <div className="w-7 h-7 rounded bg-[#5C6ECD] flex items-center justify-center">
                   <span className="text-white font-semibold text-xs">{org.abbr}</span>
                 </div>
                 <span className="text-[#1a1a1a] dark:text-white font-medium">{org.name}</span>
@@ -352,7 +352,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              className="h-10 px-4 gap-2 text-sm font-medium bg-[#4262FF] hover:bg-[#3651d4] text-white rounded-lg"
+              className="h-10 px-4 gap-2 text-sm font-medium bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white rounded-lg"
             >
               <Plus className="w-4 h-4" />
               Add New
@@ -364,7 +364,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               onClick={() => setNewClientDialogOpen(true)}
               className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
             >
-              <Users className="w-4 h-4 text-[#4262FF]" />
+              <Users className="w-4 h-4 text-[#5C6ECD]" />
               <span className="font-medium">Add Client</span>
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -405,7 +405,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                 )}>
                   <div className="flex items-start gap-3">
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-[#4262FF] text-white text-xs font-semibold">
+                      <AvatarFallback className="bg-[#5C6ECD] text-white text-xs font-semibold">
                         {msg.sender.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
@@ -419,7 +419,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               ))}
             </div>
             <div className="p-2 border-t border-[#e6e6e6] dark:border-[#333]">
-              <Button variant="ghost" className="w-full text-xs h-8 text-[#4262FF] hover:text-[#4262FF] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]" onClick={() => setMessageDialogOpen(true)}>
+              <Button variant="ghost" className="w-full text-xs h-8 text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]" onClick={() => setMessageDialogOpen(true)}>
                 View all messages
               </Button>
             </div>
@@ -451,7 +451,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                   <div className="flex items-start gap-3">
                     <div className={cn(
                       "w-2 h-2 rounded-full mt-1.5 shrink-0",
-                      !notif.read ? "bg-[#4262FF]" : "bg-transparent"
+                      !notif.read ? "bg-[#5C6ECD]" : "bg-transparent"
                     )} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#1a1a1a] dark:text-white">{notif.title}</p>
@@ -463,7 +463,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               ))}
             </div>
             <div className="p-2 border-t border-[#e6e6e6] dark:border-[#333]">
-              <Button variant="ghost" className="w-full text-xs h-8 text-[#4262FF] hover:text-[#4262FF] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]" onClick={() => setNotificationDialogOpen(true)}>
+              <Button variant="ghost" className="w-full text-xs h-8 text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]" onClick={() => setNotificationDialogOpen(true)}>
                 View all notifications
               </Button>
             </div>
@@ -474,7 +474,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center justify-center ml-1">
-              <Avatar className="h-10 w-10 ring-2 ring-[#e6e6e6] dark:ring-[#444] hover:ring-[#4262FF] transition-all">
+              <Avatar className="h-10 w-10 ring-2 ring-[#e6e6e6] dark:ring-[#444] hover:ring-[#5C6ECD] transition-all">
                 <AvatarImage src={user.avatar} alt={user.name} />
                 <AvatarFallback className="bg-[#ff7eb3] text-white text-sm font-semibold">
                   {getInitials(user.name)}
@@ -581,7 +581,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               )}>
                 <div className="flex items-start gap-3">
                   <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-[#4262FF] text-white text-sm font-semibold">
+                    <AvatarFallback className="bg-[#5C6ECD] text-white text-sm font-semibold">
                       {msg.sender.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
@@ -614,7 +614,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                 <div className="flex items-start gap-3">
                   <div className={cn(
                     "w-2 h-2 rounded-full mt-2 flex-shrink-0",
-                    !notif.read ? "bg-[#4262FF]" : "bg-[#d9d9d9] dark:bg-[#444]"
+                    !notif.read ? "bg-[#5C6ECD]" : "bg-[#d9d9d9] dark:bg-[#444]"
                   )} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -661,7 +661,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                   selectedCategory === category.id
-                    ? "bg-[#4262FF] text-white"
+                    ? "bg-[#5C6ECD] text-white"
                     : "text-[#7a7a7a] dark:text-[#999] hover:bg-[#e6e6e6] dark:hover:bg-[#333] hover:text-[#1a1a1a] dark:hover:text-white"
                 )}
               >
@@ -723,7 +723,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#e6e6e6] dark:border-[#333]">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#4262FF] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-[#5C6ECD] flex items-center justify-center">
                 <UserPlus className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -755,12 +755,12 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAddEmail()}
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-[#e6e6e6] dark:border-[#444] bg-white dark:bg-[#2a2a2a] text-sm outline-none focus:border-[#4262FF] dark:focus:border-[#4262FF] transition-colors placeholder:text-[#999]"
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-[#e6e6e6] dark:border-[#444] bg-white dark:bg-[#2a2a2a] text-sm outline-none focus:border-[#5C6ECD] dark:focus:border-[#5C6ECD] transition-colors placeholder:text-[#999]"
                   />
                 </div>
                 <Button
                   onClick={handleAddEmail}
-                  className="h-10 px-4 bg-[#4262FF] hover:bg-[#3651d4] text-white rounded-lg"
+                  className="h-10 px-4 bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white rounded-lg"
                 >
                   Add
                 </Button>
@@ -801,13 +801,13 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                       className={cn(
                         "w-full flex items-center gap-3 p-3 rounded-xl border transition-all",
                         isSelected
-                          ? "border-[#4262FF] bg-[#4262FF]/5 dark:bg-[#4262FF]/10"
+                          ? "border-[#5C6ECD] bg-[#5C6ECD]/5 dark:bg-[#5C6ECD]/10"
                           : "border-[#e6e6e6] dark:border-[#444] hover:border-[#bbb] dark:hover:border-[#555]"
                       )}
                     >
                       <div className={cn(
                         "w-8 h-8 rounded-lg flex items-center justify-center text-white font-semibold text-xs",
-                        isSelected ? "bg-[#4262FF]" : "bg-[#7a7a7a]"
+                        isSelected ? "bg-[#5C6ECD]" : "bg-[#7a7a7a]"
                       )}>
                         {org.abbr}
                       </div>
@@ -817,7 +817,7 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                       <div className={cn(
                         "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
                         isSelected
-                          ? "border-[#4262FF] bg-[#4262FF]"
+                          ? "border-[#5C6ECD] bg-[#5C6ECD]"
                           : "border-[#d9d9d9] dark:border-[#555]"
                       )}>
                         {isSelected && <Check className="w-3 h-3 text-white" />}
@@ -845,13 +845,13 @@ export function StudioHeader({ user }: StudioHeaderProps) {
                     className={cn(
                       "flex-1 p-3 rounded-xl border transition-all text-center",
                       inviteRole === role.id
-                        ? "border-[#4262FF] bg-[#4262FF]/5 dark:bg-[#4262FF]/10"
+                        ? "border-[#5C6ECD] bg-[#5C6ECD]/5 dark:bg-[#5C6ECD]/10"
                         : "border-[#e6e6e6] dark:border-[#444] hover:border-[#bbb] dark:hover:border-[#555]"
                     )}
                   >
                     <p className={cn(
                       "text-sm font-medium",
-                      inviteRole === role.id ? "text-[#4262FF]" : "text-[#1a1a1a] dark:text-white"
+                      inviteRole === role.id ? "text-[#5C6ECD]" : "text-[#1a1a1a] dark:text-white"
                     )}>
                       {role.label}
                     </p>
