@@ -294,6 +294,12 @@ export function CanvasArea({
     return canvas.getContext("2d");
   }, []);
 
+  // Calculate adjusted stroke width to keep it visually constant regardless of zoom
+  const getAdjustedStrokeWidth = useCallback((baseWidth: number) => {
+    // Compensate for CSS transform scale - divide by zoom factor to keep visual size constant
+    return baseWidth * (100 / zoom);
+  }, [zoom]);
+
   // Redraw all drawings
   const redrawCanvas = useCallback(() => {
     const ctx = getContext();
@@ -305,7 +311,8 @@ export function CanvasArea({
     // Draw all saved drawings
     drawings.forEach((drawing) => {
       ctx.strokeStyle = drawing.color;
-      ctx.lineWidth = drawing.strokeWidth;
+      // Adjust stroke width to compensate for zoom scale
+      ctx.lineWidth = getAdjustedStrokeWidth(drawing.strokeWidth);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
@@ -323,7 +330,7 @@ export function CanvasArea({
         ctx.strokeRect(drawing.rect.x, drawing.rect.y, drawing.rect.width, drawing.rect.height);
       }
     });
-  }, [drawings, getContext]);
+  }, [drawings, getContext, getAdjustedStrokeWidth]);
 
   // Update canvas size when image loads and track displayed size with ResizeObserver
   useEffect(() => {
@@ -415,7 +422,7 @@ export function CanvasArea({
       const ctx = getContext();
       if (ctx) {
         ctx.strokeStyle = drawingColor;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = getAdjustedStrokeWidth(1);
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.beginPath();
@@ -452,7 +459,7 @@ export function CanvasArea({
 
         // Draw current shape preview
         ctx.strokeStyle = drawingColor;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = getAdjustedStrokeWidth(1);
         ctx.setLineDash([5, 5]);
         ctx.strokeRect(
           shapeStart.x,
@@ -481,7 +488,7 @@ export function CanvasArea({
         type: "draw",
         points: currentPath,
         color: drawingColor,
-        strokeWidth: 3,
+        strokeWidth: 1,
       };
       onDrawingsChange?.([...drawings, newDrawing]);
       setCurrentDrawing(newDrawing);
@@ -517,7 +524,7 @@ export function CanvasArea({
             height: Math.abs(height),
           },
           color: drawingColor,
-          strokeWidth: 3,
+          strokeWidth: 1,
         };
         onDrawingsChange?.([...drawings, newDrawing]);
         setCurrentDrawing(newDrawing);
