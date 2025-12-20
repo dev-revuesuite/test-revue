@@ -46,7 +46,11 @@ export function ZoomControls({
 
   return (
     <TooltipProvider>
-      <div className="absolute bottom-4 right-[324px] lg:right-[364px] xl:right-[404px] flex items-center gap-2">
+      <div className={`absolute bottom-4 flex items-center gap-2 ${
+        isFullscreen
+          ? "right-4"
+          : "right-[324px] lg:right-[364px] xl:right-[404px]"
+      }`}>
         {/* Zoom Controls Container */}
         <div className="flex items-center bg-white dark:bg-[#2a2a2a] rounded-lg shadow-sm border border-gray-200 dark:border-[#444]">
           {/* Reset to 100% */}

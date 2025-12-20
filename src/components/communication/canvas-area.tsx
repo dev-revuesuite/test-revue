@@ -85,6 +85,7 @@ interface CanvasAreaProps {
   onToggleCompare?: () => void;
   onResetView?: () => void;
   onToggleFullscreen?: () => void;
+  isFullscreen?: boolean;
 }
 
 export function CanvasArea({
@@ -113,6 +114,7 @@ export function CanvasArea({
   onToggleCompare,
   onResetView,
   onToggleFullscreen,
+  isFullscreen = false,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -700,7 +702,7 @@ export function CanvasArea({
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
           style={{
-            paddingLeft: "60px",
+            paddingLeft: isFullscreen ? "20px" : "60px",
             paddingRight: "20px",
             transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
           }}
@@ -810,7 +812,12 @@ export function CanvasArea({
       ) : (
         /* Normal Mode - Single Image with Markers */
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none pl-[60px] pr-[324px] lg:pr-[364px] xl:pr-[404px]"
+          className={cn(
+            "absolute inset-0 flex items-center justify-center pointer-events-none",
+            isFullscreen
+              ? "p-4"
+              : "pl-[60px] pr-[324px] lg:pr-[364px] xl:pr-[404px]"
+          )}
           style={{
             transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
           }}

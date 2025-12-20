@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { CommunicationHeader } from "./communication-header";
 import { CommunicationSidebar } from "./communication-sidebar";
 import { CommentsPanel, Feedback, ReplyItem } from "./comments-panel";
@@ -202,33 +202,9 @@ export function CommunicationCanvas() {
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
 
-  // Fullscreen toggle handler
+  // Fullscreen editor mode toggle (hides header, sidebar, comments panel)
   const handleToggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      }).catch((err) => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      }).catch((err) => {
-        console.error(`Error attempting to exit fullscreen: ${err.message}`);
-      });
-    }
-  }, []);
-
-  // Listen for fullscreen changes (in case user exits with Escape key)
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
+    setIsFullscreen(prev => !prev);
   }, []);
 
   // Get the next feedback number for the current iteration
@@ -453,32 +429,37 @@ export function CommunicationCanvas() {
         onToggleCompare={() => handleSelectTool("compare")}
         onResetView={() => setRotation(0)}
         onToggleFullscreen={handleToggleFullscreen}
+        isFullscreen={isFullscreen}
       />
 
-      {/* Floating Header - Left and Right sections */}
-      <CommunicationHeader
-        iterations={iterations.map(i => ({
-          id: i.id,
-          name: i.name,
-          version: i.version,
-          timestamp: i.timestamp,
-        }))}
-        activeIterationId={activeIterationId}
-        onIterationChange={handleIterationChange}
-        onNewIteration={() => setShowNewIterationDialog(true)}
-        onShare={() => setShowShareDialog(true)}
-        unresolvedCount={unresolvedFeedbacks.length}
-      />
+      {/* Floating Header - Left and Right sections (hidden in fullscreen) */}
+      {!isFullscreen && (
+        <CommunicationHeader
+          iterations={iterations.map(i => ({
+            id: i.id,
+            name: i.name,
+            version: i.version,
+            timestamp: i.timestamp,
+          }))}
+          activeIterationId={activeIterationId}
+          onIterationChange={handleIterationChange}
+          onNewIteration={() => setShowNewIterationDialog(true)}
+          onShare={() => setShowShareDialog(true)}
+          unresolvedCount={unresolvedFeedbacks.length}
+        />
+      )}
 
-      {/* Floating Sidebar - Centered vertically on left */}
-      <CommunicationSidebar
-        selectedTool={selectedTool}
-        onSelectTool={handleSelectTool}
-        compareMode={compareMode}
-      />
+      {/* Floating Sidebar - Centered vertically on left (hidden in fullscreen) */}
+      {!isFullscreen && (
+        <CommunicationSidebar
+          selectedTool={selectedTool}
+          onSelectTool={handleSelectTool}
+          compareMode={compareMode}
+        />
+      )}
 
-      {/* Floating Feedback Panel - Right side */}
-      {showComments && !compareMode && (
+      {/* Floating Feedback Panel - Right side (hidden in fullscreen) */}
+      {showComments && !compareMode && !isFullscreen && (
         <CommentsPanel
           feedbacks={currentFeedbacks}
           onToggleResolved={handleToggleResolved}
