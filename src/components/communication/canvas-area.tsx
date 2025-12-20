@@ -397,6 +397,17 @@ export function CanvasArea({
     redrawCanvas();
   }, [drawings, redrawCanvas]);
 
+  // Redraw canvas when exiting compare mode (canvas is remounted)
+  useEffect(() => {
+    if (!compareMode) {
+      // Small delay to ensure canvas is mounted and sized
+      const timer = setTimeout(() => {
+        redrawCanvas();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [compareMode, redrawCanvas]);
+
   // Handle panning (middle mouse, alt+click, or spacebar+drag)
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && selectedTool === "pointer" && e.altKey) || (e.button === 0 && isSpacePressed)) {
