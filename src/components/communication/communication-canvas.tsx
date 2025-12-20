@@ -9,7 +9,17 @@ import { CanvasArea } from "./canvas-area";
 import { ShareDialog } from "./share-dialog";
 import { NewIterationDialog } from "./new-iteration-dialog";
 
-// Define iteration type with image and feedbacks
+// Drawing path type for annotations
+interface DrawingPath {
+  id: string;
+  type: "draw" | "shape";
+  points?: { x: number; y: number }[];
+  rect?: { x: number; y: number; width: number; height: number };
+  color: string;
+  strokeWidth: number;
+}
+
+// Define iteration type with image, feedbacks, and drawings
 interface Iteration {
   id: string;
   version: number;
@@ -17,9 +27,10 @@ interface Iteration {
   timestamp: string;
   imageUrl: string;
   feedbacks: Feedback[];
+  drawings: DrawingPath[];
 }
 
-// Initial iterations data with their own feedbacks
+// Initial iterations data with their own feedbacks and drawings
 const initialIterations: Iteration[] = [
   {
     id: "5",
@@ -27,6 +38,7 @@ const initialIterations: Iteration[] = [
     name: "Iteration 5",
     timestamp: "Today, 2:30 PM",
     imageUrl: "/assets/login.png",
+    drawings: [],
     feedbacks: [
       {
         id: "5.1",
@@ -79,6 +91,7 @@ const initialIterations: Iteration[] = [
     name: "Iteration 4",
     timestamp: "Today, 11:00 AM",
     imageUrl: "/assets/login.png",
+    drawings: [],
     feedbacks: [
       {
         id: "4.1",
@@ -112,6 +125,7 @@ const initialIterations: Iteration[] = [
     name: "Iteration 3",
     timestamp: "Yesterday, 4:15 PM",
     imageUrl: "/assets/login.png",
+    drawings: [],
     feedbacks: [
       {
         id: "3.1",
@@ -133,6 +147,7 @@ const initialIterations: Iteration[] = [
     name: "Iteration 2",
     timestamp: "Dec 15, 2024",
     imageUrl: "/assets/login.png",
+    drawings: [],
     feedbacks: [],
   },
   {
@@ -141,6 +156,7 @@ const initialIterations: Iteration[] = [
     name: "Iteration 1",
     timestamp: "Dec 14, 2024",
     imageUrl: "/assets/login.png",
+    drawings: [],
     feedbacks: [],
   },
 ];
@@ -175,6 +191,7 @@ export function CommunicationCanvas() {
   // Get current iteration
   const currentIteration = iterations.find(i => i.id === activeIterationId) || iterations[0];
   const currentFeedbacks = currentIteration?.feedbacks || [];
+  const currentDrawings = currentIteration?.drawings || [];
 
   // Get unresolved feedbacks for current iteration
   const unresolvedFeedbacks = currentFeedbacks.filter(f => !f.resolved);
@@ -231,6 +248,15 @@ export function CommunicationCanvas() {
     setIterations(prev => prev.map(iteration =>
       iteration.id === activeIterationId
         ? { ...iteration, feedbacks: [newFeedback, ...iteration.feedbacks] }
+        : iteration
+    ));
+  };
+
+  // Update drawings for current iteration
+  const handleDrawingsChange = (drawings: DrawingPath[]) => {
+    setIterations(prev => prev.map(iteration =>
+      iteration.id === activeIterationId
+        ? { ...iteration, drawings }
         : iteration
     ));
   };
@@ -326,6 +352,7 @@ export function CommunicationCanvas() {
       name: `Iteration ${newVersion}`,
       timestamp: "Just now",
       imageUrl: imageUrl,
+      drawings: [],
       feedbacks: [],
     };
 
@@ -386,6 +413,8 @@ export function CommunicationCanvas() {
         compareIterations={iterations.filter(i => i.id !== activeIterationId)}
         selectedCompareId={compareIterationId}
         onCompareIterationChange={setCompareIterationId}
+        drawings={currentDrawings}
+        onDrawingsChange={handleDrawingsChange}
       />
 
       {/* Floating Header - Left and Right sections */}

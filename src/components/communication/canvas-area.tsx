@@ -75,6 +75,9 @@ interface CanvasAreaProps {
   compareIterations?: CompareIteration[];
   selectedCompareId?: string | null;
   onCompareIterationChange?: (id: string | null) => void;
+  // Drawings props (iteration-specific)
+  drawings?: DrawingPath[];
+  onDrawingsChange?: (drawings: DrawingPath[]) => void;
 }
 
 export function CanvasArea({
@@ -95,6 +98,8 @@ export function CanvasArea({
   compareIterations = [],
   selectedCompareId,
   onCompareIterationChange,
+  drawings: externalDrawings = [],
+  onDrawingsChange,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -119,9 +124,11 @@ export function CanvasArea({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
   const [shapeStart, setShapeStart] = useState<{ x: number; y: number } | null>(null);
-  const [drawings, setDrawings] = useState<DrawingPath[]>([]);
   const [currentDrawing, setCurrentDrawing] = useState<DrawingPath | null>(null);
   const [imageSize, setImageSize] = useState({ width: 500, height: 0 });
+
+  // Use external drawings from parent (iteration-specific)
+  const drawings = externalDrawings;
 
   // Use external markers if provided, otherwise use default
   const defaultMarkers: FeedbackMarker[] = [
@@ -200,6 +207,11 @@ export function CanvasArea({
       redrawCanvas();
     }
   }, [imageSize, redrawCanvas]);
+
+  // Redraw when drawings change (e.g., when switching iterations)
+  useEffect(() => {
+    redrawCanvas();
+  }, [drawings, redrawCanvas]);
 
   // Handle panning
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -314,7 +326,7 @@ export function CanvasArea({
         color: drawingColor,
         strokeWidth: 3,
       };
-      setDrawings((prev) => [...prev, newDrawing]);
+      onDrawingsChange?.([...drawings, newDrawing]);
       setCurrentDrawing(newDrawing);
 
       // Calculate center of drawing for marker position
@@ -350,7 +362,7 @@ export function CanvasArea({
           color: drawingColor,
           strokeWidth: 3,
         };
-        setDrawings((prev) => [...prev, newDrawing]);
+        onDrawingsChange?.([...drawings, newDrawing]);
         setCurrentDrawing(newDrawing);
         redrawCanvas();
 
@@ -425,7 +437,7 @@ export function CanvasArea({
   // Handle popover close - remove the drawing if feedback not submitted
   const handlePopoverClose = () => {
     if (currentDrawing) {
-      setDrawings((prev) => prev.filter((d) => d.id !== currentDrawing.id));
+      onDrawingsChange?.(drawings.filter((d) => d.id !== currentDrawing.id));
       redrawCanvas();
     }
     setShowPopover(false);
