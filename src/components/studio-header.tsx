@@ -56,6 +56,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
+import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
 
 const organizations = [
   { id: "1", name: "Acme Studio", abbr: "AS" },
@@ -157,6 +158,8 @@ export function StudioHeader({ user }: StudioHeaderProps) {
 
   // New client dialog state
   const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false)
+  // New brief dialog state
+  const [newBriefDialogOpen, setNewBriefDialogOpen] = React.useState(false)
 
   React.useEffect(() => {
     const isDarkMode = document.documentElement.classList.contains("dark")
@@ -358,9 +361,12 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               <Users className="w-4 h-4 text-[#4262FF]" />
               <span className="font-medium">Add Client</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg">
+            <DropdownMenuItem
+              onClick={() => setNewBriefDialogOpen(true)}
+              className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+            >
               <FolderOpen className="w-4 h-4 text-[#10b981]" />
-              <span className="font-medium">Add Project</span>
+              <span className="font-medium">Add Brief</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg">
               <Image className="w-4 h-4 text-[#f59e0b]" />
@@ -901,6 +907,16 @@ export function StudioHeader({ user }: StudioHeaderProps) {
         onComplete={(data) => {
           console.log("New client data:", data)
           setNewClientDialogOpen(false)
+        }}
+      />
+
+      {/* New Brief Dialog */}
+      <NewBriefDialog
+        open={newBriefDialogOpen}
+        onClose={() => setNewBriefDialogOpen(false)}
+        onComplete={(data) => {
+          console.log("New brief data:", data)
+          setNewBriefDialogOpen(false)
         }}
       />
     </header>

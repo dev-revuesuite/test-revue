@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Outfit, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-geist-sans",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700", "800"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -33,7 +33,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased font-sans`}
+        className={`${outfit.variable} ${jetbrainsMono.variable} antialiased font-sans`}
       >
         <ThemeProvider
           attribute="class"

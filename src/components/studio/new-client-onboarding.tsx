@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useState, useRef, useEffect } from "react"
-import { ChevronDown, Check, Plus, Upload, X, Image as ImageIcon, Pencil, Trash2 } from "lucide-react"
+import { ChevronDown, Check, Plus, Upload, X, Image as ImageIcon, Pencil, Trash2, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Types
@@ -410,18 +410,18 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
     onChange: (value: string) => void
     disabled?: boolean
   }) => (
-    <div className="relative dropdown-container z-30">
+    <div className="relative dropdown-container" style={{ zIndex: dropdownOpen === id ? 9999 : 30 }}>
       <button
         type="button"
         onClick={() => !disabled && setDropdownOpen(dropdownOpen === id ? null : id)}
         disabled={disabled}
         className={cn(
-          "w-full flex items-center justify-between px-4 py-3 rounded-lg border text-left transition-colors",
+          "w-full flex items-center justify-between px-4 py-3 border text-left transition-colors",
           disabled
             ? "bg-[#f5f5f5] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#444] cursor-not-allowed"
             : dropdownOpen === id
-            ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-transparent"
-            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:border-[#5C6ECD]/50"
+            ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-[#1a1a1a]"
+            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]/50"
         )}
       >
         <span className={value ? "text-[#1a1a1a] dark:text-white" : "text-[#999]"}>
@@ -433,7 +433,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
         )} />
       </button>
       {dropdownOpen === id && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-xl max-h-48 overflow-auto z-[9999]">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-2xl max-h-48 overflow-auto" style={{ zIndex: 99999 }}>
           {options.map((opt) => (
             <button
               key={opt}
@@ -524,7 +524,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#5C6ECD] hover:bg-[#5C6ECD]/10 transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-[#5C6ECD] hover:bg-[#5C6ECD]/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -566,7 +566,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                       value={formData.brandName}
                       onChange={(e) => setFormData(prev => ({ ...prev, brandName: e.target.value }))}
                       placeholder="Enter brand name"
-                      className="w-full px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                      className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                     />
                   </div>
                   <div>
@@ -593,7 +593,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     value={formData.websiteUrl}
                     onChange={(e) => setFormData(prev => ({ ...prev, websiteUrl: e.target.value }))}
                     placeholder="https://example.com"
-                    className="w-full px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                   />
                 </div>
 
@@ -605,7 +605,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     value={formData.officeAddress}
                     onChange={(e) => setFormData(prev => ({ ...prev, officeAddress: e.target.value }))}
                     placeholder="Start typing address..."
-                    className="w-full px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                   />
                 </div>
 
@@ -622,7 +622,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                             type="button"
                             onClick={() => setSocialPopoverOpen(socialPopoverOpen === link.id ? null : link.id)}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors min-w-[140px]",
+                              "flex items-center gap-2 px-3 py-2.5 border transition-colors min-w-[140px]",
                               socialPopoverOpen === link.id
                                 ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-transparent"
                                 : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:border-[#5C6ECD]/50"
@@ -644,7 +644,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                           </button>
                           {/* Popover */}
                           {socialPopoverOpen === link.id && (
-                            <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-xl z-[9999] py-1">
+                            <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-xl z-[9999] py-1">
                               {socialPlatforms.map((platform) => (
                                 <button
                                   key={platform}
@@ -681,7 +681,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                           value={link.url}
                           onChange={(e) => updateSocialLink(link.id, 'url', e.target.value)}
                           placeholder={`Enter ${link.platform} URL`}
-                          className="flex-1 px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                         />
                         {formData.socialLinks.length > 1 && (
                           <button
@@ -756,7 +756,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                         value={contact.name}
                         onChange={(e) => updateContact(contact.id, 'name', e.target.value)}
                         placeholder="Enter contact name"
-                        className="w-full px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                        className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                       />
                     </div>
 
@@ -770,7 +770,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                         value={contact.email}
                         onChange={(e) => updateContact(contact.id, 'email', e.target.value)}
                         placeholder="Enter email address"
-                        className="w-full px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                        className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                       />
                     </div>
 
@@ -797,7 +797,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                           value={contact.phone}
                           onChange={(e) => updateContact(contact.id, 'phone', e.target.value)}
                           placeholder="Enter phone number"
-                          className="flex-1 px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                         />
                       </div>
                     </div>
@@ -822,7 +822,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                       id="sameAsOffice"
                       checked={formData.sameAsOffice}
                       onChange={(e) => handleSameAsOffice(e.target.checked)}
-                      className="w-4 h-4 rounded border-[#e5e5e5] dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
+                      className="w-4 h-4border-[#e5e5e5] dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
                     />
                     <label htmlFor="sameAsOffice" className="text-sm text-[#666] dark:text-[#999] cursor-pointer select-none">
                       Same as office address
@@ -838,7 +838,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                         value={formData.contactAddress || ""}
                         onChange={(e) => setFormData(prev => ({ ...prev, contactAddress: e.target.value }))}
                         placeholder="Enter contact address..."
-                        className="w-full px-4 py-3 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                        className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                       />
                       <p className="text-xs text-[#999] mt-2">Enter full address including city, state and country</p>
                     </div>
@@ -873,7 +873,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Logo</h3>
                   <div className="flex items-center gap-3">
                     {formData.logoPreview ? (
-                      <div className="relative w-16 h-16 rounded-lg border border-[#e5e5e5] dark:border-[#444] overflow-hidden shrink-0">
+                      <div className="relative w-16 h-16 border border-[#e5e5e5] dark:border-[#444] overflow-hidden shrink-0">
                         <img
                           src={formData.logoPreview}
                           alt="Logo preview"
@@ -890,7 +890,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     ) : (
                       <div
                         onClick={() => logoInputRef.current?.click()}
-                        className="w-16 h-16 rounded-lg border-2 border-dashed border-[#e5e5e5] dark:border-[#444] flex items-center justify-center cursor-pointer hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-colors shrink-0 group"
+                        className="w-16 h-16 border-2 border-dashed border-[#e5e5e5] dark:border-[#444] flex items-center justify-center cursor-pointer hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-colors shrink-0 group"
                       >
                         <Upload className="w-5 h-5 text-[#999] group-hover:text-[#5C6ECD] transition-colors" />
                       </div>
@@ -900,7 +900,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                         readOnly
                         placeholder="No file selected"
                         value={formData.logo?.name || ""}
-                        className="w-full px-3 py-2.5 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-[#f9f9f9] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none text-sm"
+                        className="w-full px-3 py-2.5 border border-[#e5e5e5] dark:border-[#444] bg-[#f9f9f9] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none text-sm"
                       />
                     </div>
                     <input
@@ -913,7 +913,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     <button
                       type="button"
                       onClick={() => logoInputRef.current?.click()}
-                      className="px-4 py-2.5 rounded-lg border border-[#5C6ECD] text-[#5C6ECD] font-medium text-sm hover:bg-[#5C6ECD] hover:text-white transition-colors"
+                      className="px-4 py-2.5 border border-[#5C6ECD] text-[#5C6ECD] font-medium text-sm hover:bg-[#5C6ECD] hover:text-white transition-colors"
                     >
                       Upload
                     </button>
@@ -969,7 +969,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                       <p className="text-xs text-[#666] dark:text-[#999] mb-2">Uploaded fonts:</p>
                       <div className="flex flex-wrap gap-2">
                         {formData.customFonts.map((font, i) => (
-                          <span key={i} className="px-2 py-1 bg-[#5C6ECD]/10 text-[#5C6ECD] text-xs rounded-md">
+                          <span key={i} className="px-2 py-1 bg-[#5C6ECD]/10 text-[#5C6ECD] text-xs">
                             {font.name}
                           </span>
                         ))}
@@ -980,15 +980,14 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     <button
                       type="button"
                       onClick={addFontRow}
-                      className="px-4 py-2 rounded-lg bg-[#5C6ECD] text-white text-sm font-medium hover:bg-[#4A5BC7] transition-colors flex items-center gap-2"
+                      className="w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
                     >
-                      <Plus className="w-4 h-4" />
-                      ADD NEW FONT ROW
+                      <Plus className="w-5 h-5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => fontUploadRef.current?.click()}
-                      className="px-4 py-2 rounded-lg bg-[#5C6ECD] text-white text-sm font-medium hover:bg-[#4A5BC7] transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-[#5C6ECD] text-white text-sm font-medium hover:bg-[#4A5BC7] transition-colors flex items-center gap-2"
                     >
                       <Upload className="w-4 h-4" />
                       UPLOAD YOUR FONT
@@ -1014,7 +1013,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                   <div>
                     {formData.brandImages.length > 0 ? (
                       <div>
-                        <div className="relative aspect-[16/9] rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#444]">
+                        <div className="relative aspect-[16/9] overflow-hidden border border-[#e5e5e5] dark:border-[#444]">
                           <img
                             src={formData.brandImages[currentImageIndex]}
                             alt="Brand colors"
@@ -1058,7 +1057,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                       <button
                         type="button"
                         onClick={() => brandImageInputRef.current?.click()}
-                        className="w-full aspect-[16/9] rounded-lg border-2 border-dashed border-[#e5e5e5] dark:border-[#444] flex flex-col items-center justify-center gap-2 text-[#999] hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 hover:text-[#5C6ECD] transition-colors group"
+                        className="w-full aspect-[16/9] border-2 border-dashed border-[#e5e5e5] dark:border-[#444] flex flex-col items-center justify-center gap-2 text-[#999] hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 hover:text-[#5C6ECD] transition-colors group"
                       >
                         <ImageIcon className="w-8 h-8" />
                         <span className="text-sm font-medium">Browse media</span>
@@ -1087,7 +1086,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                             value={row.hex}
                             onChange={(e) => updateColorRow(row.id, 'hex', e.target.value.replace("#", "").slice(0, 6))}
                             placeholder="000000"
-                            className="w-16 px-2 py-2 rounded border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors font-mono text-xs"
+                            className="w-16 px-2 py-2border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors font-mono text-xs"
                             maxLength={6}
                           />
                           <div className="relative">
@@ -1123,7 +1122,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                           value={row.name}
                           onChange={(e) => updateColorRow(row.id, 'name', e.target.value)}
                           placeholder="Color name"
-                          className="flex-1 px-3 py-2 rounded border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors text-sm"
+                          className="flex-1 px-3 py-2border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors text-sm"
                         />
 
                         {/* Remove Button */}
@@ -1166,7 +1165,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
               <button
                 type="button"
                 onClick={handlePrevious}
-                className="px-6 py-2.5 rounded-lg font-medium text-[#1a1a1a] dark:text-white border border-[#e5e5e5] dark:border-[#444] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
+                className="px-6 py-2.5 font-medium text-[#1a1a1a] dark:text-white border border-[#e5e5e5] dark:border-[#444] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
               >
                 Previous
               </button>
@@ -1175,14 +1174,19 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
           <button
             type="button"
             onClick={handleNext}
+            disabled={!canContinue()}
             className={cn(
-              "px-8 py-2.5 rounded-lg font-medium transition-all",
+              "group flex items-center gap-2 px-8 py-2.5 font-medium transition-all",
               canContinue()
                 ? "bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white shadow-lg shadow-[#5C6ECD]/25"
                 : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
             )}
           >
-            {step === totalSteps ? "Complete" : "Continue"}
+            {step === totalSteps ? "Add Client" : "Continue"}
+            <ArrowRight className={cn(
+              "w-4 h-4 transition-transform duration-200",
+              canContinue() && "group-hover:translate-x-1"
+            )} />
           </button>
         </div>
       </footer>
