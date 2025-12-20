@@ -257,7 +257,7 @@ export function CommentsPanel({
   const teamCount = feedbacks.filter((f) => f.source === "team").length;
 
   return (
-    <div className="absolute top-20 right-3 bottom-3 w-[380px] bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl border border-gray-200 dark:border-[#444] flex flex-col z-10 overflow-hidden">
+    <div className="absolute top-20 right-3 bottom-3 w-[300px] lg:w-[340px] xl:w-[380px] bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl border border-gray-200 dark:border-[#444] flex flex-col z-10 overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100 dark:border-[#333] bg-gradient-to-r from-gray-50 to-white dark:from-[#333] dark:to-[#2a2a2a] shrink-0">
         <div className="flex items-center gap-2 mb-3">

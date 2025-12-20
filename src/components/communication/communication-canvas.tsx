@@ -196,8 +196,8 @@ export function CommunicationCanvas() {
   // Get unresolved feedbacks for current iteration
   const unresolvedFeedbacks = currentFeedbacks.filter(f => !f.resolved);
 
-  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 10));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
 
   // Get the next feedback number for the current iteration
   const getNextFeedbackNumber = useCallback(() => {

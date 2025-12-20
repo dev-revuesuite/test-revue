@@ -137,6 +137,7 @@ export function CanvasArea({
   const [shapeStart, setShapeStart] = useState<{ x: number; y: number } | null>(null);
   const [currentDrawing, setCurrentDrawing] = useState<DrawingPath | null>(null);
   const [imageSize, setImageSize] = useState({ width: 500, height: 0 });
+  const [displayedSize, setDisplayedSize] = useState({ width: 0, height: 0 });
 
   // Use external drawings from parent (iteration-specific)
   const drawings = externalDrawings;
@@ -213,17 +214,17 @@ export function CanvasArea({
         }
       }
 
-      // Zoom shortcuts
+      // Zoom shortcuts (5% increments for smoother zoom)
       if (modKey) {
         switch (e.key) {
           case '=':
           case '+':
             e.preventDefault();
-            onZoomChange?.(Math.min(zoom + 10, 200));
+            onZoomChange?.(Math.min(zoom + 5, 200));
             break;
           case '-':
             e.preventDefault();
-            onZoomChange?.(Math.max(zoom - 10, 10));
+            onZoomChange?.(Math.max(zoom - 5, 10));
             break;
           case '0':
             e.preventDefault();
@@ -251,7 +252,7 @@ export function CanvasArea({
     };
   }, [zoom, isSpacePressed, onToolChange, onZoomChange, onRotate, onToggleCompare, onResetView]);
 
-  // Mouse wheel zoom (Cmd/Ctrl + scroll)
+  // Mouse wheel zoom (Cmd/Ctrl + scroll) - smooth 2% increments
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -259,7 +260,8 @@ export function CanvasArea({
 
       if (modKey) {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? -10 : 10;
+        // Use smaller increment (2%) for smoother zoom with scroll
+        const delta = e.deltaY > 0 ? -2 : 2;
         const newZoom = Math.min(Math.max(zoom + delta, 10), 200);
         onZoomChange?.(newZoom);
       }
@@ -315,30 +317,45 @@ export function CanvasArea({
     });
   }, [drawings, getContext]);
 
-  // Update canvas size when image loads
+  // Update canvas size when image loads and track displayed size with ResizeObserver
   useEffect(() => {
     const img = imageRef.current?.querySelector("img");
     if (img) {
       const updateSize = () => {
         setImageSize({ width: img.naturalWidth || 500, height: img.naturalHeight || 700 });
+        // Also update displayed size
+        const rect = img.getBoundingClientRect();
+        setDisplayedSize({ width: rect.width, height: rect.height });
       };
       if (img.complete) {
         updateSize();
       } else {
         img.onload = updateSize;
       }
-    }
-  }, []);
 
-  // Set canvas size
+      // ResizeObserver to track displayed size changes (for responsive design)
+      const resizeObserver = new ResizeObserver(() => {
+        const rect = img.getBoundingClientRect();
+        setDisplayedSize({ width: rect.width, height: rect.height });
+      });
+      resizeObserver.observe(img);
+
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
+  }, [imageUrl]);
+
+  // Set canvas size based on displayed image dimensions
   useEffect(() => {
     const canvas = drawingCanvasRef.current;
-    if (canvas && imageSize.height > 0) {
-      canvas.width = 500; // Match image width
-      canvas.height = (500 / imageSize.width) * imageSize.height;
+    if (canvas && displayedSize.width > 0 && displayedSize.height > 0) {
+      // Use displayed size for canvas to match the responsive image
+      canvas.width = displayedSize.width;
+      canvas.height = displayedSize.height;
       redrawCanvas();
     }
-  }, [imageSize, redrawCanvas]);
+  }, [displayedSize, redrawCanvas]);
 
   // Redraw when drawings change (e.g., when switching iterations)
   useEffect(() => {
@@ -701,11 +718,7 @@ export function CanvasArea({
                 <img
                   src={imageUrl}
                   alt="Current Iteration"
-                  className="max-w-none select-none"
-                  style={{
-                    width: "400px",
-                    height: "auto",
-                  }}
+                  className="max-w-none select-none w-[280px] lg:w-[340px] xl:w-[400px] h-auto"
                   draggable={false}
                 />
               </div>
@@ -776,15 +789,11 @@ export function CanvasArea({
                   <img
                     src={compareImageUrl}
                     alt="Compare Iteration"
-                    className="max-w-none select-none"
-                    style={{
-                      width: "400px",
-                      height: "auto",
-                    }}
+                    className="max-w-none select-none w-[280px] lg:w-[340px] xl:w-[400px] h-auto"
                     draggable={false}
                   />
                 ) : (
-                  <div className="w-[400px] h-[500px] flex items-center justify-center bg-gray-100 dark:bg-[#1a1a1a]">
+                  <div className="w-[280px] lg:w-[340px] xl:w-[400px] h-[350px] lg:h-[425px] xl:h-[500px] flex items-center justify-center bg-gray-100 dark:bg-[#1a1a1a]">
                     <p className="text-gray-500 dark:text-gray-400">Select an iteration to compare</p>
                   </div>
                 )}
@@ -795,10 +804,8 @@ export function CanvasArea({
       ) : (
         /* Normal Mode - Single Image with Markers */
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          className="absolute inset-0 flex items-center justify-center pointer-events-none pl-[60px] pr-[324px] lg:pr-[364px] xl:pr-[404px]"
           style={{
-            paddingLeft: "60px",
-            paddingRight: "404px",
             transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
           }}
         >
@@ -819,11 +826,7 @@ export function CanvasArea({
             <img
               src={imageUrl}
               alt="Creative Preview"
-              className="max-w-none select-none"
-              style={{
-                width: "500px",
-                height: "auto",
-              }}
+              className="max-w-none select-none w-[350px] lg:w-[420px] xl:w-[500px] h-auto"
               draggable={false}
             />
 

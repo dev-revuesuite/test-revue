@@ -19,7 +19,7 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut }: ZoomControlsProps) {
   const zoomPresets = [25, 50, 75, 100, 125, 150, 200];
 
   return (
-    <div className="absolute bottom-4 right-[404px] flex items-center gap-2">
+    <div className="absolute bottom-4 right-[324px] lg:right-[364px] xl:right-[404px] flex items-center gap-2">
       {/* Zoom Controls Container */}
       <div className="flex items-center bg-white dark:bg-[#2a2a2a] rounded-lg shadow-sm border border-gray-200 dark:border-[#444]">
         {/* Grid/Layout */}
