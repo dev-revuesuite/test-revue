@@ -57,6 +57,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
+import { NewOrganizationDialog } from "@/components/studio/new-organization-dialog"
 
 const organizations = [
   { id: "1", name: "Acme Studio", abbr: "AS" },
@@ -160,6 +161,8 @@ export function StudioHeader({ user }: StudioHeaderProps) {
   const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false)
   // New brief dialog state
   const [newBriefDialogOpen, setNewBriefDialogOpen] = React.useState(false)
+  // New organization dialog state
+  const [newOrgDialogOpen, setNewOrgDialogOpen] = React.useState(false)
 
   React.useEffect(() => {
     const isDarkMode = document.documentElement.classList.contains("dark")
@@ -297,7 +300,10 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               </button>
             ))}
             <div className="border-t border-[#e6e6e6] dark:border-[#333] mt-1.5 pt-1.5">
-              <button className="w-full flex items-center gap-3 px-2.5 py-2 rounded text-sm text-[#7a7a7a] dark:text-[#999] hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors">
+              <button
+                onClick={() => setNewOrgDialogOpen(true)}
+                className="w-full flex items-center gap-3 px-2.5 py-2 rounded text-sm text-[#7a7a7a] dark:text-[#999] hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
+              >
                 <Plus className="w-4 h-4" />
                 <span>Create new organization</span>
               </button>
@@ -917,6 +923,16 @@ export function StudioHeader({ user }: StudioHeaderProps) {
         onComplete={(data) => {
           console.log("New brief data:", data)
           setNewBriefDialogOpen(false)
+        }}
+      />
+
+      {/* New Organization Dialog */}
+      <NewOrganizationDialog
+        open={newOrgDialogOpen}
+        onClose={() => setNewOrgDialogOpen(false)}
+        onComplete={(data) => {
+          console.log("New organization data:", data)
+          setNewOrgDialogOpen(false)
         }}
       />
     </header>

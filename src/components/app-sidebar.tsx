@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutGrid, FileText, FolderOpen, Plus, Users, PanelLeftClose, PanelLeft, HardDrive, Loader2, Sun, Moon } from "lucide-react"
+import { LayoutGrid, FileText, FolderOpen, Plus, Users, PanelLeftClose, PanelLeft, HardDrive, Loader2, Sun, Moon, MessageCircle } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
@@ -37,6 +37,11 @@ const navItems = [
     title: "Clients",
     url: "/clients",
     icon: Users,
+  },
+  {
+    title: "Communication",
+    url: "/communication",
+    icon: MessageCircle,
   },
 ]
 
@@ -106,9 +111,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
                 "flex items-center gap-3 transition-all duration-150 relative rounded-lg",
                 isExpanded ? "w-full px-3 py-3 justify-start" : "w-12 h-12 justify-center",
                 isActive
-                  ? "bg-emerald-500 text-white shadow-md"
+                  ? "bg-[#DBFE52] text-black shadow-md"
                   : isNavigating
-                  ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                  ? "bg-[#DBFE52]/30 text-[#9ab83a]"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95"
               )}
               title={!isExpanded ? item.title : undefined}
