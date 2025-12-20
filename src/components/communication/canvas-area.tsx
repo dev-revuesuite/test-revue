@@ -750,7 +750,7 @@ export function CanvasArea({
             {/* Compare Iteration */}
             <div className="relative">
               {/* Compare Dropdown */}
-              <div className="absolute -top-10 left-0 right-0 flex justify-center">
+              <div className="absolute -top-10 left-0 right-0 flex justify-center z-[100]">
                 <div className="relative">
                   <button
                     onClick={() => setShowCompareDropdown(!showCompareDropdown)}
@@ -1135,16 +1135,30 @@ export function CanvasArea({
         </>
       )}
 
-      {/* Tool hint */}
+      {/* Tool hint - centered relative to design area (accounting for sidebar and comments panel) */}
       {isInteractiveTool && !showPopover && !showChatPopover && !compareMode && (
-        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none">
+        <div
+          className={cn(
+            "absolute bottom-20 transform -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none z-30",
+            isFullscreen
+              ? "left-1/2"
+              : "left-[calc(50%-(132px))] lg:left-[calc(50%-(152px))] xl:left-[calc(50%-(172px))]"
+          )}
+        >
           {getToolHint()}
         </div>
       )}
 
-      {/* Compare Mode hint */}
+      {/* Compare Mode hint - centered relative to design area */}
       {compareMode && (
-        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none flex items-center gap-2">
+        <div
+          className={cn(
+            "absolute bottom-20 transform -translate-x-1/2 bg-purple-600 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none flex items-center gap-2 z-30",
+            isFullscreen
+              ? "left-1/2"
+              : "left-[calc(50%-20px)]"
+          )}
+        >
           <span>Compare Mode Active</span>
           <span className="text-purple-200">•</span>
           <span className="text-purple-200">Press R to rotate • K to exit</span>
