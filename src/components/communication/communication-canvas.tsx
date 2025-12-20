@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { CommunicationHeader } from "./communication-header";
 import { CommunicationSidebar } from "./communication-sidebar";
 import { CommentsPanel, Feedback, ReplyItem } from "./comments-panel";
@@ -188,6 +188,9 @@ export function CommunicationCanvas() {
   // Rotation state
   const [rotation, setRotation] = useState(0);
 
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   // Get current iteration
   const currentIteration = iterations.find(i => i.id === activeIterationId) || iterations[0];
   const currentFeedbacks = currentIteration?.feedbacks || [];
@@ -198,6 +201,35 @@ export function CommunicationCanvas() {
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
+
+  // Fullscreen toggle handler
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch((err) => {
+        console.error(`Error attempting to exit fullscreen: ${err.message}`);
+      });
+    }
+  }, []);
+
+  // Listen for fullscreen changes (in case user exits with Escape key)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // Get the next feedback number for the current iteration
   const getNextFeedbackNumber = useCallback(() => {
@@ -420,6 +452,7 @@ export function CommunicationCanvas() {
         onRotate={() => setRotation(prev => (prev + 90) % 360)}
         onToggleCompare={() => handleSelectTool("compare")}
         onResetView={() => setRotation(0)}
+        onToggleFullscreen={handleToggleFullscreen}
       />
 
       {/* Floating Header - Left and Right sections */}
@@ -461,6 +494,9 @@ export function CommunicationCanvas() {
         zoom={zoom}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
+        onZoomChange={setZoom}
+        onToggleFullscreen={handleToggleFullscreen}
+        isFullscreen={isFullscreen}
       />
 
       {/* Share Dialog */}
