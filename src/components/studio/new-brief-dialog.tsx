@@ -13,9 +13,15 @@ import {
   ArrowRight,
   Search,
   Sparkles,
-  Zap
+  Zap,
+  CalendarIcon,
+  Clock
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 
 // Types
 interface DeliverableStage {
@@ -847,38 +853,109 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
               <div className="space-y-6 overflow-visible">
                 {/* Date Row */}
                 <div className="grid grid-cols-3 gap-4">
+                  {/* Start Date Picker */}
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                       Start Date <span className="text-[#5C6ECD] font-normal">*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                      className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            !formData.startDate && "text-[#999]"
+                          )}
+                        >
+                          <CalendarIcon className="mr-3 h-4 w-4 text-[#5C6ECD]" />
+                          {formData.startDate ? format(new Date(formData.startDate), "PPP") : "Select date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={formData.startDate ? new Date(formData.startDate) : undefined}
+                          onSelect={(date) => setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" }))}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
+
+                  {/* End Date Picker */}
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                       End Date <span className="text-[#5C6ECD] font-normal">*</span>
                     </label>
-                    <input
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                      className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            !formData.endDate && "text-[#999]"
+                          )}
+                        >
+                          <CalendarIcon className="mr-3 h-4 w-4 text-[#5C6ECD]" />
+                          {formData.endDate ? format(new Date(formData.endDate), "PPP") : "Select date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={formData.endDate ? new Date(formData.endDate) : undefined}
+                          onSelect={(date) => setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" }))}
+                          disabled={(date) => formData.startDate ? date < new Date(formData.startDate) : false}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
+
+                  {/* End Time Picker */}
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                       End Time <span className="text-[#5C6ECD] font-normal">*</span>
                     </label>
-                    <input
-                      type="time"
-                      value={formData.endTime}
-                      onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
-                      className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            !formData.endTime && "text-[#999]"
+                          )}
+                        >
+                          <Clock className="mr-3 h-4 w-4 text-[#5C6ECD]" />
+                          {formData.endTime ? format(new Date(`2000-01-01T${formData.endTime}`), "h:mm a") : "Select time"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-48 p-2" align="start">
+                        <div className="grid grid-cols-3 gap-1 max-h-[200px] overflow-y-auto">
+                          {Array.from({ length: 24 }, (_, hour) =>
+                            ["00", "30"].map(min => {
+                              const timeValue = `${hour.toString().padStart(2, "0")}:${min}`
+                              const displayTime = format(new Date(`2000-01-01T${timeValue}`), "h:mm a")
+                              return (
+                                <button
+                                  key={timeValue}
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({ ...prev, endTime: timeValue }))}
+                                  className={cn(
+                                    "px-2 py-1.5 text-xs font-medium transition-colors",
+                                    formData.endTime === timeValue
+                                      ? "bg-[#5C6ECD] text-white"
+                                      : "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] text-[#1a1a1a] dark:text-white"
+                                  )}
+                                >
+                                  {displayTime}
+                                </button>
+                              )
+                            })
+                          ).flat()}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
 
@@ -898,13 +975,33 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                           placeholder="Description"
                           className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                         />
-                        <input
-                          type="date"
-                          value={stage.date}
-                          onChange={(e) => updateDeliverableStage(stage.id, 'date', e.target.value)}
-                          placeholder="Date"
-                          className="px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-[180px] justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                                !stage.date && "text-[#999]"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4 text-[#5C6ECD]" />
+                              {stage.date ? format(new Date(stage.date), "MMM dd, yyyy") : "Select date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={stage.date ? new Date(stage.date) : undefined}
+                              onSelect={(date) => updateDeliverableStage(stage.id, 'date', date ? format(date, "yyyy-MM-dd") : "")}
+                              disabled={(date) => {
+                                if (formData.startDate && date < new Date(formData.startDate)) return true
+                                if (formData.endDate && date > new Date(formData.endDate)) return true
+                                return false
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                         {formData.deliverableStages.length > 1 && (
                           <button
                             type="button"
