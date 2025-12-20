@@ -78,6 +78,12 @@ interface CanvasAreaProps {
   // Drawings props (iteration-specific)
   drawings?: DrawingPath[];
   onDrawingsChange?: (drawings: DrawingPath[]) => void;
+  // Keyboard/mouse shortcut handlers
+  onZoomChange?: (zoom: number) => void;
+  onToolChange?: (tool: string) => void;
+  onRotate?: () => void;
+  onToggleCompare?: () => void;
+  onResetView?: () => void;
 }
 
 export function CanvasArea({
@@ -100,6 +106,11 @@ export function CanvasArea({
   onCompareIterationChange,
   drawings: externalDrawings = [],
   onDrawingsChange,
+  onZoomChange,
+  onToolChange,
+  onRotate,
+  onToggleCompare,
+  onResetView,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -142,8 +153,129 @@ export function CanvasArea({
   // Compare dropdown state
   const [showCompareDropdown, setShowCompareDropdown] = useState(false);
 
+  // Spacebar pan state
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+
   // Drawing color
   const drawingColor = "#ef4444"; // Red color for annotations
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in input fields
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+      // Spacebar for panning
+      if (e.code === 'Space' && !isSpacePressed) {
+        e.preventDefault();
+        setIsSpacePressed(true);
+      }
+
+      // Tool shortcuts (only when no modifier key)
+      if (!modKey && !e.shiftKey && !e.altKey) {
+        switch (e.key.toLowerCase()) {
+          case 'v':
+            e.preventDefault();
+            onToolChange?.('pointer');
+            break;
+          case 'd':
+            e.preventDefault();
+            onToolChange?.('draw');
+            break;
+          case 's':
+            e.preventDefault();
+            onToolChange?.('shape');
+            break;
+          case 'c':
+            e.preventDefault();
+            onToolChange?.('comment');
+            break;
+          case 'k':
+            e.preventDefault();
+            onToggleCompare?.();
+            break;
+          case 'r':
+            e.preventDefault();
+            onRotate?.();
+            break;
+          case 'escape':
+            e.preventDefault();
+            setShowPopover(false);
+            setShowChatPopover(false);
+            setShowCompareDropdown(false);
+            setCurrentDrawing(null);
+            break;
+        }
+      }
+
+      // Zoom shortcuts
+      if (modKey) {
+        switch (e.key) {
+          case '=':
+          case '+':
+            e.preventDefault();
+            onZoomChange?.(Math.min(zoom + 10, 200));
+            break;
+          case '-':
+            e.preventDefault();
+            onZoomChange?.(Math.max(zoom - 10, 10));
+            break;
+          case '0':
+            e.preventDefault();
+            onZoomChange?.(100);
+            onResetView?.();
+            setPanOffset({ x: 0, y: 0 });
+            break;
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+        setIsPanning(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [zoom, isSpacePressed, onToolChange, onZoomChange, onRotate, onToggleCompare, onResetView]);
+
+  // Mouse wheel zoom (Cmd/Ctrl + scroll)
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+      if (modKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -10 : 10;
+        const newZoom = Math.min(Math.max(zoom + delta, 10), 200);
+        onZoomChange?.(newZoom);
+      }
+    };
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    return () => {
+      if (canvas) {
+        canvas.removeEventListener('wheel', handleWheel);
+      }
+    };
+  }, [zoom, onZoomChange]);
 
   // Get canvas context
   const getContext = useCallback(() => {
@@ -213,9 +345,9 @@ export function CanvasArea({
     redrawCanvas();
   }, [drawings, redrawCanvas]);
 
-  // Handle panning
+  // Handle panning (middle mouse, alt+click, or spacebar+drag)
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && selectedTool === "pointer" && e.altKey)) {
+    if (e.button === 1 || (e.button === 0 && selectedTool === "pointer" && e.altKey) || (e.button === 0 && isSpacePressed)) {
       setIsPanning(true);
       setStartPan({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
     }
@@ -528,6 +660,7 @@ export function CanvasArea({
         // Dark mode: dark background
         "dark:bg-[#0d0d0d]",
         isPanning ? "cursor-grabbing" :
+        isSpacePressed ? "cursor-grab" :
         selectedTool === "draw" ? "cursor-crosshair" :
         selectedTool === "shape" ? "cursor-crosshair" :
         isInteractiveTool ? "cursor-crosshair" :
@@ -991,9 +1124,107 @@ export function CanvasArea({
         <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none flex items-center gap-2">
           <span>Compare Mode Active</span>
           <span className="text-purple-200">•</span>
-          <span className="text-purple-200">Use Rotate (R) to rotate both images</span>
+          <span className="text-purple-200">Press R to rotate • K to exit</span>
         </div>
       )}
+
+      {/* Keyboard Shortcuts Help */}
+      <div className="absolute bottom-4 left-4 group">
+        <button className="w-8 h-8 bg-white dark:bg-[#2a2a2a] rounded-lg shadow-lg border border-gray-200 dark:border-[#444] flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#333] transition-colors">
+          <span className="text-sm font-medium">?</span>
+        </button>
+
+        {/* Shortcuts Panel */}
+        <div className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-[#2a2a2a] rounded-xl shadow-2xl border border-gray-200 dark:border-[#444] p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Keyboard Shortcuts</h3>
+
+          <div className="space-y-3">
+            {/* Tools */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Tools</p>
+              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Pointer</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">V</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Draw</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">D</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Shape</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">S</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Comment</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">C</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Compare</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">K</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Rotate</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">R</kbd>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Navigation</p>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Pan</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">Space</kbd>
+                    <span className="text-gray-400">+ drag</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Zoom</span>
+                  <div className="flex items-center gap-1">
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">⌘/Ctrl</kbd>
+                    <span className="text-gray-400">+ scroll</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Zoom In</span>
+                  <div className="flex items-center gap-0.5">
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">⌘/Ctrl</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">+</kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Zoom Out</span>
+                  <div className="flex items-center gap-0.5">
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">⌘/Ctrl</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">-</kbd>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Reset View</span>
+                  <div className="flex items-center gap-0.5">
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">⌘/Ctrl</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">0</kbd>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* General */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">General</p>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-300">Close/Cancel</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-[#333] rounded text-gray-500 dark:text-gray-400 font-mono">Esc</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

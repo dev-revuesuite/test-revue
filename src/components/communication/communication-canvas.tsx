@@ -415,6 +415,11 @@ export function CommunicationCanvas() {
         onCompareIterationChange={setCompareIterationId}
         drawings={currentDrawings}
         onDrawingsChange={handleDrawingsChange}
+        onZoomChange={setZoom}
+        onToolChange={setSelectedTool}
+        onRotate={() => setRotation(prev => (prev + 90) % 360)}
+        onToggleCompare={() => handleSelectTool("compare")}
+        onResetView={() => setRotation(0)}
       />
 
       {/* Floating Header - Left and Right sections */}
