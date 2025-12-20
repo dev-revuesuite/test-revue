@@ -379,7 +379,7 @@ export function CanvasArea({
         resizeObserver.disconnect();
       };
     }
-  }, [imageUrl]);
+  }, [imageUrl, compareMode]); // Re-run when exiting compare mode to re-attach ResizeObserver
 
   // Set canvas size based on displayed image dimensions
   useEffect(() => {
