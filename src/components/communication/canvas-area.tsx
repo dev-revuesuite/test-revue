@@ -717,7 +717,7 @@ export function CanvasArea({
           <div className="flex items-center gap-6 pointer-events-auto">
             {/* Current Iteration */}
             <div className="relative">
-              <div className="absolute -top-10 left-0 right-0 flex justify-center">
+              <div className="absolute -top-10 left-0 right-0 flex justify-center z-[100]">
                 <div className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-full shadow-lg">
                   Current • v{currentIteration}
                 </div>
