@@ -2,9 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { Send, X, CheckCircle2, Circle, MoreHorizontal } from "lucide-react";
+import { Send, X, CheckCircle2, Circle, ChevronDown } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+
+interface CompareIteration {
+  id: string;
+  name: string;
+  version: number;
+  timestamp: string;
+}
 
 interface ReplyItem {
   id: string;
@@ -60,6 +67,14 @@ interface CanvasAreaProps {
   onMarkerClick?: (markerId: string) => void;
   onToggleResolved?: (markerId: string) => void;
   onAddReply?: (markerId: string, reply: ReplyItem) => void;
+  // New props for compare mode, rotation, and dynamic image
+  imageUrl?: string;
+  rotation?: number;
+  compareMode?: boolean;
+  compareImageUrl?: string;
+  compareIterations?: CompareIteration[];
+  selectedCompareId?: string | null;
+  onCompareIterationChange?: (id: string | null) => void;
 }
 
 export function CanvasArea({
@@ -73,6 +88,13 @@ export function CanvasArea({
   onMarkerClick,
   onToggleResolved,
   onAddReply,
+  imageUrl = "/assets/login.png",
+  rotation = 0,
+  compareMode = false,
+  compareImageUrl,
+  compareIterations = [],
+  selectedCompareId,
+  onCompareIterationChange,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -109,6 +131,9 @@ export function CanvasArea({
   ];
   const markers = externalMarkers || defaultMarkers;
   const localFeedbackCount = feedbackCount;
+
+  // Compare dropdown state
+  const [showCompareDropdown, setShowCompareDropdown] = useState(false);
 
   // Drawing color
   const drawingColor = "#ef4444"; // Red color for annotations
@@ -501,83 +526,206 @@ export function CanvasArea({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Canvas Content - Centered Image */}
-      <div
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{
-          paddingLeft: "60px",
-          paddingRight: "404px",
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-        }}
-      >
-        {/* Creative Image with Markers */}
+      {/* Canvas Content - Compare Mode or Single Image */}
+      {compareMode ? (
+        /* Compare Mode - Side by Side View */
         <div
-          ref={imageRef}
-          className={cn(
-            "relative shadow-2xl rounded-lg overflow-hidden pointer-events-auto",
-            isInteractiveTool && "ring-2 ring-blue-400 ring-offset-2"
-          )}
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
           style={{
-            transform: `scale(${zoom / 100})`,
-            transformOrigin: "center center",
+            paddingLeft: "60px",
+            paddingRight: "20px",
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
           }}
-          onClick={handleImageClick}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/assets/login.png"
-            alt="Creative Preview"
-            className="max-w-none select-none"
-            style={{
-              width: "500px",
-              height: "auto",
-            }}
-            draggable={false}
-          />
-
-          {/* Drawing Canvas Overlay */}
-          <canvas
-            ref={drawingCanvasRef}
-            className={cn(
-              "absolute top-0 left-0 w-full h-full",
-              isDrawingTool ? "pointer-events-auto" : "pointer-events-none"
-            )}
-            style={{ cursor: isDrawingTool ? "crosshair" : "default" }}
-            onMouseDown={handleDrawingStart}
-            onMouseMove={handleDrawingMove}
-            onMouseUp={handleDrawingEnd}
-            onMouseLeave={() => {
-              if (isDrawing) {
-                setIsDrawing(false);
-                setCurrentPath([]);
-                setShapeStart(null);
-              }
-            }}
-          />
-
-          {/* Feedback Markers */}
-          {markers.map((marker) => (
-            <div
-              key={marker.id}
-              className={cn(
-                "absolute min-w-[28px] h-7 px-1.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-10",
-                marker.resolved
-                  ? "bg-green-500 text-white"
-                  : "bg-red-500 text-white",
-                highlightedMarker === marker.id && "ring-4 ring-yellow-400 ring-offset-2 scale-125 z-50 animate-pulse"
-              )}
-              style={{
-                left: `${marker.x}%`,
-                top: `${marker.y}%`,
-              }}
-              title={marker.content}
-              onClick={(e) => handleMarkerClickForChat(e, marker)}
-            >
-              {marker.number}
+          <div className="flex items-center gap-6 pointer-events-auto">
+            {/* Current Iteration */}
+            <div className="relative">
+              <div className="absolute -top-10 left-0 right-0 flex justify-center">
+                <div className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-full shadow-lg">
+                  Current • v{currentIteration}
+                </div>
+              </div>
+              <div
+                className="relative shadow-2xl rounded-lg overflow-hidden bg-white dark:bg-[#2a2a2a]"
+                style={{
+                  transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
+                  transformOrigin: "center center",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt="Current Iteration"
+                  className="max-w-none select-none"
+                  style={{
+                    width: "400px",
+                    height: "auto",
+                  }}
+                  draggable={false}
+                />
+              </div>
             </div>
-          ))}
+
+            {/* VS Divider */}
+            <div className="flex flex-col items-center gap-2 py-4">
+              <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                <span className="text-white font-bold text-sm">VS</span>
+              </div>
+              <div className="h-32 w-0.5 bg-purple-600/30" />
+            </div>
+
+            {/* Compare Iteration */}
+            <div className="relative">
+              {/* Compare Dropdown */}
+              <div className="absolute -top-10 left-0 right-0 flex justify-center">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowCompareDropdown(!showCompareDropdown)}
+                    className="px-4 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-full shadow-lg flex items-center gap-2 hover:bg-purple-700 transition-colors"
+                  >
+                    Compare • v{compareIterations.find(i => i.id === selectedCompareId)?.version || "?"}
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showCompareDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowCompareDropdown(false)}
+                      />
+                      <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-[#2a2a2a] rounded-lg shadow-xl border border-gray-200 dark:border-[#444] overflow-hidden z-50 min-w-[200px]">
+                        {compareIterations.map((iteration) => (
+                          <button
+                            key={iteration.id}
+                            onClick={() => {
+                              onCompareIterationChange?.(iteration.id);
+                              setShowCompareDropdown(false);
+                            }}
+                            className={cn(
+                              "w-full px-4 py-2.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-[#333] transition-colors flex items-center justify-between",
+                              selectedCompareId === iteration.id && "bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
+                            )}
+                          >
+                            <span className="font-medium">{iteration.name}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {iteration.timestamp}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="relative shadow-2xl rounded-lg overflow-hidden bg-white dark:bg-[#2a2a2a]"
+                style={{
+                  transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
+                  transformOrigin: "center center",
+                }}
+              >
+                {compareImageUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={compareImageUrl}
+                    alt="Compare Iteration"
+                    className="max-w-none select-none"
+                    style={{
+                      width: "400px",
+                      height: "auto",
+                    }}
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="w-[400px] h-[500px] flex items-center justify-center bg-gray-100 dark:bg-[#1a1a1a]">
+                    <p className="text-gray-500 dark:text-gray-400">Select an iteration to compare</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Normal Mode - Single Image with Markers */
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{
+            paddingLeft: "60px",
+            paddingRight: "404px",
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+          }}
+        >
+          {/* Creative Image with Markers */}
+          <div
+            ref={imageRef}
+            className={cn(
+              "relative shadow-2xl rounded-lg overflow-hidden pointer-events-auto",
+              isInteractiveTool && "ring-2 ring-blue-400 ring-offset-2"
+            )}
+            style={{
+              transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
+              transformOrigin: "center center",
+            }}
+            onClick={handleImageClick}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl}
+              alt="Creative Preview"
+              className="max-w-none select-none"
+              style={{
+                width: "500px",
+                height: "auto",
+              }}
+              draggable={false}
+            />
+
+            {/* Drawing Canvas Overlay */}
+            <canvas
+              ref={drawingCanvasRef}
+              className={cn(
+                "absolute top-0 left-0 w-full h-full",
+                isDrawingTool ? "pointer-events-auto" : "pointer-events-none"
+              )}
+              style={{ cursor: isDrawingTool ? "crosshair" : "default" }}
+              onMouseDown={handleDrawingStart}
+              onMouseMove={handleDrawingMove}
+              onMouseUp={handleDrawingEnd}
+              onMouseLeave={() => {
+                if (isDrawing) {
+                  setIsDrawing(false);
+                  setCurrentPath([]);
+                  setShapeStart(null);
+                }
+              }}
+            />
+
+            {/* Feedback Markers */}
+            {markers.map((marker) => (
+              <div
+                key={marker.id}
+                className={cn(
+                  "absolute min-w-[28px] h-7 px-1.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-10",
+                  marker.resolved
+                    ? "bg-green-500 text-white"
+                    : "bg-red-500 text-white",
+                  highlightedMarker === marker.id && "ring-4 ring-yellow-400 ring-offset-2 scale-125 z-50 animate-pulse"
+                )}
+                style={{
+                  left: `${marker.x}%`,
+                  top: `${marker.y}%`,
+                }}
+                title={marker.content}
+                onClick={(e) => handleMarkerClickForChat(e, marker)}
+              >
+                {marker.number}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Feedback Popover */}
       {showPopover && (
@@ -820,9 +968,18 @@ export function CanvasArea({
       )}
 
       {/* Tool hint */}
-      {isInteractiveTool && !showPopover && !showChatPopover && (
+      {isInteractiveTool && !showPopover && !showChatPopover && !compareMode && (
         <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none">
           {getToolHint()}
+        </div>
+      )}
+
+      {/* Compare Mode hint */}
+      {compareMode && (
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none flex items-center gap-2">
+          <span>Compare Mode Active</span>
+          <span className="text-purple-200">•</span>
+          <span className="text-purple-200">Use Rotate (R) to rotate both images</span>
         </div>
       )}
     </div>

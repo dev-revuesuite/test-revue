@@ -20,6 +20,7 @@ import {
   Contrast,
   HelpCircle,
   LogOut,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -43,13 +44,14 @@ interface Iteration {
   timestamp: string;
 }
 
-const initialIterations: Iteration[] = [
-  { id: "5", name: "Iteration 5", version: 5, timestamp: "Today, 2:30 PM" },
-  { id: "4", name: "Iteration 4", version: 4, timestamp: "Today, 11:00 AM" },
-  { id: "3", name: "Iteration 3", version: 3, timestamp: "Yesterday, 4:15 PM" },
-  { id: "2", name: "Iteration 2", version: 2, timestamp: "Dec 15, 2024" },
-  { id: "1", name: "Iteration 1", version: 1, timestamp: "Dec 14, 2024" },
-];
+interface CommunicationHeaderProps {
+  iterations?: Iteration[];
+  activeIterationId?: string;
+  onIterationChange?: (id: string) => void;
+  onNewIteration?: () => void;
+  onShare?: () => void;
+  unresolvedCount?: number;
+}
 
 // Mock user data - in real app this would come from auth context
 const currentUser = {
@@ -58,13 +60,26 @@ const currentUser = {
   avatar: "",
 };
 
-export function CommunicationHeader() {
+export function CommunicationHeader({
+  iterations: propIterations,
+  activeIterationId: propActiveId,
+  onIterationChange,
+  onNewIteration,
+  onShare,
+  unresolvedCount = 0,
+}: CommunicationHeaderProps) {
   const router = useRouter();
   const [creativeName, setCreativeName] = useState("Homepage Banner");
   const [isEditing, setIsEditing] = useState(false);
-  const [iterations, setIterations] = useState<Iteration[]>(initialIterations);
-  const [activeIteration, setActiveIteration] = useState("5");
   const [isDark, setIsDark] = useState(false);
+
+  // Use prop iterations or fallback
+  const iterations = propIterations || [
+    { id: "5", name: "Iteration 5", version: 5, timestamp: "Today, 2:30 PM" },
+    { id: "4", name: "Iteration 4", version: 4, timestamp: "Today, 11:00 AM" },
+    { id: "3", name: "Iteration 3", version: 3, timestamp: "Yesterday, 4:15 PM" },
+  ];
+  const activeIteration = propActiveId || "5";
 
   const currentIteration = iterations.find((i) => i.id === activeIteration);
 
@@ -99,16 +114,22 @@ export function CommunicationHeader() {
       .slice(0, 2);
   };
 
-  const handleCreateIteration = () => {
-    const newVersion = iterations.length + 1;
-    const newIteration: Iteration = {
-      id: String(newVersion),
-      name: `Iteration ${newVersion}`,
-      version: newVersion,
-      timestamp: "Just now",
-    };
-    setIterations([newIteration, ...iterations]);
-    setActiveIteration(newIteration.id);
+  const handleIterationSelect = (id: string) => {
+    if (onIterationChange) {
+      onIterationChange(id);
+    }
+  };
+
+  const handleNewIteration = () => {
+    if (onNewIteration) {
+      onNewIteration();
+    }
+  };
+
+  const handleShare = () => {
+    if (onShare) {
+      onShare();
+    }
   };
 
   // Sample active users
@@ -201,7 +222,7 @@ export function CommunicationHeader() {
               {iterations.map((iteration) => (
                 <DropdownMenuItem
                   key={iteration.id}
-                  onClick={() => setActiveIteration(iteration.id)}
+                  onClick={() => handleIterationSelect(iteration.id)}
                   className={cn(
                     "flex items-center justify-between py-2.5 px-3 cursor-pointer rounded-md mx-1",
                     activeIteration === iteration.id
@@ -228,11 +249,25 @@ export function CommunicationHeader() {
 
           {/* New Iteration Button */}
           <button
-            onClick={handleCreateIteration}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#DBFE52] hover:bg-[#d0f043] text-black rounded-md font-medium text-sm transition-all"
+            onClick={handleNewIteration}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-sm transition-all relative",
+              unresolvedCount > 0
+                ? "bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+                : "bg-[#DBFE52] hover:bg-[#d0f043] text-black"
+            )}
           >
-            <Plus className="w-4 h-4" />
+            {unresolvedCount > 0 ? (
+              <AlertCircle className="w-4 h-4" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
             New Iteration
+            {unresolvedCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                {unresolvedCount}
+              </span>
+            )}
           </button>
 
           {/* Divider */}
@@ -274,6 +309,7 @@ export function CommunicationHeader() {
           {/* Share Button */}
           <Button
             size="sm"
+            onClick={handleShare}
             className="h-9 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium px-5 rounded-md"
           >
             Share
