@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Send, X, CheckCircle2, Circle, ChevronDown } from "lucide-react";
+import { Send, X, CheckCircle2, Circle, ChevronDown, Square, CircleIcon, Minus, ArrowRight, Sparkles, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { FabricCanvasManager, DrawingPath, ToolType, ShapeType, CreatedItemInfo } from "@/lib/fabric";
+import { AISuggestion } from "./comments-panel";
 
 interface CompareIteration {
   id: string;
@@ -38,15 +40,7 @@ interface FeedbackMarker {
   };
   timestamp?: string;
   replies?: ReplyItem[];
-}
-
-interface DrawingPath {
-  id: string;
-  type: "draw" | "shape";
-  points?: { x: number; y: number }[];
-  rect?: { x: number; y: number; width: number; height: number };
-  color: string;
-  strokeWidth: number;
+  drawingId?: string; // ID of associated drawing/shape
 }
 
 interface CanvasAreaProps {
@@ -86,6 +80,19 @@ interface CanvasAreaProps {
   onResetView?: () => void;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
+  // Drawing customization
+  drawingColor?: string;
+  onColorChange?: (color: string) => void;
+  shapeType?: ShapeType;
+  onShapeTypeChange?: (shapeType: ShapeType) => void;
+  // External highlight control (from sidebar)
+  highlightDrawingId?: string | null;
+  // AI Analysis
+  aiAnalysisActive?: boolean;
+  viewMode?: "view" | "comments" | "ai";
+  onViewModeChange?: (mode: "view" | "comments" | "ai") => void;
+  aiSuggestions?: AISuggestion[];
+  onShowAIAnalysisOptions?: () => void;
 }
 
 export function CanvasArea({
@@ -115,13 +122,27 @@ export function CanvasArea({
   onResetView,
   onToggleFullscreen,
   isFullscreen = false,
+  drawingColor = "#ef4444",
+  onColorChange,
+  shapeType = "rectangle",
+  onShapeTypeChange,
+  highlightDrawingId,
+  aiAnalysisActive = false,
+  viewMode = "comments",
+  onViewModeChange,
+  aiSuggestions = [],
+  onShowAIAnalysisOptions,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
-  const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fabricCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fabricManagerRef = useRef<FabricCanvasManager | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
+
+  // Fabric.js state
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
 
   // Feedback popover state (for new feedback)
   const [showPopover, setShowPopover] = useState(false);
@@ -135,13 +156,12 @@ export function CanvasArea({
   const [chatPopoverPosition, setChatPopoverPosition] = useState({ x: 0, y: 0 });
   const [replyText, setReplyText] = useState("");
 
-  // Drawing state
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
-  const [shapeStart, setShapeStart] = useState<{ x: number; y: number } | null>(null);
+  // Current drawing for feedback association
   const [currentDrawing, setCurrentDrawing] = useState<DrawingPath | null>(null);
-  const [imageSize, setImageSize] = useState({ width: 500, height: 0 });
   const [displayedSize, setDisplayedSize] = useState({ width: 0, height: 0 });
+
+  // Flag to prevent infinite loop when drawings change from internal updates
+  const isInternalUpdateRef = useRef(false);
 
   // Use external drawings from parent (iteration-specific)
   const drawings = externalDrawings;
@@ -161,8 +181,218 @@ export function CanvasArea({
   // Spacebar pan state
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
-  // Drawing color
-  const drawingColor = "#ef4444"; // Red color for annotations
+  // Shape type options for dropdown
+  const shapeOptions: { type: ShapeType; icon: React.ReactNode; label: string }[] = [
+    { type: "rectangle", icon: <Square className="w-4 h-4" />, label: "Rectangle" },
+    { type: "circle", icon: <CircleIcon className="w-4 h-4" />, label: "Circle" },
+    { type: "line", icon: <Minus className="w-4 h-4" />, label: "Line" },
+    { type: "arrow", icon: <ArrowRight className="w-4 h-4" />, label: "Arrow" },
+  ];
+
+  // Color palette
+  const colorOptions = [
+    "#ef4444", // Red
+    "#f97316", // Orange
+    "#eab308", // Yellow
+    "#22c55e", // Green
+    "#3b82f6", // Blue
+    "#8b5cf6", // Purple
+    "#ec4899", // Pink
+    "#000000", // Black
+  ];
+
+  // Initialize Fabric.js canvas
+  useEffect(() => {
+    if (!fabricCanvasRef.current) return;
+
+    // Get parent dimensions
+    const parent = fabricCanvasRef.current.parentElement;
+    if (!parent) return;
+
+    const rect = parent.getBoundingClientRect();
+    // Use default dimensions if parent has no size yet
+    const width = rect.width > 0 ? rect.width : 500;
+    const height = rect.height > 0 ? rect.height : 645;
+
+    // Create Fabric manager
+    const manager = new FabricCanvasManager();
+
+    // Initialize canvas
+    manager.initialize(fabricCanvasRef.current, width, height);
+
+    // Style the Fabric.js canvas-container to overlay the image
+    const canvasContainer = fabricCanvasRef.current.parentElement;
+    if (canvasContainer && canvasContainer.classList.contains('canvas-container')) {
+      canvasContainer.style.position = 'absolute';
+      canvasContainer.style.top = '0';
+      canvasContainer.style.left = '0';
+      canvasContainer.style.width = '100%';
+      canvasContainer.style.height = '100%';
+    }
+
+    // Set callbacks
+    manager.setCallbacks({
+      onDrawingComplete: (newDrawings) => {
+        // Mark as internal update to prevent infinite loop
+        isInternalUpdateRef.current = true;
+        onDrawingsChange?.(newDrawings);
+        // Reset after a tick to allow the effect to check the flag
+        setTimeout(() => {
+          isInternalUpdateRef.current = false;
+        }, 0);
+      },
+      onItemCreated: (info: CreatedItemInfo) => {
+        // When a drawing or shape is created, show the comment popover
+        // Calculate screen position from percentage-based position
+        const imageElement = imageRef.current;
+        if (!imageElement) return;
+
+        const img = imageElement.querySelector("img");
+        if (!img) return;
+
+        const rect = img.getBoundingClientRect();
+
+        // Convert percentage to screen coordinates
+        const screenX = rect.left + (info.position.x / 100) * rect.width;
+        const screenY = rect.top + (info.position.y / 100) * rect.height;
+
+        // Set marker position (percentage based for storage)
+        setMarkerPosition({ x: info.position.x, y: info.position.y });
+
+        // Set popover position (screen coordinates)
+        setPopoverPosition({ x: screenX, y: screenY });
+
+        // Store the drawing to associate with the feedback
+        setCurrentDrawing(info.drawing);
+
+        // Show the popover
+        setShowPopover(true);
+        setFeedbackText("");
+      },
+    });
+
+    // Set initial tool config
+    manager.setToolConfig({ color: drawingColor, strokeWidth: 3 });
+
+    fabricManagerRef.current = manager;
+    setIsCanvasReady(true);
+
+    // Cleanup only on unmount
+    return () => {
+      manager.dispose();
+      fabricManagerRef.current = null;
+      setIsCanvasReady(false);
+    };
+  }, []); // Empty dependency array - only run on mount/unmount
+
+  // Handle resize - sync canvas size with image size
+  useEffect(() => {
+    if (!fabricManagerRef.current || !imageRef.current || compareMode) return;
+
+    const img = imageRef.current.querySelector("img") as HTMLImageElement;
+    if (!img) return;
+
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let resizeTimeout: NodeJS.Timeout | null = null;
+
+    const syncSize = () => {
+      const rect = img.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        // Only update if size actually changed significantly (prevent infinite loops)
+        if (Math.abs(lastWidth - rect.width) > 1 || Math.abs(lastHeight - rect.height) > 1) {
+          lastWidth = rect.width;
+          lastHeight = rect.height;
+
+          fabricManagerRef.current?.resize(rect.width, rect.height);
+
+          // Ensure canvas-container stays properly positioned
+          const canvasContainer = imageRef.current?.querySelector('.canvas-container') as HTMLElement;
+          if (canvasContainer) {
+            canvasContainer.style.position = 'absolute';
+            canvasContainer.style.top = '0';
+            canvasContainer.style.left = '0';
+          }
+        }
+      }
+    };
+
+    // Sync immediately if image is already loaded
+    if (img.complete && img.naturalWidth > 0) {
+      syncSize();
+    }
+
+    // Also sync on image load
+    img.addEventListener('load', syncSize);
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Debounce resize updates
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(syncSize, 100);
+    });
+
+    resizeObserver.observe(img);
+
+    return () => {
+      img.removeEventListener('load', syncSize);
+      resizeObserver.disconnect();
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+    };
+  }, [isCanvasReady, compareMode]);
+
+  // NOTE: We don't load the image into Fabric.js canvas anymore
+  // The native <img> element handles image display
+  // Fabric.js canvas is just a transparent overlay for drawings
+
+  // Load drawings when they change externally (e.g., when switching iterations)
+  // Skip if the change came from our own internal updates to prevent infinite loop
+  useEffect(() => {
+    if (!isCanvasReady || !fabricManagerRef.current || compareMode) return;
+
+    // Skip if this is an internal update (user just drew something)
+    if (isInternalUpdateRef.current) return;
+
+    fabricManagerRef.current.loadDrawings(drawings);
+  }, [isCanvasReady, drawings, compareMode]);
+
+  // Update tool when it changes
+  useEffect(() => {
+    if (!isCanvasReady || !fabricManagerRef.current || compareMode) return;
+
+    // Map selectedTool to Fabric tool type
+    const toolMap: Record<string, ToolType> = {
+      pointer: "pointer",
+      draw: "draw",
+      shape: "shape",
+      comment: "comment",
+    };
+
+    const fabricTool = toolMap[selectedTool] || "pointer";
+    fabricManagerRef.current.setTool(fabricTool);
+  }, [isCanvasReady, selectedTool, compareMode]);
+
+  // Update drawing color when it changes
+  useEffect(() => {
+    if (!isCanvasReady || !fabricManagerRef.current) return;
+    fabricManagerRef.current.setToolConfig({ color: drawingColor });
+  }, [isCanvasReady, drawingColor]);
+
+  // Update shape type when it changes
+  useEffect(() => {
+    if (!isCanvasReady || !fabricManagerRef.current) return;
+    fabricManagerRef.current.setShapeType(shapeType);
+  }, [isCanvasReady, shapeType]);
+
+  // Highlight drawing when highlightDrawingId changes (from sidebar selection)
+  useEffect(() => {
+    if (!isCanvasReady || !fabricManagerRef.current) return;
+
+    if (highlightDrawingId) {
+      fabricManagerRef.current.highlightDrawing(highlightDrawingId);
+    } else {
+      fabricManagerRef.current.clearHighlight();
+    }
+  }, [isCanvasReady, highlightDrawingId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -179,6 +409,14 @@ export function CanvasArea({
       if (e.code === 'Space' && !isSpacePressed) {
         e.preventDefault();
         setIsSpacePressed(true);
+      }
+
+      // Delete selected objects
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault();
+          fabricManagerRef.current?.deleteSelected();
+        }
       }
 
       // Tool shortcuts (only when no modifier key)
@@ -287,127 +525,6 @@ export function CanvasArea({
     };
   }, [zoom, onZoomChange]);
 
-  // Get canvas context
-  const getContext = useCallback(() => {
-    const canvas = drawingCanvasRef.current;
-    if (!canvas) return null;
-    return canvas.getContext("2d");
-  }, []);
-
-  // Calculate adjusted stroke width to keep it visually constant regardless of zoom
-  const getAdjustedStrokeWidth = useCallback((baseWidth: number) => {
-    // Compensate for CSS transform scale - divide by zoom factor to keep visual size constant
-    return baseWidth * (100 / zoom);
-  }, [zoom]);
-
-  // Draw smooth line using quadratic curves for better quality
-  const drawSmoothLine = useCallback((ctx: CanvasRenderingContext2D, points: { x: number; y: number }[]) => {
-    if (points.length < 2) return;
-
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-
-    if (points.length === 2) {
-      // Just two points, draw a line
-      ctx.lineTo(points[1].x, points[1].y);
-    } else {
-      // Use quadratic curves for smooth lines
-      for (let i = 1; i < points.length - 1; i++) {
-        const midX = (points[i].x + points[i + 1].x) / 2;
-        const midY = (points[i].y + points[i + 1].y) / 2;
-        ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
-      }
-      // Draw the last segment
-      const lastPoint = points[points.length - 1];
-      ctx.lineTo(lastPoint.x, lastPoint.y);
-    }
-    ctx.stroke();
-  }, []);
-
-  // Redraw all drawings
-  const redrawCanvas = useCallback(() => {
-    const ctx = getContext();
-    const canvas = drawingCanvasRef.current;
-    if (!ctx || !canvas) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Enable anti-aliasing
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    // Draw all saved drawings
-    drawings.forEach((drawing) => {
-      ctx.strokeStyle = drawing.color;
-      // Adjust stroke width to compensate for zoom scale
-      ctx.lineWidth = getAdjustedStrokeWidth(drawing.strokeWidth);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-
-      if (drawing.type === "draw" && drawing.points) {
-        drawSmoothLine(ctx, drawing.points);
-      } else if (drawing.type === "shape" && drawing.rect) {
-        ctx.strokeRect(drawing.rect.x, drawing.rect.y, drawing.rect.width, drawing.rect.height);
-      }
-    });
-  }, [drawings, getContext, getAdjustedStrokeWidth, drawSmoothLine]);
-
-  // Update canvas size when image loads and track displayed size with ResizeObserver
-  useEffect(() => {
-    const img = imageRef.current?.querySelector("img");
-    if (img) {
-      const updateSize = () => {
-        setImageSize({ width: img.naturalWidth || 500, height: img.naturalHeight || 700 });
-        // Also update displayed size
-        const rect = img.getBoundingClientRect();
-        setDisplayedSize({ width: rect.width, height: rect.height });
-      };
-      if (img.complete) {
-        updateSize();
-      } else {
-        img.onload = updateSize;
-      }
-
-      // ResizeObserver to track displayed size changes (for responsive design)
-      const resizeObserver = new ResizeObserver(() => {
-        const rect = img.getBoundingClientRect();
-        setDisplayedSize({ width: rect.width, height: rect.height });
-      });
-      resizeObserver.observe(img);
-
-      return () => {
-        resizeObserver.disconnect();
-      };
-    }
-  }, [imageUrl, compareMode]); // Re-run when exiting compare mode to re-attach ResizeObserver
-
-  // Set canvas size based on displayed image dimensions
-  useEffect(() => {
-    const canvas = drawingCanvasRef.current;
-    if (canvas && displayedSize.width > 0 && displayedSize.height > 0) {
-      // Use displayed size for canvas to match the responsive image
-      canvas.width = displayedSize.width;
-      canvas.height = displayedSize.height;
-      redrawCanvas();
-    }
-  }, [displayedSize, redrawCanvas]);
-
-  // Redraw when drawings change (e.g., when switching iterations)
-  useEffect(() => {
-    redrawCanvas();
-  }, [drawings, redrawCanvas]);
-
-  // Redraw canvas when exiting compare mode (canvas is remounted)
-  useEffect(() => {
-    if (!compareMode) {
-      // Small delay to ensure canvas is mounted and sized
-      const timer = setTimeout(() => {
-        redrawCanvas();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [compareMode, redrawCanvas]);
-
   // Handle panning (middle mouse, alt+click, or spacebar+drag)
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && selectedTool === "pointer" && e.altKey) || (e.button === 0 && isSpacePressed)) {
@@ -427,158 +544,6 @@ export function CanvasArea({
 
   const handleMouseUp = () => {
     setIsPanning(false);
-  };
-
-  // Get position relative to canvas
-  const getCanvasPosition = (e: React.MouseEvent) => {
-    const canvas = drawingCanvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
-  };
-
-  // Handle drawing start
-  const handleDrawingStart = (e: React.MouseEvent) => {
-    if (selectedTool === "draw") {
-      e.stopPropagation();
-      const pos = getCanvasPosition(e);
-      setIsDrawing(true);
-      setCurrentPath([pos]);
-
-      const ctx = getContext();
-      if (ctx) {
-        ctx.strokeStyle = drawingColor;
-        ctx.lineWidth = getAdjustedStrokeWidth(3);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-      }
-    } else if (selectedTool === "shape") {
-      e.stopPropagation();
-      const pos = getCanvasPosition(e);
-      setIsDrawing(true);
-      setShapeStart(pos);
-    }
-  };
-
-  // Handle drawing move
-  const handleDrawingMove = (e: React.MouseEvent) => {
-    if (!isDrawing) return;
-
-    if (selectedTool === "draw") {
-      const pos = getCanvasPosition(e);
-      setCurrentPath((prev) => [...prev, pos]);
-
-      const ctx = getContext();
-      if (ctx) {
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-      }
-    } else if (selectedTool === "shape" && shapeStart) {
-      const pos = getCanvasPosition(e);
-      const ctx = getContext();
-      const canvas = drawingCanvasRef.current;
-      if (ctx && canvas) {
-        // Redraw previous drawings
-        redrawCanvas();
-
-        // Draw current shape preview
-        ctx.strokeStyle = drawingColor;
-        ctx.lineWidth = getAdjustedStrokeWidth(3);
-        ctx.setLineDash([5, 5]);
-        ctx.strokeRect(
-          shapeStart.x,
-          shapeStart.y,
-          pos.x - shapeStart.x,
-          pos.y - shapeStart.y
-        );
-        ctx.setLineDash([]);
-      }
-    }
-  };
-
-  // Handle drawing end
-  const handleDrawingEnd = (e: React.MouseEvent) => {
-    if (!isDrawing) return;
-    setIsDrawing(false);
-
-    const imageElement = imageRef.current;
-    if (!imageElement) return;
-
-    const rect = imageElement.getBoundingClientRect();
-
-    if (selectedTool === "draw" && currentPath.length > 1) {
-      const newDrawing: DrawingPath = {
-        id: `drawing-${Date.now()}`,
-        type: "draw",
-        points: currentPath,
-        color: drawingColor,
-        strokeWidth: 3,
-      };
-      onDrawingsChange?.([...drawings, newDrawing]);
-      setCurrentDrawing(newDrawing);
-
-      // Calculate center of drawing for marker position
-      const centerX = currentPath.reduce((sum, p) => sum + p.x, 0) / currentPath.length;
-      const centerY = currentPath.reduce((sum, p) => sum + p.y, 0) / currentPath.length;
-      const canvas = drawingCanvasRef.current;
-      if (canvas) {
-        setMarkerPosition({
-          x: (centerX / canvas.width) * 100,
-          y: (centerY / canvas.height) * 100,
-        });
-      }
-
-      // Show popover
-      setPopoverPosition({ x: e.clientX, y: e.clientY });
-      setShowPopover(true);
-      setFeedbackText("");
-    } else if (selectedTool === "shape" && shapeStart) {
-      const pos = getCanvasPosition(e);
-      const width = pos.x - shapeStart.x;
-      const height = pos.y - shapeStart.y;
-
-      if (Math.abs(width) > 10 && Math.abs(height) > 10) {
-        const newDrawing: DrawingPath = {
-          id: `shape-${Date.now()}`,
-          type: "shape",
-          rect: {
-            x: width > 0 ? shapeStart.x : pos.x,
-            y: height > 0 ? shapeStart.y : pos.y,
-            width: Math.abs(width),
-            height: Math.abs(height),
-          },
-          color: drawingColor,
-          strokeWidth: 3,
-        };
-        onDrawingsChange?.([...drawings, newDrawing]);
-        setCurrentDrawing(newDrawing);
-        redrawCanvas();
-
-        // Calculate center of shape for marker position
-        const canvas = drawingCanvasRef.current;
-        if (canvas && newDrawing.rect) {
-          setMarkerPosition({
-            x: ((newDrawing.rect.x + newDrawing.rect.width / 2) / canvas.width) * 100,
-            y: ((newDrawing.rect.y + newDrawing.rect.height / 2) / canvas.height) * 100,
-          });
-        }
-
-        // Show popover
-        setPopoverPosition({ x: e.clientX, y: e.clientY });
-        setShowPopover(true);
-        setFeedbackText("");
-      }
-    }
-
-    setCurrentPath([]);
-    setShapeStart(null);
   };
 
   // Handle canvas click for comment tool
@@ -629,11 +594,11 @@ export function CanvasArea({
     setCurrentDrawing(null);
   };
 
-  // Handle popover close - remove the drawing if feedback not submitted
+  // Handle popover close - also removes associated drawing if canceling
   const handlePopoverClose = () => {
-    if (currentDrawing) {
-      onDrawingsChange?.(drawings.filter((d) => d.id !== currentDrawing.id));
-      redrawCanvas();
+    // If there was a drawing/shape associated with this feedback, remove it
+    if (currentDrawing?.id) {
+      fabricManagerRef.current?.removeDrawingById(currentDrawing.id);
     }
     setShowPopover(false);
     setCurrentDrawing(null);
@@ -647,6 +612,11 @@ export function CanvasArea({
     setShowChatPopover(true);
     setReplyText("");
 
+    // Highlight associated drawing if any
+    if (marker.drawingId) {
+      fabricManagerRef.current?.highlightDrawing(marker.drawingId);
+    }
+
     // Also notify parent if needed
     if (onMarkerClick) {
       onMarkerClick(marker.id);
@@ -655,6 +625,9 @@ export function CanvasArea({
 
   // Handle chat popover close
   const handleChatPopoverClose = () => {
+    // Clear any drawing highlights
+    fabricManagerRef.current?.clearHighlight();
+
     setShowChatPopover(false);
     setSelectedMarker(null);
     setReplyText("");
@@ -734,9 +707,204 @@ export function CanvasArea({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Canvas Content - Compare Mode or Single Image */}
-      {compareMode ? (
-        /* Compare Mode - Side by Side View */
+
+      {/* Normal Mode - Single Image with Fabric.js Canvas (always rendered, hidden in compare mode) */}
+      <div
+        className={cn(
+          "absolute inset-0 flex items-center justify-center pointer-events-none",
+          isFullscreen
+            ? "p-4"
+            : "pl-[60px] pr-[324px] lg:pr-[364px] xl:pr-[404px]",
+          compareMode && "hidden"
+        )}
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+        }}
+      >
+        {/* Wrapper for image and toggle */}
+        <div className="flex flex-col items-center gap-4">
+          {/* Creative Image with Fabric.js Canvas */}
+          <div
+            ref={imageRef}
+            className={cn(
+              "relative shadow-2xl rounded-lg overflow-hidden pointer-events-auto",
+              isInteractiveTool && !compareMode && viewMode === "comments" && "ring-2 ring-blue-400 ring-offset-2"
+            )}
+            style={{
+              transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
+              transformOrigin: "center center",
+            }}
+            onClick={handleImageClick}
+          >
+          {/* Background Image */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt="Creative Preview"
+            className="max-w-none select-none w-[350px] lg:w-[420px] xl:w-[500px] h-auto"
+            draggable={false}
+          />
+
+          {/* Fabric.js Canvas Overlay */}
+          <canvas
+            ref={fabricCanvasRef}
+            className="absolute top-0 left-0"
+          />
+
+          {/* AI Analysis Scanning Animation with Fade Effect */}
+          {aiAnalysisActive && (
+            <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+              {/* Fading overlay for the graphic */}
+              <div className="absolute inset-0 bg-black/40 animate-pulse" />
+
+              {/* Scanning line effect */}
+              <div
+                className="absolute inset-x-0 h-1.5 bg-gradient-to-r from-transparent via-purple-400 to-transparent shadow-[0_0_20px_rgba(168,85,247,0.8)]"
+                style={{
+                  animation: 'scan 2s ease-in-out infinite',
+                }}
+              />
+
+              {/* Gradient reveal effect following scan line */}
+              <div
+                className="absolute inset-x-0 h-24 bg-gradient-to-b from-purple-500/30 via-transparent to-transparent"
+                style={{
+                  animation: 'scan 2s ease-in-out infinite',
+                }}
+              />
+
+              {/* Corner brackets with glow */}
+              <div className="absolute top-4 left-4 w-12 h-12 border-t-3 border-l-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: '3px' }} />
+              <div className="absolute top-4 right-4 w-12 h-12 border-t-3 border-r-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: '3px' }} />
+              <div className="absolute bottom-4 left-4 w-12 h-12 border-b-3 border-l-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: '3px' }} />
+              <div className="absolute bottom-4 right-4 w-12 h-12 border-b-3 border-r-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: '3px' }} />
+
+              {/* Grid overlay */}
+              <div className="absolute inset-0 opacity-30"
+                style={{
+                  backgroundImage: 'linear-gradient(rgba(168, 85, 247, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(168, 85, 247, 0.4) 1px, transparent 1px)',
+                  backgroundSize: '24px 24px',
+                }}
+              />
+
+              {/* Analyzing badge */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2.5 animate-pulse">
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Analyzing Design...
+              </div>
+            </div>
+          )}
+
+          {/* AI Visual Annotations - Simple dashed rectangles with numbers */}
+          {viewMode === "ai" && !aiAnalysisActive && aiSuggestions.length > 0 && (
+            <div className="absolute inset-0 pointer-events-none z-15">
+              {aiSuggestions.map((suggestion, index) => {
+                const severityColor = suggestion.severity === "error"
+                  ? "border-red-500 bg-red-500"
+                  : suggestion.severity === "warning"
+                    ? "border-amber-500 bg-amber-500"
+                    : "border-blue-500 bg-blue-500";
+
+                return (
+                  <div
+                    key={suggestion.id}
+                    className="absolute animate-in fade-in zoom-in duration-300"
+                    style={{
+                      left: `${suggestion.location?.x || 50}%`,
+                      top: `${suggestion.location?.y || 50}%`,
+                      transform: 'translate(-50%, -50%)',
+                      animationDelay: `${index * 100}ms`,
+                    }}
+                  >
+                    {/* Simple dashed rectangle with number */}
+                    <div className={cn(
+                      "w-16 h-12 border-2 border-dashed rounded-md relative",
+                      severityColor.split(' ')[0]
+                    )}>
+                      {/* Number badge */}
+                      <div className={cn(
+                        "absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md",
+                        severityColor.split(' ')[1]
+                      )}>
+                        {index + 1}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Feedback Markers - Only show when NOT in AI mode */}
+          {viewMode === "comments" && markers.map((marker) => (
+            <div
+              key={marker.id}
+              className={cn(
+                "absolute min-w-[28px] h-7 px-1.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-10",
+                marker.resolved
+                  ? "bg-green-500 text-white"
+                  : "bg-red-500 text-white",
+                highlightedMarker === marker.id && "ring-4 ring-yellow-400 ring-offset-2 scale-125 z-50 animate-pulse"
+              )}
+              style={{
+                left: `${marker.x}%`,
+                top: `${marker.y}%`,
+              }}
+              title={marker.content}
+              onClick={(e) => handleMarkerClickForChat(e, marker)}
+            >
+              {marker.number}
+            </div>
+          ))}
+          </div>
+
+          {/* View Mode Toggle - Below the graphic */}
+          {!compareMode && !isFullscreen && (
+            <div className="pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-300 z-50">
+              <div className="bg-white dark:bg-[#2a2a2a] rounded-full shadow-lg border border-gray-200 dark:border-[#444] p-1 flex items-center gap-1">
+                <button
+                  onClick={() => onViewModeChange?.("comments")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-all",
+                    viewMode === "comments"
+                      ? "bg-blue-500 text-white shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]"
+                  )}
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  Comments
+                </button>
+                <button
+                  onClick={() => {
+                    if (aiSuggestions.length === 0) {
+                      // No analysis yet, show options dialog
+                      onShowAIAnalysisOptions?.();
+                    } else {
+                      // Has analysis, switch to AI view
+                      onViewModeChange?.("ai");
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-all",
+                    viewMode === "ai"
+                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]"
+                  )}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  AI Analyse {aiSuggestions.length > 0 && `(${aiSuggestions.length})`}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Compare Mode - Side by Side View (only shown when compareMode is true) */}
+      {compareMode && (
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
           style={{
@@ -845,83 +1013,6 @@ export function CanvasArea({
                 )}
               </div>
             </div>
-          </div>
-        </div>
-      ) : (
-        /* Normal Mode - Single Image with Markers */
-        <div
-          className={cn(
-            "absolute inset-0 flex items-center justify-center pointer-events-none",
-            isFullscreen
-              ? "p-4"
-              : "pl-[60px] pr-[324px] lg:pr-[364px] xl:pr-[404px]"
-          )}
-          style={{
-            transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-          }}
-        >
-          {/* Creative Image with Markers */}
-          <div
-            ref={imageRef}
-            className={cn(
-              "relative shadow-2xl rounded-lg overflow-hidden pointer-events-auto",
-              isInteractiveTool && "ring-2 ring-blue-400 ring-offset-2"
-            )}
-            style={{
-              transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
-              transformOrigin: "center center",
-            }}
-            onClick={handleImageClick}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl}
-              alt="Creative Preview"
-              className="max-w-none select-none w-[350px] lg:w-[420px] xl:w-[500px] h-auto"
-              draggable={false}
-            />
-
-            {/* Drawing Canvas Overlay */}
-            <canvas
-              ref={drawingCanvasRef}
-              className={cn(
-                "absolute top-0 left-0 w-full h-full",
-                isDrawingTool ? "pointer-events-auto" : "pointer-events-none"
-              )}
-              style={{ cursor: isDrawingTool ? "crosshair" : "default" }}
-              onMouseDown={handleDrawingStart}
-              onMouseMove={handleDrawingMove}
-              onMouseUp={handleDrawingEnd}
-              onMouseLeave={() => {
-                if (isDrawing) {
-                  setIsDrawing(false);
-                  setCurrentPath([]);
-                  setShapeStart(null);
-                }
-              }}
-            />
-
-            {/* Feedback Markers */}
-            {markers.map((marker) => (
-              <div
-                key={marker.id}
-                className={cn(
-                  "absolute min-w-[28px] h-7 px-1.5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-110 shadow-lg z-10",
-                  marker.resolved
-                    ? "bg-green-500 text-white"
-                    : "bg-red-500 text-white",
-                  highlightedMarker === marker.id && "ring-4 ring-yellow-400 ring-offset-2 scale-125 z-50 animate-pulse"
-                )}
-                style={{
-                  left: `${marker.x}%`,
-                  top: `${marker.y}%`,
-                }}
-                title={marker.content}
-                onClick={(e) => handleMarkerClickForChat(e, marker)}
-              >
-                {marker.number}
-              </div>
-            ))}
           </div>
         </div>
       )}

@@ -3,11 +3,12 @@
 import { useState, useCallback } from "react";
 import { CommunicationHeader } from "./communication-header";
 import { CommunicationSidebar } from "./communication-sidebar";
-import { CommentsPanel, Feedback, ReplyItem } from "./comments-panel";
+import { CommentsPanel, Feedback, ReplyItem, AIAnalysisType, AISuggestion } from "./comments-panel";
 import { ZoomControls } from "./zoom-controls";
 import { CanvasArea } from "./canvas-area";
 import { ShareDialog } from "./share-dialog";
 import { NewIterationDialog } from "./new-iteration-dialog";
+import { ShapeType } from "@/lib/fabric";
 
 // Drawing path type for annotations
 interface DrawingPath {
@@ -191,6 +192,23 @@ export function CommunicationCanvas() {
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Drawing customization state
+  const [drawingColor, setDrawingColor] = useState("#FF5733");
+  const [shapeType, setShapeType] = useState<ShapeType>("rectangle");
+
+  // Highlight state for sidebar selection (drawing associated with selected feedback)
+  const [highlightDrawingId, setHighlightDrawingId] = useState<string | null>(null);
+
+  // Hide resolved feedbacks state
+  const [hideResolved, setHideResolved] = useState(false);
+
+  // AI Analysis state
+  const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
+  const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
+  const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
+  const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
+
   // Get current iteration
   const currentIteration = iterations.find(i => i.id === activeIterationId) || iterations[0];
   const currentFeedbacks = currentIteration?.feedbacks || [];
@@ -239,6 +257,7 @@ export function CommunicationCanvas() {
     content: string;
     x: number;
     y: number;
+    drawing?: DrawingPath;
   }) => {
     const newFeedback: Feedback = {
       id: feedback.id,
@@ -251,6 +270,7 @@ export function CommunicationCanvas() {
       x: feedback.x,
       y: feedback.y,
       replies: [],
+      drawingId: feedback.drawing?.id, // Store associated drawing ID
     };
 
     setIterations(prev => prev.map(iteration =>
@@ -261,10 +281,10 @@ export function CommunicationCanvas() {
   };
 
   // Update drawings for current iteration
-  const handleDrawingsChange = (drawings: DrawingPath[]) => {
+  const handleDrawingsChange = (newDrawings: DrawingPath[]) => {
     setIterations(prev => prev.map(iteration =>
       iteration.id === activeIterationId
-        ? { ...iteration, drawings }
+        ? { ...iteration, drawings: newDrawings }
         : iteration
     ));
   };
@@ -278,18 +298,6 @@ export function CommunicationCanvas() {
             feedbacks: iteration.feedbacks.map(f =>
               f.id === id ? { ...f, resolved: !f.resolved } : f
             )
-          }
-        : iteration
-    ));
-  };
-
-  // Delete feedback
-  const handleDeleteFeedback = (id: string) => {
-    setIterations(prev => prev.map(iteration =>
-      iteration.id === activeIterationId
-        ? {
-            ...iteration,
-            feedbacks: iteration.feedbacks.filter(f => f.id !== id)
           }
         : iteration
     ));
@@ -314,16 +322,30 @@ export function CommunicationCanvas() {
   // Handle feedback click from panel
   const handleFeedbackClick = (feedbackId: string) => {
     setHighlightedFeedback(feedbackId);
-    setTimeout(() => setHighlightedFeedback(null), 2000);
+    // Also highlight the associated drawing if any
+    const feedback = currentFeedbacks.find(f => f.id === feedbackId);
+    if (feedback?.drawingId) {
+      setHighlightDrawingId(feedback.drawingId);
+    }
+    setTimeout(() => {
+      setHighlightedFeedback(null);
+      setHighlightDrawingId(null);
+    }, 2000);
   };
 
   // Handle marker click from canvas
   const handleMarkerClick = (markerId: string) => {
     setOpenFeedbackId(markerId);
     setHighlightedFeedback(markerId);
+    // Also highlight the associated drawing if any
+    const feedback = currentFeedbacks.find(f => f.id === markerId);
+    if (feedback?.drawingId) {
+      setHighlightDrawingId(feedback.drawingId);
+    }
     setTimeout(() => {
       setOpenFeedbackId(null);
       setHighlightedFeedback(null);
+      setHighlightDrawingId(null);
     }, 2000);
   };
 
@@ -369,31 +391,95 @@ export function CommunicationCanvas() {
     setShowNewIterationDialog(false);
   };
 
-  // Convert feedbacks to marker format for canvas
-  const markers = currentFeedbacks.map(f => ({
-    id: f.id,
-    x: f.x || 0,
-    y: f.y || 0,
-    number: f.number,
-    content: f.content,
-    resolved: f.resolved,
-    user: {
-      name: f.user.name,
-      avatar: f.user.avatar,
-      color: f.user.color.replace('bg-', '#').replace('-500', ''),
-    },
-    timestamp: f.timestamp,
-    replies: f.replies.map(r => ({
-      id: r.id,
+  // Handle AI Analysis
+  const handleStartAIAnalysis = useCallback((type: AIAnalysisType) => {
+    setAiAnalysisType(type);
+    setAiAnalysisActive(true);
+    setAiSuggestions([]);
+    setViewMode("ai"); // Switch to AI mode when starting analysis
+
+    // Simulate analysis with mock suggestions after a delay
+    setTimeout(() => {
+      const mockSuggestions: AISuggestion[] = getMockSuggestions(type);
+      setAiSuggestions(mockSuggestions);
+      setAiAnalysisActive(false);
+    }, 3000);
+  }, []);
+
+  // Handle ignoring an AI suggestion
+  const handleIgnoreAISuggestion = useCallback((id: string) => {
+    setAiSuggestions(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  // Generate mock AI suggestions based on analysis type
+  const getMockSuggestions = (type: AIAnalysisType): AISuggestion[] => {
+    const suggestions: Record<AIAnalysisType, AISuggestion[]> = {
+      complete: [
+        { id: "1", type: "complete", title: "Improve button contrast", description: "The primary CTA button has a contrast ratio of 3.2:1. Consider increasing to 4.5:1 for better accessibility.", severity: "warning", location: { x: 50, y: 70 } },
+        { id: "2", type: "complete", title: "Inconsistent spacing", description: "The gap between form elements varies from 12px to 20px. Standardize to 16px for visual consistency.", severity: "info", location: { x: 50, y: 45 } },
+        { id: "3", type: "complete", title: "Missing focus states", description: "Input fields lack visible focus indicators, which may affect keyboard navigation.", severity: "error", location: { x: 50, y: 40 } },
+      ],
+      typography: [
+        { id: "1", type: "typography", title: "Line height too tight", description: "Body text has a line height of 1.2. Consider increasing to 1.5-1.6 for better readability.", severity: "warning", location: { x: 40, y: 35 } },
+        { id: "2", type: "typography", title: "Font size hierarchy", description: "The heading and body text sizes are too similar. Increase heading size for better visual hierarchy.", severity: "info", location: { x: 50, y: 20 } },
+      ],
+      spacing: [
+        { id: "1", type: "spacing", title: "Uneven margins", description: "Left margin is 24px while right margin is 32px. Align both to maintain symmetry.", severity: "warning", location: { x: 10, y: 50 } },
+        { id: "2", type: "spacing", title: "Crowded elements", description: "The social login buttons are too close together. Add 12px gap between them.", severity: "info", location: { x: 50, y: 80 } },
+      ],
+      spelling: [
+        { id: "1", type: "spelling", title: "Typo detected", description: "\"Pasword\" should be \"Password\" in the input label.", severity: "error", location: { x: 30, y: 45 } },
+        { id: "2", type: "spelling", title: "Inconsistent capitalization", description: "\"Sign in\" vs \"Sign In\" - choose one style for consistency.", severity: "info", location: { x: 50, y: 75 } },
+      ],
+      alignment: [
+        { id: "1", type: "alignment", title: "Off-center logo", description: "The logo appears to be 4px off-center. Align to the horizontal center of the container.", severity: "warning", location: { x: 48, y: 10 } },
+        { id: "2", type: "alignment", title: "Form field misalignment", description: "The email and password fields have different left edges. Align to the same starting point.", severity: "info", location: { x: 35, y: 40 } },
+      ],
+      contrast: [
+        { id: "1", type: "contrast", title: "Low contrast text", description: "The placeholder text (#999) on white background has only 2.8:1 contrast ratio. WCAG AA requires 4.5:1.", severity: "error", location: { x: 50, y: 38 } },
+        { id: "2", type: "contrast", title: "Link visibility", description: "The \"Forgot password\" link color is too similar to body text. Use a distinct color for links.", severity: "warning", location: { x: 65, y: 55 } },
+      ],
+    };
+    return suggestions[type] || [];
+  };
+
+  // Convert feedbacks to marker format for canvas (filter by hideResolved)
+  const markers = currentFeedbacks
+    .filter(f => !hideResolved || !f.resolved)
+    .map(f => ({
+      id: f.id,
+      x: f.x || 0,
+      y: f.y || 0,
+      number: f.number,
+      content: f.content,
+      resolved: f.resolved,
       user: {
-        name: r.user.name,
-        avatar: r.user.avatar,
-        color: r.user.color.replace('bg-', '#').replace('-500', ''),
+        name: f.user.name,
+        avatar: f.user.avatar,
+        color: f.user.color.replace('bg-', '#').replace('-500', ''),
       },
-      content: r.content,
-      timestamp: r.timestamp,
-    })),
-  }));
+      timestamp: f.timestamp,
+      replies: f.replies.map(r => ({
+        id: r.id,
+        user: {
+          name: r.user.name,
+          avatar: r.user.avatar,
+          color: r.user.color.replace('bg-', '#').replace('-500', ''),
+        },
+        content: r.content,
+        timestamp: r.timestamp,
+      })),
+      drawingId: f.drawingId, // Pass associated drawing ID
+    }));
+
+  // Filter drawings to hide resolved feedback drawings
+  const visibleDrawings = hideResolved
+    ? currentDrawings.filter(d => {
+        // Keep drawings that are NOT associated with resolved feedbacks
+        const associatedFeedback = currentFeedbacks.find(f => f.drawingId === d.id);
+        return !associatedFeedback?.resolved;
+      })
+    : currentDrawings;
 
   // Get compare iteration
   const compareIteration = compareIterationId
@@ -421,7 +507,7 @@ export function CommunicationCanvas() {
         compareIterations={iterations.filter(i => i.id !== activeIterationId)}
         selectedCompareId={compareIterationId}
         onCompareIterationChange={setCompareIterationId}
-        drawings={currentDrawings}
+        drawings={visibleDrawings}
         onDrawingsChange={handleDrawingsChange}
         onZoomChange={setZoom}
         onToolChange={setSelectedTool}
@@ -430,6 +516,16 @@ export function CommunicationCanvas() {
         onResetView={() => setRotation(0)}
         onToggleFullscreen={handleToggleFullscreen}
         isFullscreen={isFullscreen}
+        drawingColor={drawingColor}
+        onColorChange={setDrawingColor}
+        shapeType={shapeType}
+        onShapeTypeChange={setShapeType}
+        highlightDrawingId={highlightDrawingId}
+        aiAnalysisActive={aiAnalysisActive}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        aiSuggestions={aiSuggestions}
+        onShowAIAnalysisOptions={() => setShowAIAnalysisOptions(true)}
       />
 
       {/* Floating Header - Left and Right sections (hidden in fullscreen) */}
@@ -455,6 +551,14 @@ export function CommunicationCanvas() {
           selectedTool={selectedTool}
           onSelectTool={handleSelectTool}
           compareMode={compareMode}
+          drawingColor={drawingColor}
+          onColorChange={setDrawingColor}
+          shapeType={shapeType}
+          onShapeTypeChange={setShapeType}
+          onStartAIAnalysis={handleStartAIAnalysis}
+          aiAnalysisActive={aiAnalysisActive}
+          showAIOptions={showAIAnalysisOptions}
+          onShowAIOptionsChange={setShowAIAnalysisOptions}
         />
       )}
 
@@ -463,10 +567,14 @@ export function CommunicationCanvas() {
         <CommentsPanel
           feedbacks={currentFeedbacks}
           onToggleResolved={handleToggleResolved}
-          onDeleteFeedback={handleDeleteFeedback}
           onAddReply={handleAddReply}
           onFeedbackClick={handleFeedbackClick}
           openFeedbackId={openFeedbackId}
+          hideResolved={hideResolved}
+          onHideResolvedChange={setHideResolved}
+          viewMode={viewMode}
+          aiSuggestions={aiSuggestions}
+          onIgnoreAISuggestion={handleIgnoreAISuggestion}
         />
       )}
 

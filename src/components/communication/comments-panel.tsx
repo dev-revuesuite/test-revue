@@ -3,24 +3,19 @@
 import { useState, useEffect } from "react";
 import {
   Send,
-  MoreHorizontal,
   CheckCircle2,
   Circle,
   MessageSquare,
   ChevronDown,
   ChevronUp,
   Reply,
-  Trash2,
   MapPin,
+  EyeOff,
+  Eye,
+  Sparkles,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 export interface ReplyItem {
   id: string;
@@ -48,15 +43,39 @@ export interface Feedback {
   source: "client" | "team";
   x?: number;
   y?: number;
+  drawingId?: string; // ID of associated drawing/shape
+}
+
+// AI Analysis types
+export type AIAnalysisType =
+  | "complete"
+  | "typography"
+  | "spacing"
+  | "spelling"
+  | "alignment"
+  | "contrast";
+
+export interface AISuggestion {
+  id: string;
+  type: AIAnalysisType;
+  title: string;
+  description: string;
+  severity: "info" | "warning" | "error";
+  location?: { x: number; y: number };
 }
 
 interface CommentsPanelProps {
   feedbacks?: Feedback[];
   onToggleResolved?: (id: string) => void;
-  onDeleteFeedback?: (id: string) => void;
   onAddReply?: (feedbackId: string, reply: ReplyItem) => void;
   onFeedbackClick?: (feedbackId: string) => void;
   openFeedbackId?: string | null;
+  hideResolved?: boolean;
+  onHideResolvedChange?: (hide: boolean) => void;
+  // View Mode props
+  viewMode?: "view" | "comments" | "ai";
+  aiSuggestions?: AISuggestion[];
+  onIgnoreAISuggestion?: (id: string) => void;
 }
 
 const defaultFeedbackData: Feedback[] = [
@@ -128,10 +147,14 @@ const currentUser = {
 export function CommentsPanel({
   feedbacks: externalFeedbacks,
   onToggleResolved,
-  onDeleteFeedback,
   onAddReply,
   onFeedbackClick,
   openFeedbackId,
+  hideResolved = false,
+  onHideResolvedChange,
+  viewMode = "comments",
+  aiSuggestions = [],
+  onIgnoreAISuggestion,
 }: CommentsPanelProps) {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>(externalFeedbacks || defaultFeedbackData);
   const [expandedFeedbacks, setExpandedFeedbacks] = useState<Set<string>>(new Set(["5.1"]));
@@ -158,9 +181,13 @@ export function CommentsPanel({
     }
   }, [openFeedbackId, feedbacks]);
 
-  // Filter feedbacks based on source and sort (unresolved first, then resolved)
+  // Filter feedbacks based on source, hideResolved, and sort (unresolved first, then resolved)
   const filteredFeedbacks = feedbacks
-    .filter((f) => f.source === filter)
+    .filter((f) => {
+      if (f.source !== filter) return false;
+      if (hideResolved && f.resolved) return false;
+      return true;
+    })
     .sort((a, b) => {
       // Unresolved items come first
       if (a.resolved !== b.resolved) {
@@ -190,15 +217,6 @@ export function CommentsPanel({
       setFeedbacks((prev) =>
         prev.map((f) => (f.id === id ? { ...f, resolved: !f.resolved } : f))
       );
-    }
-  };
-
-  // Delete a feedback
-  const deleteFeedback = (id: string) => {
-    if (onDeleteFeedback) {
-      onDeleteFeedback(id);
-    } else {
-      setFeedbacks((prev) => prev.filter((f) => f.id !== id));
     }
   };
 
@@ -255,53 +273,164 @@ export function CommentsPanel({
 
   const clientCount = feedbacks.filter((f) => f.source === "client").length;
   const teamCount = feedbacks.filter((f) => f.source === "team").length;
+  const resolvedCount = feedbacks.filter((f) => f.resolved).length;
 
   return (
     <div className="absolute top-20 right-3 bottom-3 w-[300px] lg:w-[340px] xl:w-[380px] bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl border border-gray-200 dark:border-[#444] flex flex-col z-10 overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100 dark:border-[#333] bg-gradient-to-r from-gray-50 to-white dark:from-[#333] dark:to-[#2a2a2a] shrink-0">
-        <div className="flex items-center gap-2 mb-3">
-          <MessageSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <h2 className="font-semibold text-gray-800 dark:text-white">Feedback</h2>
-          <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-            {feedbacks.length}
-          </span>
+      <div className={cn(
+        "px-4 py-3 border-b border-gray-100 dark:border-[#333] shrink-0",
+        viewMode === "ai"
+          ? "bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20"
+          : "bg-gradient-to-r from-gray-50 to-white dark:from-[#333] dark:to-[#2a2a2a]"
+      )}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            {viewMode === "ai" ? (
+              <>
+                <div className="p-1 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="font-semibold text-gray-800 dark:text-white">AI Suggestions</h2>
+                <span className="text-xs bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
+                  {aiSuggestions.length}
+                </span>
+              </>
+            ) : (
+              <>
+                <MessageSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <h2 className="font-semibold text-gray-800 dark:text-white">Feedback</h2>
+                <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                  {feedbacks.length}
+                </span>
+              </>
+            )}
+          </div>
+          {/* Hide Resolved Toggle - Only show when not in AI mode */}
+          {viewMode !== "ai" && resolvedCount > 0 && (
+            <button
+              onClick={() => onHideResolvedChange?.(!hideResolved)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-all",
+                hideResolved
+                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                  : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]"
+              )}
+              title={hideResolved ? "Show resolved feedback" : "Hide resolved feedback"}
+            >
+              {hideResolved ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {hideResolved ? "Hidden" : "Hide"} ({resolvedCount})
+            </button>
+          )}
         </div>
 
-        {/* Filter Tabs - Client / Team */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-[#1a1a1a] p-1 rounded-lg">
-          <button
-            onClick={() => setFilter("client")}
-            className={cn(
-              "flex-1 text-xs font-medium py-1.5 px-3 rounded-md transition-all",
-              filter === "client"
-                ? "bg-white dark:bg-[#333] text-gray-800 dark:text-white shadow-sm"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            )}
-          >
-            Client ({clientCount})
-          </button>
-          <button
-            onClick={() => setFilter("team")}
-            className={cn(
-              "flex-1 text-xs font-medium py-1.5 px-3 rounded-md transition-all",
-              filter === "team"
-                ? "bg-white dark:bg-[#333] text-gray-800 dark:text-white shadow-sm"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-            )}
-          >
-            Team ({teamCount})
-          </button>
-        </div>
+        {/* Filter Tabs - Client / Team (hidden in AI mode) */}
+        {viewMode !== "ai" && (
+          <div className="flex gap-1 bg-gray-100 dark:bg-[#1a1a1a] p-1 rounded-lg">
+            <button
+              onClick={() => setFilter("client")}
+              className={cn(
+                "flex-1 text-xs font-medium py-1.5 px-2 rounded-md transition-all",
+                filter === "client"
+                  ? "bg-white dark:bg-[#333] text-gray-800 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+            >
+              Client ({clientCount})
+            </button>
+            <button
+              onClick={() => setFilter("team")}
+              className={cn(
+                "flex-1 text-xs font-medium py-1.5 px-2 rounded-md transition-all",
+                filter === "team"
+                  ? "bg-white dark:bg-[#333] text-gray-800 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+            >
+              Team ({teamCount})
+            </button>
+          </div>
+        )}
+
       </div>
 
-      {/* Feedback List */}
+      {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
-        {filteredFeedbacks.length === 0 ? (
+        {/* AI Suggestions List (shown in AI mode) */}
+        {viewMode === "ai" ? (
+          aiSuggestions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 p-8">
+              <Sparkles className="w-12 h-12 mb-3 opacity-50" />
+              <p className="text-sm font-medium">No AI suggestions</p>
+              <p className="text-xs mt-1 text-center">
+                Run an AI analysis from the sidebar to get design feedback
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100 dark:divide-[#333]">
+              {aiSuggestions.map((suggestion, index) => {
+                const severityColor = suggestion.severity === "error"
+                  ? "bg-red-500"
+                  : suggestion.severity === "warning"
+                    ? "bg-amber-500"
+                    : "bg-blue-500";
+
+                return (
+                  <div
+                    key={suggestion.id}
+                    className="p-3 hover:bg-gray-50 dark:hover:bg-[#333] transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Number badge with severity color */}
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0",
+                        severityColor
+                      )}>
+                        {index + 1}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {/* Type label */}
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 capitalize">
+                            {suggestion.type}
+                          </span>
+                          {/* Ignore button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onIgnoreAISuggestion?.(suggestion.id);
+                            }}
+                            className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                            title="Ignore"
+                          >
+                            Ignore
+                          </button>
+                        </div>
+
+                        {/* Suggestion text */}
+                        <p className="text-sm text-gray-800 dark:text-white leading-relaxed">
+                          {suggestion.title}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : filteredFeedbacks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 p-8">
             <MessageSquare className="w-12 h-12 mb-3 opacity-50" />
-            <p className="text-sm font-medium">No {filter} feedback yet</p>
-            <p className="text-xs mt-1 text-center">Use the Comment, Draw, or Shape tool to add feedback on the creative</p>
+            <p className="text-sm font-medium">
+              {hideResolved ? `All ${filter} feedback is resolved` : `No ${filter} feedback yet`}
+            </p>
+            <p className="text-xs mt-1 text-center">
+              {hideResolved
+                ? "Toggle 'Show resolved' to see all feedback"
+                : "Use the Comment, Draw, or Shape tool to add feedback on the creative"
+              }
+            </p>
           </div>
         ) : (
           filteredFeedbacks.map((feedback) => {
@@ -364,26 +493,6 @@ export function CommentsPanel({
                               <Circle className="w-5 h-5" />
                             )}
                           </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#333]"
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-36">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); startReply(feedback.id); }}>
-                                <Reply className="w-4 h-4 mr-2" />
-                                Reply
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); deleteFeedback(feedback.id); }} className="text-red-600">
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       </div>
 
@@ -495,11 +604,23 @@ export function CommentsPanel({
       </div>
 
       {/* Hint */}
-      <div className="px-4 py-3 border-t border-gray-100 dark:border-[#333] bg-gray-50 dark:bg-[#1a1a1a] shrink-0">
-        <p className="text-xs text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-1.5">
-          <MapPin className="w-3.5 h-3.5" />
-          Click on creative to add feedback
-        </p>
+      <div className={cn(
+        "px-4 py-3 border-t border-gray-100 dark:border-[#333] shrink-0",
+        viewMode === "ai"
+          ? "bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10"
+          : "bg-gray-50 dark:bg-[#1a1a1a]"
+      )}>
+        {viewMode === "ai" ? (
+          <p className="text-xs text-purple-600 dark:text-purple-400 text-center flex items-center justify-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Click on annotations on the graphic to see details
+          </p>
+        ) : (
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5" />
+            Click on creative to add feedback
+          </p>
+        )}
       </div>
     </div>
   );
