@@ -5,18 +5,10 @@ import { Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare, Chec
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
+import { ProjectDetailsModal, ProjectDetails } from "./project-details-modal"
 
-interface Project {
-  id: string
-  name: string
-  createdOn: string
-  deadline: string
-  daysLeft: number
-  status: "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
-  projectMode: "Creative Mode" | "Productive Mode"
-  team: { avatar: string; name: string }[]
-  additionalMembers: number
-  completedOn?: string
+interface Project extends ProjectDetails {
+  // Extended from ProjectDetails - all fields are inherited
 }
 
 interface ClientRoom {
@@ -114,7 +106,7 @@ function StatsSkeleton() {
   )
 }
 
-// Sample data
+// Sample data with full project details
 const sampleClientRoom: ClientRoom = {
   id: "1",
   name: "TechVision Labs",
@@ -128,30 +120,247 @@ const sampleClientRoom: ClientRoom = {
   tertiaryFont: "IBM Flex Mono",
   colors: ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F1F5F9"],
   projects: [
-    { id: "p1", name: "Revitalise Brand Identity", createdOn: "10 July", deadline: "20 July", daysLeft: 10, status: "brief_received", projectMode: "Creative Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=1", name: "Alex" }, { avatar: "https://i.pravatar.cc/150?img=2", name: "Sarah" }, { avatar: "https://i.pravatar.cc/150?img=3", name: "Mike" }, { avatar: "https://i.pravatar.cc/150?img=4", name: "Emma" }], additionalMembers: 2 },
-    { id: "p2", name: "Mobile App Redesign", createdOn: "5 July", deadline: "20 July", daysLeft: 10, status: "qc_pending", projectMode: "Creative Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=5", name: "John" }, { avatar: "https://i.pravatar.cc/150?img=6", name: "Lisa" }, { avatar: "https://i.pravatar.cc/150?img=7", name: "David" }, { avatar: "https://i.pravatar.cc/150?img=8", name: "Kate" }], additionalMembers: 2 },
-    { id: "p3", name: "Website Refresh", createdOn: "1 July", deadline: "20 July", daysLeft: 10, status: "review_qc", projectMode: "Productive Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=9", name: "Tom" }, { avatar: "https://i.pravatar.cc/150?img=10", name: "Amy" }, { avatar: "https://i.pravatar.cc/150?img=11", name: "Chris" }, { avatar: "https://i.pravatar.cc/150?img=12", name: "Nina" }], additionalMembers: 2 },
-    { id: "p4", name: "Marketing Collateral", createdOn: "8 July", deadline: "20 July", daysLeft: 10, status: "iteration_shared", projectMode: "Productive Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=13", name: "Ryan" }, { avatar: "https://i.pravatar.cc/150?img=14", name: "Olivia" }, { avatar: "https://i.pravatar.cc/150?img=15", name: "James" }, { avatar: "https://i.pravatar.cc/150?img=16", name: "Sophie" }], additionalMembers: 2 },
-    { id: "p5", name: "Social Media Kit", createdOn: "12 July", deadline: "20 July", daysLeft: 10, status: "feedback_received", projectMode: "Productive Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=17", name: "Ben" }, { avatar: "https://i.pravatar.cc/150?img=18", name: "Mia" }, { avatar: "https://i.pravatar.cc/150?img=19", name: "Luke" }, { avatar: "https://i.pravatar.cc/150?img=20", name: "Ella" }], additionalMembers: 2 },
-    { id: "p6", name: "Icon Set Design", createdOn: "3 July", deadline: "20 July", daysLeft: 10, status: "iteration_approved", projectMode: "Creative Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=21", name: "Jack" }, { avatar: "https://i.pravatar.cc/150?img=22", name: "Lily" }, { avatar: "https://i.pravatar.cc/150?img=23", name: "Noah" }, { avatar: "https://i.pravatar.cc/150?img=24", name: "Zoe" }], additionalMembers: 2 },
+    {
+      id: "p1",
+      name: "Revitalise Brand Identity",
+      description: "Complete brand refresh including logo redesign, color palette update, and brand guidelines documentation for TechVision Labs.",
+      clientName: "TechVision Labs",
+      projectType: "Branding",
+      createdOn: "10 July",
+      deadline: "20 July",
+      daysLeft: 10,
+      status: "brief_received",
+      projectMode: "Creative Mode",
+      industry: "Technology",
+      deliverable: "Brand Identity Package",
+      scopeDescription: "Full project scope",
+      startDate: "2024-07-10",
+      endDate: "2024-07-20",
+      endTime: "18:00",
+      deliverableStages: [
+        { id: "1", stage: "Stage 1", description: "Research & Discovery", date: "2024-07-12" },
+        { id: "2", stage: "Stage 2", description: "Concept Development", date: "2024-07-15" },
+        { id: "3", stage: "Stage 3", description: "Final Delivery", date: "2024-07-20" },
+      ],
+      accountManager: "John Doe",
+      accountManagerAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
+      team: [
+        { id: "1", name: "Alex Turner", role: "Lead Designer", avatar: "https://i.pravatar.cc/150?img=1" },
+        { id: "2", name: "Sarah Chen", role: "Brand Strategist", avatar: "https://i.pravatar.cc/150?img=2" },
+        { id: "3", name: "Mike Ross", role: "Graphic Designer", avatar: "https://i.pravatar.cc/150?img=3" },
+        { id: "4", name: "Emma Wilson", role: "Project Coordinator", avatar: "https://i.pravatar.cc/150?img=4" },
+      ],
+      additionalMembers: 2,
+      autoDeleteIteration: "30 Days",
+      needQCTool: true,
+      references: [
+        { id: "1", name: "Brand Strategy Document" },
+        { id: "2", name: "Competitor Analysis" },
+      ],
+      externalLinks: [
+        { id: "1", name: "Figma Design File" },
+        { id: "2", name: "Notion Brief" },
+      ],
+      namingConvention: "TechVision_BrandIdentity_Date_Version",
+      colors: ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B"],
+      primaryFont: "Gilroy",
+      secondaryFont: "IBM Flex Mono",
+    },
+    {
+      id: "p2",
+      name: "Mobile App Redesign",
+      description: "Redesign the mobile application with focus on improved UX and modern UI patterns.",
+      clientName: "TechVision Labs",
+      projectType: "UI Designing",
+      createdOn: "5 July",
+      deadline: "20 July",
+      daysLeft: 10,
+      status: "qc_pending",
+      projectMode: "Creative Mode",
+      industry: "Technology",
+      deliverable: "Mobile App Screens",
+      scopeDescription: "Partial scope - Design only",
+      accountManager: "Jane Smith",
+      team: [
+        { id: "1", name: "John Lee", role: "UI Designer", avatar: "https://i.pravatar.cc/150?img=5" },
+        { id: "2", name: "Lisa Park", role: "UX Researcher", avatar: "https://i.pravatar.cc/150?img=6" },
+        { id: "3", name: "David Kim", role: "Interaction Designer", avatar: "https://i.pravatar.cc/150?img=7" },
+        { id: "4", name: "Kate Brown", role: "Visual Designer", avatar: "https://i.pravatar.cc/150?img=8" },
+      ],
+      additionalMembers: 2,
+      needQCTool: true,
+      colors: ["#0F172A", "#1E293B", "#334155"],
+      primaryFont: "Gilroy",
+    },
+    {
+      id: "p3",
+      name: "Website Refresh",
+      description: "Update the company website with new content sections and improved performance.",
+      clientName: "TechVision Labs",
+      projectType: "Web Development",
+      createdOn: "1 July",
+      deadline: "20 July",
+      daysLeft: 10,
+      status: "review_qc",
+      projectMode: "Productive Mode",
+      industry: "Technology",
+      deliverable: "Website Pages",
+      accountManager: "Mike Johnson",
+      team: [
+        { id: "1", name: "Tom Hardy", role: "Frontend Developer", avatar: "https://i.pravatar.cc/150?img=9" },
+        { id: "2", name: "Amy Liu", role: "Backend Developer", avatar: "https://i.pravatar.cc/150?img=10" },
+        { id: "3", name: "Chris Evans", role: "QA Engineer", avatar: "https://i.pravatar.cc/150?img=11" },
+        { id: "4", name: "Nina Patel", role: "Project Manager", avatar: "https://i.pravatar.cc/150?img=12" },
+      ],
+      additionalMembers: 2,
+      needQCTool: false,
+    },
+    {
+      id: "p4",
+      name: "Marketing Collateral",
+      description: "Create marketing materials including brochures, flyers, and social media graphics.",
+      clientName: "TechVision Labs",
+      projectType: "Marketing",
+      createdOn: "8 July",
+      deadline: "20 July",
+      daysLeft: 10,
+      status: "iteration_shared",
+      projectMode: "Productive Mode",
+      industry: "Technology",
+      deliverable: "Marketing Materials",
+      accountManager: "Sarah Williams",
+      team: [
+        { id: "1", name: "Ryan Gosling", role: "Marketing Designer", avatar: "https://i.pravatar.cc/150?img=13" },
+        { id: "2", name: "Olivia Wilde", role: "Copywriter", avatar: "https://i.pravatar.cc/150?img=14" },
+        { id: "3", name: "James Franco", role: "Art Director", avatar: "https://i.pravatar.cc/150?img=15" },
+        { id: "4", name: "Sophie Turner", role: "Social Media Manager", avatar: "https://i.pravatar.cc/150?img=16" },
+      ],
+      additionalMembers: 2,
+    },
+    {
+      id: "p5",
+      name: "Social Media Kit",
+      description: "Design a comprehensive social media kit with templates for all major platforms.",
+      clientName: "TechVision Labs",
+      projectType: "Social Media",
+      createdOn: "12 July",
+      deadline: "20 July",
+      daysLeft: 10,
+      status: "feedback_received",
+      projectMode: "Productive Mode",
+      industry: "Technology",
+      deliverable: "Social Media Templates",
+      accountManager: "Robert Brown",
+      team: [
+        { id: "1", name: "Ben Affleck", role: "Graphic Designer", avatar: "https://i.pravatar.cc/150?img=17" },
+        { id: "2", name: "Mia Wallace", role: "Content Creator", avatar: "https://i.pravatar.cc/150?img=18" },
+        { id: "3", name: "Luke Skywalker", role: "Brand Designer", avatar: "https://i.pravatar.cc/150?img=19" },
+        { id: "4", name: "Ella Fitzgerald", role: "Motion Designer", avatar: "https://i.pravatar.cc/150?img=20" },
+      ],
+      additionalMembers: 2,
+    },
+    {
+      id: "p6",
+      name: "Icon Set Design",
+      description: "Create a custom icon set for the product interface with consistent styling.",
+      clientName: "TechVision Labs",
+      projectType: "UI Designing",
+      createdOn: "3 July",
+      deadline: "20 July",
+      daysLeft: 10,
+      status: "iteration_approved",
+      projectMode: "Creative Mode",
+      industry: "Technology",
+      deliverable: "Icon Library",
+      accountManager: "John Doe",
+      team: [
+        { id: "1", name: "Jack Sparrow", role: "Icon Designer", avatar: "https://i.pravatar.cc/150?img=21" },
+        { id: "2", name: "Lily Collins", role: "Visual Designer", avatar: "https://i.pravatar.cc/150?img=22" },
+        { id: "3", name: "Noah Centineo", role: "UI Designer", avatar: "https://i.pravatar.cc/150?img=23" },
+        { id: "4", name: "Zoe Saldana", role: "Art Director", avatar: "https://i.pravatar.cc/150?img=24" },
+      ],
+      additionalMembers: 2,
+    },
   ],
   completedProjects: [
-    { id: "c1", name: "Logo Design Package", createdOn: "1 June", deadline: "15 June", daysLeft: 0, status: "completed", projectMode: "Creative Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=25", name: "Dan" }, { avatar: "https://i.pravatar.cc/150?img=26", name: "Eve" }, { avatar: "https://i.pravatar.cc/150?img=27", name: "Sam" }, { avatar: "https://i.pravatar.cc/150?img=28", name: "Ivy" }], additionalMembers: 1, completedOn: "14 June" },
-    { id: "c2", name: "Brand Guidelines V1", createdOn: "10 May", deadline: "30 May", daysLeft: 0, status: "completed", projectMode: "Productive Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=29", name: "Max" }, { avatar: "https://i.pravatar.cc/150?img=30", name: "Ava" }, { avatar: "https://i.pravatar.cc/150?img=31", name: "Leo" }, { avatar: "https://i.pravatar.cc/150?img=32", name: "Mia" }], additionalMembers: 0, completedOn: "28 May" },
-    { id: "c3", name: "Pitch Deck Design", createdOn: "15 April", deadline: "30 April", daysLeft: 0, status: "completed", projectMode: "Creative Mode", team: [{ avatar: "https://i.pravatar.cc/150?img=33", name: "Jay" }, { avatar: "https://i.pravatar.cc/150?img=34", name: "Zara" }, { avatar: "https://i.pravatar.cc/150?img=35", name: "Cole" }, { avatar: "https://i.pravatar.cc/150?img=36", name: "Luna" }], additionalMembers: 3, completedOn: "29 April" },
+    {
+      id: "c1",
+      name: "Logo Design Package",
+      description: "Complete logo design with multiple variations and usage guidelines.",
+      clientName: "TechVision Labs",
+      projectType: "Logo Design",
+      createdOn: "1 June",
+      deadline: "15 June",
+      daysLeft: 0,
+      status: "completed",
+      projectMode: "Creative Mode",
+      industry: "Technology",
+      accountManager: "John Doe",
+      team: [
+        { id: "1", name: "Dan Brown", role: "Logo Designer", avatar: "https://i.pravatar.cc/150?img=25" },
+        { id: "2", name: "Eve Jobs", role: "Brand Designer", avatar: "https://i.pravatar.cc/150?img=26" },
+        { id: "3", name: "Sam Wilson", role: "Graphic Designer", avatar: "https://i.pravatar.cc/150?img=27" },
+        { id: "4", name: "Ivy Chen", role: "Creative Director", avatar: "https://i.pravatar.cc/150?img=28" },
+      ],
+      additionalMembers: 1,
+      completedOn: "14 June",
+    },
+    {
+      id: "c2",
+      name: "Brand Guidelines V1",
+      description: "Comprehensive brand guidelines document covering all brand elements.",
+      clientName: "TechVision Labs",
+      projectType: "Branding",
+      createdOn: "10 May",
+      deadline: "30 May",
+      daysLeft: 0,
+      status: "completed",
+      projectMode: "Productive Mode",
+      industry: "Technology",
+      accountManager: "Jane Smith",
+      team: [
+        { id: "1", name: "Max Power", role: "Brand Strategist", avatar: "https://i.pravatar.cc/150?img=29" },
+        { id: "2", name: "Ava Gardner", role: "Designer", avatar: "https://i.pravatar.cc/150?img=30" },
+        { id: "3", name: "Leo Messi", role: "Writer", avatar: "https://i.pravatar.cc/150?img=31" },
+        { id: "4", name: "Mia Khalifa", role: "Coordinator", avatar: "https://i.pravatar.cc/150?img=32" },
+      ],
+      additionalMembers: 0,
+      completedOn: "28 May",
+    },
+    {
+      id: "c3",
+      name: "Pitch Deck Design",
+      description: "Investor pitch deck with compelling visuals and data presentations.",
+      clientName: "TechVision Labs",
+      projectType: "Marketing",
+      createdOn: "15 April",
+      deadline: "30 April",
+      daysLeft: 0,
+      status: "completed",
+      projectMode: "Creative Mode",
+      industry: "Technology",
+      accountManager: "Mike Johnson",
+      team: [
+        { id: "1", name: "Jay Gatsby", role: "Presentation Designer", avatar: "https://i.pravatar.cc/150?img=33" },
+        { id: "2", name: "Zara Larsson", role: "Content Writer", avatar: "https://i.pravatar.cc/150?img=34" },
+        { id: "3", name: "Cole Sprouse", role: "Data Visualizer", avatar: "https://i.pravatar.cc/150?img=35" },
+        { id: "4", name: "Luna Lovegood", role: "Project Lead", avatar: "https://i.pravatar.cc/150?img=36" },
+      ],
+      additionalMembers: 3,
+      completedOn: "29 April",
+    },
   ],
 }
 
-function ProjectCard({ project }: { project: Project }) {
+function ProjectCard({ project, onClick }: { project: Project; onClick?: () => void }) {
   const status = statusConfig[project.status]
   const StatusIcon = status.icon
-  const router = useRouter()
 
   const getActionButtons = () => {
     switch (project.status) {
       case "brief_received":
         return (
-          <Button variant="outline" className="group w-full h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" onClick={() => router.push("/revue-tool")}>
+          <Button variant="outline" className="group w-full h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" onClick={(e) => { e.stopPropagation(); onClick?.() }}>
             VIEW BRIEF
             <ArrowRight className="w-4 h-4 btn-arrow" />
           </Button>
@@ -159,11 +368,11 @@ function ProjectCard({ project }: { project: Project }) {
       case "qc_pending":
         return (
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="group h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black">
+            <Button variant="outline" className="group h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" onClick={(e) => { e.stopPropagation(); onClick?.() }}>
               BRIEF
               <ArrowRight className="w-4 h-4 btn-arrow" />
             </Button>
-            <Button variant="outline" className="group h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black">
+            <Button variant="outline" className="group h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" onClick={(e) => e.stopPropagation()}>
               QC
               <ArrowRight className="w-4 h-4 btn-arrow" />
             </Button>
@@ -172,11 +381,11 @@ function ProjectCard({ project }: { project: Project }) {
       case "review_qc":
         return (
           <div className="grid grid-cols-2 gap-2">
-            <Button className="group h-10 font-semibold text-sm bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90">
+            <Button className="group h-10 font-semibold text-sm bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90" onClick={(e) => { e.stopPropagation(); onClick?.() }}>
               BRIEF
               <ArrowRight className="w-4 h-4 btn-arrow" />
             </Button>
-            <Button variant="outline" className="group h-10 font-semibold text-sm border-b-2 border-b-amber-500 border-t-black/30 border-x-black/30 dark:border-t-white/30 dark:border-x-white/30 hover:bg-muted">
+            <Button variant="outline" className="group h-10 font-semibold text-sm border-b-2 border-b-amber-500 border-t-black/30 border-x-black/30 dark:border-t-white/30 dark:border-x-white/30 hover:bg-muted" onClick={(e) => e.stopPropagation()}>
               REVIEW (3)
               <ArrowRight className="w-4 h-4 btn-arrow" />
             </Button>
@@ -184,7 +393,7 @@ function ProjectCard({ project }: { project: Project }) {
         )
       case "iteration_shared":
         return (
-          <Button variant="outline" className="group w-full h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" onClick={() => router.push("/revue-tool")}>
+          <Button variant="outline" className="group w-full h-10 font-semibold text-sm border-black/30 dark:border-white/30 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black" onClick={(e) => { e.stopPropagation(); onClick?.() }}>
             VIEW ITERATION
             <ArrowRight className="w-4 h-4 btn-arrow" />
           </Button>
@@ -192,11 +401,11 @@ function ProjectCard({ project }: { project: Project }) {
       case "feedback_received":
         return (
           <div className="grid grid-cols-2 gap-2">
-            <Button className="group h-10 font-semibold text-sm bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90">
+            <Button className="group h-10 font-semibold text-sm bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90" onClick={(e) => { e.stopPropagation(); onClick?.() }}>
               BRIEF
               <ArrowRight className="w-4 h-4 btn-arrow" />
             </Button>
-            <Button variant="outline" className="group h-10 font-semibold text-sm border-b-2 border-b-orange-500 border-t-black/30 border-x-black/30 dark:border-t-white/30 dark:border-x-white/30 hover:bg-muted" onClick={() => router.push("/revue-tool")}>
+            <Button variant="outline" className="group h-10 font-semibold text-sm border-b-2 border-b-orange-500 border-t-black/30 border-x-black/30 dark:border-t-white/30 dark:border-x-white/30 hover:bg-muted" onClick={(e) => e.stopPropagation()}>
               FEEDBACK (3)
               <ArrowRight className="w-4 h-4 btn-arrow" />
             </Button>
@@ -204,14 +413,14 @@ function ProjectCard({ project }: { project: Project }) {
         )
       case "iteration_approved":
         return (
-          <Button disabled className="w-full h-10 font-semibold text-sm bg-[#DBFE52]/20 text-[#6B8E23] border border-[#DBFE52]">
+          <Button disabled className="w-full h-10 font-semibold text-sm bg-[#DBFE52]/20 text-[#6B8E23] border border-[#DBFE52]" onClick={(e) => e.stopPropagation()}>
             <CheckCircle className="w-4 h-4 mr-2" />
             APPROVED
           </Button>
         )
       case "completed":
         return (
-          <Button variant="outline" className="group w-full h-10 font-semibold text-sm border-emerald-500/30 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950">
+          <Button variant="outline" className="group w-full h-10 font-semibold text-sm border-emerald-500/30 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950" onClick={(e) => { e.stopPropagation(); onClick?.() }}>
             VIEW PROJECT
             <ArrowRight className="w-4 h-4 btn-arrow" />
           </Button>
@@ -224,7 +433,10 @@ function ProjectCard({ project }: { project: Project }) {
   const isCompleted = project.status === "completed"
 
   return (
-    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-card p-5 flex flex-col hover:shadow-lg transition-all duration-300 h-fit">
+    <div
+      className="rounded-xl border border-black/10 dark:border-white/10 bg-card p-5 flex flex-col hover:shadow-lg hover:border-[#5C6ECD]/30 transition-all duration-300 h-fit cursor-pointer"
+      onClick={onClick}
+    >
       {/* Header */}
       <div className="mb-4">
         <h3 className="font-bold text-foreground text-base mb-1">{project.name}</h3>
@@ -304,8 +516,15 @@ export function RoomContent({ clientId }: RoomContentProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [selectedStatus, setSelectedStatus] = useState<StatusKey | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [showProjectModal, setShowProjectModal] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const client = sampleClientRoom
+
+  const handleProjectClick = (project: Project) => {
+    setSelectedProject(project)
+    setShowProjectModal(true)
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -533,11 +752,18 @@ export function RoomContent({ clientId }: RoomContentProps) {
             </>
           ) : (
             displayProjects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard key={project.id} project={project} onClick={() => handleProjectClick(project)} />
             ))
           )}
         </div>
       </div>
+
+      {/* Project Details Modal */}
+      <ProjectDetailsModal
+        project={selectedProject}
+        open={showProjectModal}
+        onClose={() => setShowProjectModal(false)}
+      />
     </main>
   )
 }
