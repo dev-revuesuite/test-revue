@@ -579,6 +579,7 @@ export function CommunicationCanvas() {
           onShapeTypeChange={setShapeType}
           onStartAIAnalysis={handleStartAIAnalysis}
           aiAnalysisActive={aiAnalysisActive}
+          viewMode={viewMode}
           showAIOptions={showAIAnalysisOptions}
           onShowAIOptionsChange={setShowAIAnalysisOptions}
         />

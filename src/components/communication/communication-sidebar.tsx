@@ -90,6 +90,7 @@ interface CommunicationSidebarProps {
   // AI Analysis props
   onStartAIAnalysis?: (type: AIAnalysisType) => void;
   aiAnalysisActive?: boolean;
+  viewMode?: "view" | "comments" | "ai";
   // External control of AI options panel
   showAIOptions?: boolean;
   onShowAIOptionsChange?: (show: boolean) => void;
@@ -105,6 +106,7 @@ export function CommunicationSidebar({
   onShapeTypeChange,
   onStartAIAnalysis,
   aiAnalysisActive = false,
+  viewMode = "comments",
   showAIOptions: externalShowAIOptions,
   onShowAIOptionsChange,
 }: CommunicationSidebarProps) {
@@ -121,7 +123,8 @@ export function CommunicationSidebar({
   };
 
   const showExtension = selectedTool === "draw" || selectedTool === "shape";
-  const toolsDisabled = aiAnalysisActive;
+  // Disable draw, shape, comment tools when AI analysis is active OR when in AI view mode
+  const toolsDisabled = aiAnalysisActive || viewMode === "ai";
 
   const handleAIAnalysis = (type: AIAnalysisType) => {
     setShowAIOptions(false);
