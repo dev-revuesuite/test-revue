@@ -20,7 +20,7 @@ interface DrawingPath {
   strokeWidth: number;
 }
 
-// Define iteration type with image, feedbacks, and drawings
+// Define iteration type with image, feedbacks, drawings, and AI suggestions
 interface Iteration {
   id: string;
   version: number;
@@ -29,6 +29,7 @@ interface Iteration {
   imageUrl: string;
   feedbacks: Feedback[];
   drawings: DrawingPath[];
+  aiSuggestions: AISuggestion[];
 }
 
 // Initial iterations data with their own feedbacks and drawings
@@ -85,6 +86,7 @@ const initialIterations: Iteration[] = [
         replies: [],
       },
     ],
+    aiSuggestions: [],
   },
   {
     id: "4",
@@ -119,6 +121,7 @@ const initialIterations: Iteration[] = [
         replies: [],
       },
     ],
+    aiSuggestions: [],
   },
   {
     id: "3",
@@ -141,6 +144,7 @@ const initialIterations: Iteration[] = [
         replies: [],
       },
     ],
+    aiSuggestions: [],
   },
   {
     id: "2",
@@ -150,6 +154,7 @@ const initialIterations: Iteration[] = [
     imageUrl: "/assets/login.png",
     drawings: [],
     feedbacks: [],
+    aiSuggestions: [],
   },
   {
     id: "1",
@@ -159,6 +164,7 @@ const initialIterations: Iteration[] = [
     imageUrl: "/assets/login.png",
     drawings: [],
     feedbacks: [],
+    aiSuggestions: [],
   },
 ];
 
@@ -204,7 +210,6 @@ export function CommunicationCanvas() {
 
   // AI Analysis state
   const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
   const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
   const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
@@ -213,6 +218,7 @@ export function CommunicationCanvas() {
   const currentIteration = iterations.find(i => i.id === activeIterationId) || iterations[0];
   const currentFeedbacks = currentIteration?.feedbacks || [];
   const currentDrawings = currentIteration?.drawings || [];
+  const currentAiSuggestions = currentIteration?.aiSuggestions || [];
 
   // Get unresolved feedbacks for current iteration
   const unresolvedFeedbacks = currentFeedbacks.filter(f => !f.resolved);
@@ -384,6 +390,7 @@ export function CommunicationCanvas() {
       imageUrl: imageUrl,
       drawings: [],
       feedbacks: [],
+      aiSuggestions: [],
     };
 
     setIterations(prev => [newIteration, ...prev]);
@@ -391,25 +398,40 @@ export function CommunicationCanvas() {
     setShowNewIterationDialog(false);
   };
 
-  // Handle AI Analysis
+  // Handle AI Analysis - saves suggestions to the current iteration
   const handleStartAIAnalysis = useCallback((type: AIAnalysisType) => {
     setAiAnalysisType(type);
     setAiAnalysisActive(true);
-    setAiSuggestions([]);
     setViewMode("ai"); // Switch to AI mode when starting analysis
+
+    // Clear current iteration's suggestions while analyzing
+    setIterations(prev => prev.map(iteration =>
+      iteration.id === activeIterationId
+        ? { ...iteration, aiSuggestions: [] }
+        : iteration
+    ));
 
     // Simulate analysis with mock suggestions after a delay
     setTimeout(() => {
       const mockSuggestions: AISuggestion[] = getMockSuggestions(type);
-      setAiSuggestions(mockSuggestions);
+      // Save suggestions to the current iteration
+      setIterations(prev => prev.map(iteration =>
+        iteration.id === activeIterationId
+          ? { ...iteration, aiSuggestions: mockSuggestions }
+          : iteration
+      ));
       setAiAnalysisActive(false);
     }, 3000);
-  }, []);
+  }, [activeIterationId]);
 
-  // Handle ignoring an AI suggestion
+  // Handle ignoring an AI suggestion - updates the current iteration
   const handleIgnoreAISuggestion = useCallback((id: string) => {
-    setAiSuggestions(prev => prev.filter(s => s.id !== id));
-  }, []);
+    setIterations(prev => prev.map(iteration =>
+      iteration.id === activeIterationId
+        ? { ...iteration, aiSuggestions: iteration.aiSuggestions.filter(s => s.id !== id) }
+        : iteration
+    ));
+  }, [activeIterationId]);
 
   // Generate mock AI suggestions based on analysis type
   const getMockSuggestions = (type: AIAnalysisType): AISuggestion[] => {
@@ -524,7 +546,7 @@ export function CommunicationCanvas() {
         aiAnalysisActive={aiAnalysisActive}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        aiSuggestions={aiSuggestions}
+        aiSuggestions={currentAiSuggestions}
         onShowAIAnalysisOptions={() => setShowAIAnalysisOptions(true)}
       />
 
@@ -573,7 +595,7 @@ export function CommunicationCanvas() {
           hideResolved={hideResolved}
           onHideResolvedChange={setHideResolved}
           viewMode={viewMode}
-          aiSuggestions={aiSuggestions}
+          aiSuggestions={currentAiSuggestions}
           onIgnoreAISuggestion={handleIgnoreAISuggestion}
         />
       )}
