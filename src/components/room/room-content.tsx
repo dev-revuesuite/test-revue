@@ -5,10 +5,69 @@ import { Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare, Chec
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
-import { ProjectDetailsModal, ProjectDetails } from "./project-details-modal"
 
-interface Project extends ProjectDetails {
-  // Extended from ProjectDetails - all fields are inherited
+// Types
+interface DeliverableStage {
+  id: string
+  stage: string
+  description: string
+  date: string
+}
+
+interface TeamMember {
+  id: string
+  name: string
+  role: string
+  avatar?: string
+}
+
+interface Reference {
+  id: string
+  name: string
+  url?: string
+}
+
+interface ExternalLinkItem {
+  id: string
+  name: string
+  url?: string
+}
+
+type StatusKey = "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
+
+interface Project {
+  id: string
+  name: string
+  description?: string
+  clientName: string
+  projectType: string
+  createdOn: string
+  deadline: string
+  daysLeft: number
+  status: StatusKey
+  projectMode: "Creative Mode" | "Productive Mode"
+  industry?: string
+  deliverable?: string
+  scopeDescription?: string
+  startDate?: string
+  endDate?: string
+  endTime?: string
+  deliverableStages?: DeliverableStage[]
+  accountManager?: string
+  accountManagerAvatar?: string
+  team: TeamMember[]
+  additionalMembers: number
+  autoDeleteIteration?: string
+  needQCTool?: boolean
+  references?: Reference[]
+  externalLinks?: ExternalLinkItem[]
+  namingConvention?: string
+  otherDescription?: string
+  colors?: string[]
+  primaryFont?: string
+  secondaryFont?: string
+  tertiaryFont?: string
+  completedOn?: string
 }
 
 interface ClientRoom {
@@ -26,8 +85,6 @@ interface ClientRoom {
   projects: Project[]
   completedProjects: Project[]
 }
-
-type StatusKey = "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
 
 const statusConfig: Record<StatusKey, { label: string; icon: typeof FileText; color: string; borderColor: string }> = {
   brief_received: { label: "Brief Received", icon: FileText, color: "bg-[#5C6ECD] text-white", borderColor: "border-[#5C6ECD]" },
@@ -516,14 +573,11 @@ export function RoomContent({ clientId }: RoomContentProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [selectedStatus, setSelectedStatus] = useState<StatusKey | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [showProjectModal, setShowProjectModal] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const client = sampleClientRoom
 
   const handleProjectClick = (project: Project) => {
-    setSelectedProject(project)
-    setShowProjectModal(true)
+    router.push(`/brief/${project.id}`)
   }
 
   useEffect(() => {
@@ -757,13 +811,6 @@ export function RoomContent({ clientId }: RoomContentProps) {
           )}
         </div>
       </div>
-
-      {/* Project Details Modal */}
-      <ProjectDetailsModal
-        project={selectedProject}
-        open={showProjectModal}
-        onClose={() => setShowProjectModal(false)}
-      />
     </main>
   )
 }
