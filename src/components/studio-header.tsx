@@ -29,6 +29,8 @@ import {
   Link2,
   Shield,
   Contrast,
+  Maximize,
+  Minimize,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -157,6 +159,9 @@ export function StudioHeader({ user }: StudioHeaderProps) {
   // Theme state
   const [isDark, setIsDark] = React.useState(false)
 
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = React.useState(false)
+
   // New client dialog state
   const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false)
   // New brief dialog state
@@ -178,6 +183,26 @@ export function StudioHeader({ user }: StudioHeaderProps) {
       document.documentElement.classList.remove("dark")
     }
   }
+
+  // Fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+      setIsFullscreen(true)
+    } else {
+      document.exitFullscreen()
+      setIsFullscreen(false)
+    }
+  }
+
+  // Listen for fullscreen changes
+  React.useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange)
+  }, [])
 
   // Animate placeholder text
   React.useEffect(() => {
@@ -380,6 +405,19 @@ export function StudioHeader({ user }: StudioHeaderProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Fullscreen Toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
+          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        >
+          {isFullscreen ? (
+            <Minimize className="w-5 h-5 text-[#1a1a1a] dark:text-white" />
+          ) : (
+            <Maximize className="w-5 h-5 text-[#1a1a1a] dark:text-white" />
+          )}
+        </button>
 
         {/* Messages Icon */}
         <Popover>

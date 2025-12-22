@@ -3,11 +3,16 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutGrid, FileText, FolderOpen, Plus, Users, PanelLeftClose, PanelLeft, HardDrive, Loader2, Sun, Moon, MessageCircle } from "lucide-react"
+import { LayoutGrid, Clock, HardDrive, MessageSquare, MessageCircle, Calendar, GitBranch, Settings, PanelLeftClose, PanelLeft, Loader2, Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
 const navItems = [
+  {
+    title: "Recents",
+    url: "/recents",
+    icon: Clock,
+  },
   {
     title: "Studio",
     url: "/studio",
@@ -19,29 +24,29 @@ const navItems = [
     icon: HardDrive,
   },
   {
-    title: "Projects",
-    url: "/projects",
-    icon: FileText,
-  },
-  {
-    title: "Revue Tool",
-    url: "/revue-tool",
-    icon: FolderOpen,
-  },
-  {
-    title: "Create",
-    url: "/create",
-    icon: Plus,
-  },
-  {
-    title: "Clients",
-    url: "/clients",
-    icon: Users,
+    title: "Messages",
+    url: "/messages",
+    icon: MessageSquare,
   },
   {
     title: "Communication",
     url: "/communication",
     icon: MessageCircle,
+  },
+  {
+    title: "Calendar",
+    url: "/calendar",
+    icon: Calendar,
+  },
+  {
+    title: "Timelines",
+    url: "/timelines",
+    icon: GitBranch,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings,
   },
 ]
 

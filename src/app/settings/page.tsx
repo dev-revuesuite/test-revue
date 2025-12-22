@@ -2,8 +2,9 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
+import { Settings } from "lucide-react"
 
-export default async function ClientsPage() {
+export default async function SettingsPage() {
   const supabase = await createClient()
 
   const {
@@ -25,22 +26,11 @@ export default async function ClientsPage() {
       <AppSidebar user={userData} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <StudioHeader user={userData} />
-        <main className="flex-1 overflow-auto">
-          <div className="p-6">
-            <div className="mb-6">
-              <h1 className="text-2xl font-semibold">Clients</h1>
-              <p className="text-muted-foreground">Manage your clients and relationships</p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="bg-muted/50 aspect-video rounded-lg flex items-center justify-center"
-                >
-                  <span className="text-muted-foreground">Client {index + 1}</span>
-                </div>
-              ))}
-            </div>
+        <main className="flex-1 flex items-center justify-center bg-background">
+          <div className="text-center">
+            <Settings className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h1 className="text-2xl font-semibold mb-2">Settings</h1>
+            <p className="text-muted-foreground">Manage your account and preferences</p>
           </div>
         </main>
       </div>
