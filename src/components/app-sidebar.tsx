@@ -3,18 +3,13 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutGrid, Clock, HardDrive, MessageSquare, MessageCircle, Calendar, GitBranch, Settings, PanelLeftClose, PanelLeft, Loader2, Sun, Moon } from "lucide-react"
+import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   {
-    title: "Recents",
-    url: "/recents",
-    icon: Clock,
-  },
-  {
-    title: "Studio",
+    title: "Dashboard",
     url: "/studio",
     icon: LayoutGrid,
   },
@@ -24,29 +19,24 @@ const navItems = [
     icon: HardDrive,
   },
   {
-    title: "Messages",
-    url: "/messages",
-    icon: MessageSquare,
+    title: "Creative Zone",
+    url: "/creative-zone",
+    icon: Palette,
   },
   {
-    title: "Communication",
-    url: "/communication",
-    icon: MessageCircle,
-  },
-  {
-    title: "Calendar",
-    url: "/calendar",
-    icon: Calendar,
-  },
-  {
-    title: "Timelines",
-    url: "/timelines",
-    icon: GitBranch,
+    title: "Productive Zone",
+    url: "/productive-zone",
+    icon: Briefcase,
   },
   {
     title: "Settings",
     url: "/settings",
     icon: Settings,
+  },
+  {
+    title: "Help Desk",
+    url: "/help-desk",
+    icon: HelpCircle,
   },
 ]
 
