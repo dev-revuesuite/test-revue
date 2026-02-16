@@ -934,109 +934,103 @@ function PerformanceModal({
 
 // Organisations Tab
 function OrganisationsTab() {
-  const [orgs, setOrgs] = useState(mockOrganisations)
-  const [selectedOrgId, setSelectedOrgId] = useState(mockOrganisations[0]?.id || "")
+  const [org, setOrg] = useState(mockOrganisations[0] || {
+    id: "1",
+    name: "",
+    email: "",
+    phone: "",
+    website: "",
+    industry: "Design & Creative",
+    size: "1-10",
+    country: "India",
+    state: "",
+    logo: ""
+  })
 
-  const selectedOrg = orgs.find(org => org.id === selectedOrgId)
-
-  const updateOrg = (id: string, field: string, value: string) => {
-    setOrgs(orgs.map(org => org.id === id ? { ...org, [field]: value } : org))
+  const updateOrg = (field: string, value: string) => {
+    setOrg({ ...org, [field]: value })
   }
 
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Organisations</h2>
-            <p className="text-sm text-muted-foreground">Manage your organisations</p>
-          </div>
-          {/* Organisation Selector */}
-          <OrgSelector
-            orgs={orgs}
-            selectedId={selectedOrgId}
-            onChange={setSelectedOrgId}
-          />
+      <div className="mb-6">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Organisation</h2>
+          <p className="text-sm text-muted-foreground">Manage your organisation details</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors">
-          <Plus className="w-4 h-4" />
-          Add Organisation
-        </button>
       </div>
 
-      {/* Selected Organisation Details */}
-      {selectedOrg && (
-        <div>
-          {/* Organisation Logo */}
-          <SectionHeader title="Organisation Logo" />
-          <div className="border-t border-border">
-            <div className="flex items-center justify-between py-4 border-b border-border">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
-                  {selectedOrg.logo ? (
-                    <img src={selectedOrg.logo} alt={selectedOrg.name} className="w-full h-full object-cover rounded-lg" />
-                  ) : (
-                    <Building2 className="w-8 h-8 text-muted-foreground" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Upload your organisation logo</p>
-                </div>
+      {/* Organisation Details */}
+      <div>
+        {/* Organisation Logo */}
+        <SectionHeader title="Organisation Logo" />
+        <div className="border-t border-border">
+          <div className="flex items-center justify-between py-4 border-b border-border">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                {org.logo ? (
+                  <img src={org.logo} alt={org.name} className="w-full h-full object-cover rounded-lg" />
+                ) : (
+                  <Building2 className="w-8 h-8 text-muted-foreground" />
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Upload</button>
+              <div>
+                <p className="text-sm text-muted-foreground">Upload your organisation logo</p>
               </div>
             </div>
-          </div>
-
-          {/* Organisation Information */}
-          <SectionHeader title="Organisation Information" icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
-          <div className="border-t border-border">
-            <EditableRow label="Organisation Name" value={selectedOrg.name} onSave={(v) => updateOrg(selectedOrg.id, "name", v)} />
-            <EditableRow label="Email Address" value={selectedOrg.email} onSave={(v) => updateOrg(selectedOrg.id, "email", v)} type="email" />
-            <EditableRow label="Phone Number" value={selectedOrg.phone} onSave={(v) => updateOrg(selectedOrg.id, "phone", v)} type="tel" />
-            <EditableRow label="Website" value={selectedOrg.website} onSave={(v) => updateOrg(selectedOrg.id, "website", v)} />
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-sm text-foreground">Industry</span>
-              <Dropdown
-                value={selectedOrg.industry}
-                options={["Design & Creative", "Technology", "Marketing", "Finance", "Healthcare", "Education"]}
-                onChange={(v) => updateOrg(selectedOrg.id, "industry", v)}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-sm text-foreground">Organisation Size</span>
-              <Dropdown
-                value={selectedOrg.size}
-                options={["1-10", "11-50", "51-200", "201-500", "500+"]}
-                onChange={(v) => updateOrg(selectedOrg.id, "size", v)}
-              />
-            </div>
-          </div>
-
-          {/* Location */}
-          <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
-          <div className="border-t border-border">
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-sm text-foreground">Country</span>
-              <Dropdown
-                value={selectedOrg.country}
-                options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
-                onChange={(v) => updateOrg(selectedOrg.id, "country", v)}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-sm text-foreground">State</span>
-              <Dropdown
-                value={selectedOrg.state}
-                options={["Uttar Pradesh", "Maharashtra", "Karnataka", "Tamil Nadu", "Delhi", "London"]}
-                onChange={(v) => updateOrg(selectedOrg.id, "state", v)}
-              />
+            <div className="flex items-center gap-2">
+              <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Upload</button>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Organisation Information */}
+        <SectionHeader title="Organisation Information" icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
+        <div className="border-t border-border">
+          <EditableRow label="Organisation Name" value={org.name} onSave={(v) => updateOrg("name", v)} />
+          <EditableRow label="Email Address" value={org.email} onSave={(v) => updateOrg("email", v)} type="email" />
+          <EditableRow label="Phone Number" value={org.phone} onSave={(v) => updateOrg("phone", v)} type="tel" />
+          <EditableRow label="Website" value={org.website} onSave={(v) => updateOrg("website", v)} />
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <span className="text-sm text-foreground">Industry</span>
+            <Dropdown
+              value={org.industry}
+              options={["Design & Creative", "Technology", "Marketing", "Finance", "Healthcare", "Education"]}
+              onChange={(v) => updateOrg("industry", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <span className="text-sm text-foreground">Organisation Size</span>
+            <Dropdown
+              value={org.size}
+              options={["1-10", "11-50", "51-200", "201-500", "500+"]}
+              onChange={(v) => updateOrg("size", v)}
+            />
+          </div>
+        </div>
+
+        {/* Location */}
+        <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
+        <div className="border-t border-border">
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <span className="text-sm text-foreground">Country</span>
+            <Dropdown
+              value={org.country}
+              options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
+              onChange={(v) => updateOrg("country", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <span className="text-sm text-foreground">State</span>
+            <Dropdown
+              value={org.state}
+              options={["Uttar Pradesh", "Maharashtra", "Karnataka", "Tamil Nadu", "Delhi", "London"]}
+              onChange={(v) => updateOrg("state", v)}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1598,79 +1592,3 @@ function Dropdown({
   )
 }
 
-// Organisation Selector Component
-function OrgSelector({
-  orgs,
-  selectedId,
-  onChange
-}: {
-  orgs: typeof mockOrganisations
-  selectedId: string
-  onChange: (id: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const dropdownRef = React.useRef<HTMLDivElement>(null)
-
-  const selectedOrg = orgs.find(org => org.id === selectedId)
-
-  React.useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-background hover:bg-muted/50 transition-colors"
-      >
-        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-          {selectedOrg?.logo ? (
-            <img src={selectedOrg.logo} alt={selectedOrg.name} className="w-full h-full object-cover rounded-lg" />
-          ) : (
-            <Building2 className="w-4 h-4 text-muted-foreground" />
-          )}
-        </div>
-        <span className="text-sm font-medium text-foreground">{selectedOrg?.name || "Select organisation"}</span>
-        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 min-w-[280px] bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
-          {orgs.map((org) => (
-            <button
-              key={org.id}
-              onClick={() => {
-                onChange(org.id)
-                setOpen(false)
-              }}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted transition-colors",
-                selectedId === org.id && "bg-muted"
-              )}
-            >
-              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                {org.logo ? (
-                  <img src={org.logo} alt={org.name} className="w-full h-full object-cover rounded-lg" />
-                ) : (
-                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{org.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{org.industry} · {org.size} employees</p>
-              </div>
-              {selectedId === org.id && (
-                <Check className="w-4 h-4 text-[#5C6ECD] shrink-0" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}

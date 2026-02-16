@@ -23,7 +23,12 @@ export default async function RoomPage() {
 
   return (
     <div className="flex flex-col h-svh">
-      <StudioHeader user={userData} />
+      <StudioHeader
+        user={userData}
+        organizationId={null}
+        organizationLogoUrl={null}
+        clientDirectory={[]}
+      />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
         <RoomContent />

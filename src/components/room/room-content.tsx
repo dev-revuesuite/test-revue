@@ -3,16 +3,18 @@
 import { useState, useEffect } from "react"
 import {
   Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare,
-  CheckCircle, Share, AlertCircle, ArrowLeft, Info, Copy, Plus,
-  Briefcase, Calendar, Palette, Type, Image as ImageIcon,
-  Trash2, MoreHorizontal, ExternalLink, Search,
-  Sparkles, Zap, Building2, Target, CalendarDays, FolderOpen, Globe, Edit3, FileCheck,
-  X, UserPlus, Pencil, ScanSearch, ChevronUp, FolderKanban, CircleDot, Upload, CircleCheck,
-  Settings, Layers, Link, Play, LayoutGrid
+  CheckCircle, ArrowLeft, Plus,
+  Briefcase, Palette, Type, Image as ImageIcon,
+  ExternalLink, Search,
+  Sparkles, Zap, FolderOpen,
+  X, UserPlus, Pencil, ChevronUp, FolderKanban, CircleDot, Upload, CircleCheck,
+  Settings, Layers, Link, Circle, CheckCircle2, Copy,
+  FileImage, Video, FileCheck, Layers2, Play
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
@@ -28,15 +30,33 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 // Types
-interface DeliverableStage {
+interface Deliverable {
   id: string
-  stage: string
-  description: string
-  date: string
+  name: string
+  status: "pending" | "in_progress" | "completed"
+  dueDate?: string
+}
+
+interface Creative {
+  id: string
+  name: string
+  type: "image" | "video" | "document" | "design"
+  thumbnailUrl: string
+  updatedAt: string
+  feedbackCount: number
+  iteration: number
+  status: "in_progress" | "completed"
 }
 
 interface TeamMember {
@@ -59,60 +79,26 @@ interface ExternalLinkItem {
   url?: string
 }
 
-interface NamingColumn {
-  id: string
-  value: string
-}
-
-interface Creative {
-  id: string
-  name: string
-  type: "Image" | "Video" | "Document" | "Website"
-  thumbnail: string
-  iterations: number
-  activeFeedbacks: number
-  status: "in_review" | "approved" | "pending" | "revision"
-  lastUpdated: string
-  dimensions?: string
-}
-
 type StatusKey = "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
 
 interface Project {
   id: string
   name: string
-  description?: string
+  type: string
+  description: string
   clientName: string
-  projectType: string
-  industry?: string
-  deliverable?: string
-  scopeDescription?: string
-  startDate?: string
-  endDate?: string
-  endTime?: string
-  deliverableStages?: DeliverableStage[]
-  accountManager?: string
-  accountManagerAvatar?: string
-  autoDeleteIteration?: string
-  needQCTool?: boolean
-  workmode?: "productive" | "creative"
-  team: TeamMember[]
-  references?: Reference[]
-  externalLinks?: ExternalLinkItem[]
-  namingColumns?: NamingColumn[]
-  otherDescription?: string
   createdOn: string
   deadline: string
   daysLeft: number
   status: StatusKey
+  workmode?: "productive" | "creative"
+  team: TeamMember[]
   additionalMembers: number
-  colors?: string[]
-  primaryFont?: string
-  secondaryFont?: string
-  tertiaryFont?: string
-  completedOn?: string
+  references?: Reference[]
+  externalLinks?: ExternalLinkItem[]
   budget?: string
-  creatives?: Creative[]
+  deliverables: Deliverable[]
+  creatives: Creative[]
 }
 
 interface ClientRoom {
@@ -126,7 +112,6 @@ interface ClientRoom {
   tertiaryFont: string
   colors: string[]
   projects: Project[]
-  completedProjects: Project[]
 }
 
 const statusConfig: Record<StatusKey, { label: string; icon: typeof FileText; color: string; bgColor: string; iconBg: string; tagBg: string }> = {
@@ -140,6 +125,17 @@ const statusConfig: Record<StatusKey, { label: string; icon: typeof FileText; co
 }
 
 const statusList: StatusKey[] = ["brief_received", "qc_pending", "review_qc", "iteration_shared", "feedback_received", "iteration_approved"]
+
+const projectTypes = [
+  "Branding", "Social Media", "Web Design", "Mobile App", "Print Design", "Motion Graphics", "Packaging", "Video Production", "Other",
+]
+
+const creativeTypeIcons: Record<Creative["type"], typeof ImageIcon> = {
+  image: FileImage,
+  video: Video,
+  document: FileText,
+  design: Palette,
+}
 
 // Sample data
 const sampleClientRoom: ClientRoom = {
@@ -156,151 +152,104 @@ const sampleClientRoom: ClientRoom = {
     {
       id: "p1",
       name: "WebUI Design",
+      type: "Mobile App",
       description: "You need to develop an application on something like React native, so that it is for Android and IOS. There are about 30 screens, the design and layout in the sketch is ready.",
       clientName: "Dropbox, Inc.",
-      projectType: "Mobile App",
-      industry: "Technology",
-      deliverable: "Mobile Application (iOS & Android)",
-      scopeDescription: "Full project scope - 30 screens",
-      startDate: "2024-06-17",
-      endDate: "2024-07-04",
-      endTime: "18:00",
-      deliverableStages: [
-        { id: "1", stage: "Stage 1", description: "Research & Discovery", date: "2024-06-20" },
-        { id: "2", stage: "Stage 2", description: "Wireframes & Prototypes", date: "2024-06-25" },
-        { id: "3", stage: "Stage 3", description: "UI Design Development", date: "2024-06-30" },
-        { id: "4", stage: "Stage 4", description: "Final Delivery", date: "2024-07-04" },
-      ],
-      accountManager: "John Doe",
-      autoDeleteIteration: "30 Days",
-      needQCTool: true,
+      createdOn: "10 June",
+      deadline: "04 Jul, 2024",
+      daysLeft: 7,
+      status: "brief_received",
       workmode: "creative",
       team: [
         { id: "1", name: "Jacob Hawkins", role: "Project Manager", avatar: "https://i.pravatar.cc/150?img=1" },
         { id: "2", name: "Regina Cooper", role: "Lead Designer", avatar: "https://i.pravatar.cc/150?img=2" },
         { id: "3", name: "Jane Wilson", role: "UI Designer", avatar: "https://i.pravatar.cc/150?img=3" },
         { id: "4", name: "Ronald Robertson", role: "Reviewer", avatar: "https://i.pravatar.cc/150?img=4" },
-        { id: "5", name: "Dustin Williamson", role: "Developer", avatar: "https://i.pravatar.cc/150?img=5" },
-        { id: "6", name: "Robert Edwards", role: "QC Analyst", avatar: "https://i.pravatar.cc/150?img=6" },
       ],
+      additionalMembers: 2,
       references: [
         { id: "1", name: "Wireframe UI Kit.zip", size: "5.8 MB" },
         { id: "2", name: "Brand Styles Guide.pdf", size: "487KB" },
-        { id: "3", name: "Rocket – Admin Dashboard UI Kit", size: "5.8 MB" },
       ],
       externalLinks: [
         { id: "1", name: "Figma Design File", url: "https://figma.com/file/xxx" },
         { id: "2", name: "Notion Brief Document", url: "https://notion.so/xxx" },
       ],
-      namingColumns: [
-        { id: "1", value: "Brand Name" },
-        { id: "2", value: "Project Name" },
-        { id: "3", value: "Date" },
-        { id: "4", value: "Version" },
-      ],
-      otherDescription: "The storage and processing server is on our side. Please ensure all deliverables follow the brand guidelines provided.",
-      createdOn: "10 June",
-      deadline: "04 Jul, 2024",
-      daysLeft: 7,
-      status: "brief_received",
-      additionalMembers: 0,
       budget: "2,08,000",
+      deliverables: [
+        { id: "d1", name: "Home Screen Design", status: "completed" },
+        { id: "d2", name: "User Profile Screens", status: "completed" },
+        { id: "d3", name: "Settings & Preferences", status: "in_progress", dueDate: "Jul 2" },
+        { id: "d4", name: "Onboarding Flow", status: "in_progress", dueDate: "Jul 3" },
+        { id: "d5", name: "Notification System", status: "pending", dueDate: "Jul 4" },
+      ],
       creatives: [
-        { id: "c1", name: "Hero Banner v2", type: "Image", thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&h=200&fit=crop", iterations: 3, activeFeedbacks: 2, status: "in_review", lastUpdated: "2 hours ago", dimensions: "1920x1080" },
-        { id: "c2", name: "Instagram Story", type: "Image", thumbnail: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300&h=200&fit=crop", iterations: 2, activeFeedbacks: 0, status: "approved", lastUpdated: "1 day ago", dimensions: "1080x1920" },
-        { id: "c3", name: "Product Showcase", type: "Video", thumbnail: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=300&h=200&fit=crop", iterations: 1, activeFeedbacks: 5, status: "revision", lastUpdated: "3 hours ago", dimensions: "1920x1080" },
-        { id: "c4", name: "Landing Page Header", type: "Website", thumbnail: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=300&h=200&fit=crop", iterations: 4, activeFeedbacks: 1, status: "pending", lastUpdated: "5 hours ago", dimensions: "1440x900" },
+        { id: "c1", name: "Hero Banner", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop", updatedAt: "2 hours ago", feedbackCount: 5, iteration: 3, status: "in_progress" },
+        { id: "c2", name: "Product Cards", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&h=300&fit=crop", updatedAt: "1 day ago", feedbackCount: 3, iteration: 2, status: "completed" },
+        { id: "c3", name: "Onboarding Flow", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=400&h=300&fit=crop", updatedAt: "5 hours ago", feedbackCount: 8, iteration: 4, status: "in_progress" },
+        { id: "c4", name: "App Promo Video", type: "video", thumbnailUrl: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop", updatedAt: "3 days ago", feedbackCount: 2, iteration: 1, status: "completed" },
       ],
     },
     {
       id: "p2",
       name: "Dashboard Redesign",
+      type: "Web Design",
       description: "Complete redesign of the analytics dashboard with modern UI patterns.",
       clientName: "Dropbox, Inc.",
-      projectType: "Web Development",
-      industry: "Technology",
-      deliverable: "Dashboard UI",
-      scopeDescription: "5 dashboard screens",
-      startDate: "2024-07-05",
-      endDate: "2024-07-20",
-      accountManager: "Jane Smith",
-      autoDeleteIteration: "14 Days",
-      needQCTool: true,
+      createdOn: "5 July",
+      deadline: "20 July",
+      daysLeft: 7,
+      status: "qc_pending",
       workmode: "productive",
       team: [
         { id: "1", name: "John Lee", role: "Project Manager", avatar: "https://i.pravatar.cc/150?img=7" },
         { id: "2", name: "Lisa Park", role: "Designer", avatar: "https://i.pravatar.cc/150?img=8" },
       ],
+      additionalMembers: 0,
       references: [{ id: "1", name: "Current Site Analysis.pdf", size: "2.1 MB" }],
-      createdOn: "5 July",
-      deadline: "20 July",
-      daysLeft: 7,
-      status: "qc_pending",
-      additionalMembers: 2,
       budget: "1,50,000",
+      deliverables: [
+        { id: "d6", name: "Dashboard Overview", status: "in_progress", dueDate: "Jul 15" },
+        { id: "d7", name: "Analytics Charts", status: "pending", dueDate: "Jul 18" },
+      ],
+      creatives: [
+        { id: "c5", name: "Dashboard Overview", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop", updatedAt: "3 hours ago", feedbackCount: 2, iteration: 1, status: "in_progress" },
+      ],
     },
     {
       id: "p3",
       name: "Landing Page",
+      type: "Web Design",
       description: "Create a high-converting landing page for product launch.",
       clientName: "Dropbox, Inc.",
-      projectType: "Web Design",
-      industry: "Technology",
-      deliverable: "Landing Page",
-      scopeDescription: "Single page with 3 variants",
-      startDate: "2024-07-01",
-      endDate: "2024-07-20",
-      accountManager: "Mike Johnson",
+      createdOn: "1 July",
+      deadline: "20 July",
+      daysLeft: 7,
+      status: "iteration_shared",
       workmode: "creative",
       team: [
         { id: "1", name: "Tom Hardy", role: "Developer", avatar: "https://i.pravatar.cc/150?img=9" },
         { id: "2", name: "Amy Liu", role: "Designer", avatar: "https://i.pravatar.cc/150?img=10" },
       ],
+      additionalMembers: 0,
       references: [{ id: "1", name: "Brand Guidelines.pdf", size: "3.2 MB" }],
-      createdOn: "1 July",
-      deadline: "20 July",
-      daysLeft: 7,
-      status: "iteration_shared",
-      additionalMembers: 0,
       budget: "79,000",
-    },
-    {
-      id: "p4",
-      name: "Mobile App UI",
-      description: "Mobile app interface design for iOS and Android.",
-      clientName: "Dropbox, Inc.",
-      projectType: "Mobile Design",
-      industry: "Technology",
-      deliverable: "App Screens",
-      startDate: "2024-07-08",
-      endDate: "2024-07-15",
-      accountManager: "Sarah Williams",
-      workmode: "productive",
-      team: [
-        { id: "1", name: "Ryan Gosling", role: "Lead Designer", avatar: "https://i.pravatar.cc/150?img=11" },
-        { id: "2", name: "Olivia Wilde", role: "Reviewer", avatar: "https://i.pravatar.cc/150?img=12" },
+      deliverables: [
+        { id: "d8", name: "Hero Section", status: "completed" },
+        { id: "d9", name: "Features Section", status: "in_progress", dueDate: "Jul 12" },
       ],
-      createdOn: "8 July",
-      deadline: "15 July",
-      daysLeft: 5,
-      status: "feedback_received",
-      additionalMembers: 0,
-      budget: "1,00,000",
+      creatives: [],
     },
   ],
-  completedProjects: [],
 }
 
 // Mode Badge Component
 function ModeBadge({ mode }: { mode?: "productive" | "creative" }) {
   if (mode === "creative") {
     return (
-      <span className="relative inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full overflow-hidden">
-        <span className="absolute inset-0 bg-gradient-to-r from-[#5C6ECD] via-[#8B5CF6] to-[#5C6ECD] animate-gradient-x" />
-        <span className="relative flex items-center gap-1 text-white">
-          <Sparkles className="w-3 h-3" />
-          Creative
-        </span>
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold animate-shimmer bg-gradient-to-r from-[#5C6ECD] via-[#8B5CF6] via-[#EC4899] to-[#5C6ECD] bg-[length:200%_100%] bg-clip-text text-transparent">
+        <Sparkles className="w-3 h-3 text-[#8B5CF6]" />
+        Creative
       </span>
     )
   }
@@ -317,12 +266,6 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
   const status = statusConfig[project.status]
   const StatusIcon = status.icon
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return ""
-    const date = new Date(dateStr)
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  }
-
   return (
     <div
       onClick={onClick}
@@ -331,34 +274,22 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
         isSelected ? "bg-[#5C6ECD]/5 border-[#5C6ECD] shadow-sm" : "border-border hover:border-[#5C6ECD]/50 hover:bg-muted/30"
       )}
     >
-      {/* Top Row - Status & Mode */}
       <div className="flex items-center justify-between mb-3">
-        <span className={cn(
-          "flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full",
-          status.tagBg
-        )}>
+        <span className={cn("flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full", status.tagBg)}>
           <StatusIcon className="w-3 h-3" />
           {status.label}
         </span>
         <ModeBadge mode={project.workmode} />
       </div>
-
-      {/* Project Info */}
       <div className="flex items-start gap-3 mb-3">
         <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
-          {clientLogo ? (
-            <img src={clientLogo} alt="Logo" className="w-full h-full object-contain p-1" />
-          ) : (
-            <Briefcase className="w-5 h-5 text-muted-foreground" />
-          )}
+          {clientLogo ? <img src={clientLogo} alt="Logo" className="w-full h-full object-contain p-1" /> : <Briefcase className="w-5 h-5 text-muted-foreground" />}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-foreground text-sm truncate leading-tight">{project.name}</h3>
-          <p className="text-xs text-muted-foreground truncate">{project.projectType}</p>
+          <p className="text-xs text-muted-foreground truncate">{project.type}</p>
         </div>
       </div>
-
-      {/* Details Grid */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-3">
         <div>
           <p className="text-[10px] text-muted-foreground">Budget</p>
@@ -366,11 +297,9 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
         </div>
         <div>
           <p className="text-[10px] text-muted-foreground">Deadline</p>
-          <p className="text-xs font-semibold text-foreground">{formatDate(project.endDate) || "TBD"}</p>
+          <p className="text-xs font-semibold text-foreground">{project.deadline}</p>
         </div>
       </div>
-
-      {/* Team & Days Row */}
       <div className="flex items-center justify-between pt-3 border-t border-border/50">
         <div className="flex items-center -space-x-2">
           {project.team.slice(0, 3).map((member, index) => (
@@ -399,7 +328,7 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
   )
 }
 
-// Filter Tags Component - Horizontal scrollable with colored badges matching status dropdown
+// Filter Tags Component
 function FilterTags({ selectedFilter, onFilterChange, projectCounts }: { selectedFilter: StatusKey | "all"; onFilterChange: (filter: StatusKey | "all") => void; projectCounts: Record<string, number> }) {
   return (
     <div className="overflow-x-auto scrollbar-hide">
@@ -408,14 +337,11 @@ function FilterTags({ selectedFilter, onFilterChange, projectCounts }: { selecte
           onClick={() => onFilterChange("all")}
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap border",
-            selectedFilter === "all"
-              ? "bg-[#5C6ECD] text-white border-[#5C6ECD]"
-              : "bg-[#5C6ECD]/10 text-[#5C6ECD] border-[#5C6ECD]/20 hover:bg-[#5C6ECD]/20"
+            selectedFilter === "all" ? "bg-[#5C6ECD] text-white border-[#5C6ECD]" : "bg-[#5C6ECD]/10 text-[#5C6ECD] border-[#5C6ECD]/20 hover:bg-[#5C6ECD]/20"
           )}
         >
           <FolderKanban className="w-3.5 h-3.5" />
-          All
-          <span className="opacity-80">({projectCounts.all || 0})</span>
+          All ({projectCounts.all || 0})
         </button>
         {statusList.map((statusKey) => {
           const config = statusConfig[statusKey]
@@ -428,33 +354,15 @@ function FilterTags({ selectedFilter, onFilterChange, projectCounts }: { selecte
               onClick={() => onFilterChange(statusKey)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap border",
-                selectedFilter === statusKey
-                  ? config.bgColor + " text-white border-transparent"
-                  : config.tagBg + " border-current/20 hover:opacity-80"
+                selectedFilter === statusKey ? config.bgColor + " text-white border-transparent" : config.tagBg + " border-current/20 hover:opacity-80"
               )}
             >
               <StatusIcon className="w-3.5 h-3.5" />
-              {config.label.split(" ")[0]}
-              <span className="opacity-80">({count})</span>
+              {config.label.split(" ")[0]} ({count})
             </button>
           )
         })}
       </div>
-    </div>
-  )
-}
-
-// Section Header Component
-function SectionHeader({ icon: Icon, title, action }: { icon: typeof FileText; title: string; action?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
-          <Icon className="w-4 h-4 text-[#5C6ECD]" />
-        </div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      </div>
-      {action}
     </div>
   )
 }
@@ -520,17 +428,13 @@ function TeamMembersModal({ open, onOpenChange, team, projectName }: { open: boo
     "UI Designer": "bg-slate-700",
     "Developer": "bg-emerald-600",
     "Reviewer": "bg-slate-600",
-    "QC Analyst": "bg-slate-600",
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-[#5C6ECD]" />
-            Team Members
-          </DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-[#5C6ECD]" /> Team Members</DialogTitle>
           <DialogDescription>{projectName} - {team.length} members</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 mt-4">
@@ -547,15 +451,11 @@ function TeamMembersModal({ open, onOpenChange, team, projectName }: { open: boo
                   <span className="text-sm text-muted-foreground">{member.role}</span>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Pencil className="w-4 h-4" />
-              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"><Pencil className="w-4 h-4" /></Button>
             </div>
           ))}
         </div>
-        <Button className="w-full mt-4 gap-2 bg-[#5C6ECD] hover:bg-[#4a5bb8]">
-          <UserPlus className="w-4 h-4" /> Add Team Member
-        </Button>
+        <Button className="w-full mt-4 gap-2 bg-[#5C6ECD] hover:bg-[#4a5bb8]"><UserPlus className="w-4 h-4" /> Add Team Member</Button>
       </DialogContent>
     </Dialog>
   )
@@ -572,7 +472,17 @@ export function RoomContent({ clientId }: RoomContentProps) {
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusKey | "all">("all")
-  const [activeTab, setActiveTab] = useState<"details" | "creatives">("details")
+  const [isEditing, setIsEditing] = useState(false)
+  const [editData, setEditData] = useState<Project | null>(null)
+
+  // Deliverable modal state
+  const [addDeliverableOpen, setAddDeliverableOpen] = useState(false)
+  const [newDeliverable, setNewDeliverable] = useState({ name: "", dueDate: "" })
+
+  // Creative modal state
+  const [addCreativeOpen, setAddCreativeOpen] = useState(false)
+  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], thumbnailUrl: "" })
+
   const client = sampleClientRoom
 
   const projectCounts = client.projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; acc.all = (acc.all || 0) + 1; return acc }, {} as Record<string, number>)
@@ -582,22 +492,128 @@ export function RoomContent({ clientId }: RoomContentProps) {
     return matchesSearch && matchesStatus
   })
 
-  useEffect(() => { const timer = setTimeout(() => { setIsLoading(false); if (client.projects.length > 0) setSelectedProject(client.projects[0]) }, 500); return () => clearTimeout(timer) }, [])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false)
+      if (client.projects.length > 0) {
+        const firstProject = client.projects[0]
+        setSelectedProject(firstProject)
+        setEditData(firstProject)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [])
 
-  const handleProjectSelect = (project: Project) => { setSelectedProject(project); setActiveTab("details") }
-  const handleCreativeReview = (creativeId: string) => { if (selectedProject) router.push(`/communication?projectId=${selectedProject.id}&creativeId=${creativeId}`) }
-  const handleStatusChange = (newStatus: StatusKey) => { if (selectedProject) setSelectedProject({ ...selectedProject, status: newStatus }); setStatusDropdownOpen(false) }
-  const formatDate = (dateStr?: string) => { if (!dateStr) return ""; const date = new Date(dateStr); return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }
+  const handleProjectSelect = (project: Project) => {
+    setSelectedProject(project)
+    setEditData(project)
+    setIsEditing(false)
+  }
 
-  if (isLoading) return <main className="flex-1 overflow-hidden bg-background"><div className="h-full flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Loading...</div></div></main>
+  const handleStatusChange = (newStatus: StatusKey) => {
+    if (selectedProject) setSelectedProject({ ...selectedProject, status: newStatus })
+    setStatusDropdownOpen(false)
+  }
+
+  const handleSave = () => {
+    if (editData) { setSelectedProject(editData); setIsEditing(false) }
+  }
+
+  const handleCancel = () => {
+    setEditData(selectedProject)
+    setIsEditing(false)
+  }
+
+  const handleCreativeClick = (creative: Creative) => {
+    if (selectedProject) router.push(`/communication?projectId=${selectedProject.id}&creativeId=${creative.id}`)
+  }
+
+  // Deliverable handlers
+  const handleAddDeliverable = () => {
+    if (!selectedProject || !newDeliverable.name.trim()) return
+    const deliverable: Deliverable = {
+      id: `d${Date.now()}`,
+      name: newDeliverable.name.trim(),
+      status: "pending",
+      dueDate: newDeliverable.dueDate || undefined,
+    }
+    const updatedProject = {
+      ...selectedProject,
+      deliverables: [...selectedProject.deliverables, deliverable],
+    }
+    setSelectedProject(updatedProject)
+    setEditData(updatedProject)
+    setNewDeliverable({ name: "", dueDate: "" })
+    setAddDeliverableOpen(false)
+  }
+
+  const handleToggleDeliverableStatus = (deliverableId: string) => {
+    if (!selectedProject) return
+    const updatedDeliverables = selectedProject.deliverables.map((d) => {
+      if (d.id === deliverableId) {
+        // Cycle through statuses: pending -> in_progress -> completed -> pending
+        const nextStatus: Record<Deliverable["status"], Deliverable["status"]> = {
+          pending: "in_progress",
+          in_progress: "completed",
+          completed: "pending",
+        }
+        return { ...d, status: nextStatus[d.status] }
+      }
+      return d
+    })
+    const updatedProject = { ...selectedProject, deliverables: updatedDeliverables }
+    setSelectedProject(updatedProject)
+    setEditData(updatedProject)
+  }
+
+  // Creative handlers
+  const handleAddCreative = () => {
+    if (!selectedProject || !newCreative.name.trim()) return
+    const creative: Creative = {
+      id: `c${Date.now()}`,
+      name: newCreative.name.trim(),
+      type: newCreative.type,
+      thumbnailUrl: newCreative.thumbnailUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop",
+      updatedAt: "Just now",
+      feedbackCount: 0,
+      iteration: 1,
+      status: "in_progress",
+    }
+    const updatedProject = {
+      ...selectedProject,
+      creatives: [...selectedProject.creatives, creative],
+    }
+    setSelectedProject(updatedProject)
+    setEditData(updatedProject)
+    setNewCreative({ name: "", type: "design", thumbnailUrl: "" })
+    setAddCreativeOpen(false)
+  }
+
+  const getDeliverableStats = (deliverables: Deliverable[]) => {
+    const total = deliverables.length
+    const completed = deliverables.filter((d) => d.status === "completed").length
+    return { total, completed }
+  }
+
+  const getStatusIcon = (status: Deliverable["status"]) => {
+    switch (status) {
+      case "completed": return <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+      case "in_progress": return <Clock className="w-4 h-4 text-amber-500" />
+      default: return <Circle className="w-4 h-4 text-muted-foreground" />
+    }
+  }
+
+  if (isLoading) {
+    return <main className="flex-1 overflow-hidden bg-background"><div className="h-full flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Loading...</div></div></main>
+  }
 
   const currentStatus = selectedProject ? statusConfig[selectedProject.status] : null
+  const data = isEditing && editData ? editData : selectedProject
 
   return (
     <main className="flex-1 overflow-hidden bg-background flex flex-col">
-      {/* Fixed Top Bar - Full Width with branded gradient */}
+      {/* Fixed Top Bar */}
       <div className="h-16 border-b border-[#5C6ECD]/20 bg-gradient-to-r from-[#5C6ECD]/5 via-[#8B5CF6]/5 to-[#5C6ECD]/5 flex items-center justify-between px-5 flex-shrink-0">
-        {/* Left Side - Logo, Company, Project Name */}
         <div className="flex items-center gap-4">
           <button onClick={() => router.back()} className="w-9 h-9 rounded-full border border-[#5C6ECD]/20 bg-white/80 flex items-center justify-center hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
             <ArrowLeft className="w-4 h-4 text-[#5C6ECD]" />
@@ -607,32 +623,17 @@ export function RoomContent({ clientId }: RoomContentProps) {
               {client.logoUrl ? <img src={client.logoUrl} alt="Logo" className="w-full h-full object-contain" /> : <span className="font-bold text-[#5C6ECD]">{client.logo}</span>}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-bold text-foreground text-lg">{client.name}</h1>
-                {selectedProject && (
-                  <>
-                    <span className="text-[#5C6ECD]/30">•</span>
-                    <span className="text-[#5C6ECD] font-semibold">{selectedProject.name}</span>
-                  </>
-                )}
-              </div>
+              <h1 className="font-bold text-foreground text-lg">{client.name}</h1>
               <p className="text-xs text-muted-foreground">{client.projects.length} active projects</p>
             </div>
           </div>
         </div>
-
-        {/* Right Side - Action Buttons */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAssetsDrawerOpen(true)}
-            className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all"
-          >
+          <button onClick={() => setAssetsDrawerOpen(true)} className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
             <Layers className="w-4 h-4 text-[#5C6ECD]" />
             <span className="text-sm font-medium text-foreground">Brand Assets</span>
           </button>
-          <button
-            className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all"
-          >
+          <button className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
             <Settings className="w-4 h-4 text-[#5C6ECD] group-hover:rotate-90 transition-transform duration-300" />
             <span className="text-sm font-medium text-foreground">Edit Client</span>
           </button>
@@ -640,310 +641,294 @@ export function RoomContent({ clientId }: RoomContentProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Unified Action Bar - Aligned across all panels */}
-        <div className="h-14 border-b border-border bg-card flex items-center flex-shrink-0">
-          {/* Left Section - Search & Filters */}
-          <div className="w-[320px] min-w-[320px] px-3 flex items-center gap-3 border-r border-border h-full">
-            <div className="relative flex-shrink-0 w-[140px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 h-8 bg-muted/50 border-0 rounded-lg text-xs" />
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Projects List */}
+        <div className="w-[320px] min-w-[320px] border-r border-border flex flex-col bg-card h-full">
+          <div className="p-3 border-b border-border space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Search projects..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 bg-muted/50 border-0" />
             </div>
-            <div className="flex-1 overflow-x-auto scrollbar-hide">
-              <FilterTags selectedFilter={statusFilter} onFilterChange={setStatusFilter} projectCounts={projectCounts} />
+            <FilterTags selectedFilter={statusFilter} onFilterChange={setStatusFilter} projectCounts={projectCounts} />
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-3 space-y-3">
+              {filteredProjects.map((project) => (
+                <ProjectCard key={project.id} project={project} isSelected={selectedProject?.id === project.id} onClick={() => handleProjectSelect(project)} clientLogo={client.logoUrl} />
+              ))}
+              {filteredProjects.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">No projects found</div>}
             </div>
           </div>
+        </div>
 
-          {/* Center Section - Tabs & Status */}
-          {selectedProject && currentStatus && (
-            <div className="flex-1 px-4 flex items-center justify-between h-full border-r border-border">
-              {/* Tabs */}
-              <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/50">
-                <button
-                  onClick={() => setActiveTab("details")}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all",
-                    activeTab === "details" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <FileText className="w-4 h-4" />
-                  Details
-                </button>
-                <button
-                  onClick={() => setActiveTab("creatives")}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all",
-                    activeTab === "creatives" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                  Creatives
-                  {selectedProject.creatives && selectedProject.creatives.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#5C6ECD] text-white">
-                      {selectedProject.creatives.length}
-                    </span>
-                  )}
-                </button>
+        {/* Center Panel - Project Details */}
+        {selectedProject && currentStatus && data && (
+          <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+            {/* Action Bar */}
+            <div className="h-14 border-b border-border bg-card flex items-center justify-between px-6 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                {isEditing ? (
+                  <Input value={editData?.name || ""} onChange={(e) => setEditData((prev) => prev ? { ...prev, name: e.target.value } : null)} className="text-lg font-bold h-9 w-[200px]" placeholder="Project name" />
+                ) : (
+                  <h2 className="text-lg font-bold text-foreground">{data.name}</h2>
+                )}
+                {isEditing ? (
+                  <Select value={editData?.type || ""} onValueChange={(value) => setEditData((prev) => prev ? { ...prev, type: value } : null)}>
+                    <SelectTrigger className="w-[140px] h-8"><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>{projectTypes.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
+                  </Select>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#5C6ECD]/10 text-[#5C6ECD] border border-[#5C6ECD]/20">{data.type}</span>
+                )}
+                <ModeBadge mode={data.workmode} />
               </div>
-              {/* Status Change Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg border transition-all",
-                    currentStatus.bgColor, "text-white border-transparent hover:opacity-90"
-                  )}
-                >
-                  <currentStatus.icon className="w-4 h-4" />
-                  <span className="font-medium text-sm">{currentStatus.label}</span>
-                  {statusDropdownOpen ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-                {statusDropdownOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden py-2">
-                    <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Change Status</div>
-                    {statusList.map((statusKey) => {
-                      const config = statusConfig[statusKey]
-                      const StatusIcon = config.icon
-                      const isSelected = selectedProject.status === statusKey
-                      return (
-                        <button
-                          key={statusKey}
-                          onClick={() => handleStatusChange(statusKey)}
-                          className={cn("w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors", isSelected ? "bg-muted" : "hover:bg-muted/50")}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", config.iconBg)}>
-                              <StatusIcon className={cn("w-4 h-4", config.color)} />
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <button onClick={() => setStatusDropdownOpen(!statusDropdownOpen)} className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all", currentStatus.bgColor, "text-white border-transparent hover:opacity-90")}>
+                    <currentStatus.icon className="w-4 h-4" />
+                    <span className="font-medium text-sm">{currentStatus.label}</span>
+                    {statusDropdownOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {statusDropdownOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden py-2">
+                      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Change Status</div>
+                      {statusList.map((statusKey) => {
+                        const config = statusConfig[statusKey]
+                        const StatusIcon = config.icon
+                        const isSelected = selectedProject.status === statusKey
+                        return (
+                          <button key={statusKey} onClick={() => handleStatusChange(statusKey)} className={cn("w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors", isSelected ? "bg-muted" : "hover:bg-muted/50")}>
+                            <div className="flex items-center gap-3">
+                              <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", config.iconBg)}><StatusIcon className={cn("w-4 h-4", config.color)} /></div>
+                              <span className={cn("font-medium", isSelected ? config.color : "text-foreground")}>{config.label}</span>
                             </div>
-                            <span className={cn("font-medium", isSelected ? config.color : "text-foreground")}>{config.label}</span>
-                          </div>
-                          {isSelected && <CheckCircle className="w-4 h-4 text-[#5C6ECD]" />}
-                        </button>
-                      )
-                    })}
-                  </div>
+                            {isSelected && <CheckCircle className="w-4 h-4 text-[#5C6ECD]" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                {isEditing ? (
+                  <>
+                    <Button variant="outline" onClick={handleCancel} size="sm"><X className="w-4 h-4 mr-2" />Cancel</Button>
+                    <Button onClick={handleSave} size="sm" className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"><FileCheck className="w-4 h-4 mr-2" />Save</Button>
+                  </>
+                ) : (
+                  <Button variant="outline" onClick={() => setIsEditing(true)} size="sm"><Pencil className="w-4 h-4 mr-2" />Edit</Button>
                 )}
               </div>
             </div>
-          )}
 
-          {/* Right Section - Team */}
-          {selectedProject && (
-            <div className="w-[280px] min-w-[280px] px-4 flex items-center justify-between h-full">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">Team</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center -space-x-2">
-                  {selectedProject.team.slice(0, 4).map((member) => (
-                    <Avatar key={member.id} className="w-7 h-7 border-2 border-background cursor-pointer hover:z-10 transition-transform hover:scale-110" onClick={() => setTeamModalOpen(true)}>
-                      <AvatarImage src={member.avatar} alt={member.name} />
-                      <AvatarFallback className="bg-[#5C6ECD] text-white text-[10px]">{member.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                  ))}
-                  {selectedProject.team.length > 4 && (
-                    <div className="w-7 h-7 rounded-full bg-muted text-foreground text-[10px] font-bold flex items-center justify-center border-2 border-background cursor-pointer" onClick={() => setTeamModalOpen(true)}>
-                      +{selectedProject.team.length - 4}
-                    </div>
-                  )}
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTeamModalOpen(true)}>
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Content Panels */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Panel - Projects List */}
-          <div className="w-[320px] min-w-[320px] border-r border-border flex flex-col bg-card h-full">
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-3 space-y-3">
-                {filteredProjects.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    isSelected={selectedProject?.id === project.id}
-                    onClick={() => handleProjectSelect(project)}
-                    clientLogo={client.logoUrl}
-                  />
-                ))}
-                {filteredProjects.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">No projects found</div>}
-              </div>
-            </div>
-          </div>
-
-          {/* Center Panel - Project Details */}
-          {selectedProject && currentStatus && (
-            <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-muted/30">
-
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto">
-              {activeTab === "details" ? (
-                <div className="p-6 space-y-6">
-                  {/* Brand Information */}
-                  <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                    <SectionHeader icon={Building2} title="Brand Information" action={<Button variant="ghost" size="sm" className="gap-1.5 text-[#5C6ECD]"><Edit3 className="w-3.5 h-3.5" /> Edit</Button>} />
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      <div><p className="text-xs text-muted-foreground">Project Name</p><p className="text-sm font-medium text-foreground">{selectedProject.name}</p></div>
-                      <div><p className="text-xs text-muted-foreground">Project Type</p><p className="text-sm font-medium text-foreground">{selectedProject.projectType}</p></div>
-                      <div><p className="text-xs text-muted-foreground">Industry</p><p className="text-sm font-medium text-foreground">{selectedProject.industry || "N/A"}</p></div>
-                      {selectedProject.budget && <div><p className="text-xs text-muted-foreground">Budget</p><p className="text-sm font-medium text-foreground">₹{selectedProject.budget}</p></div>}
-                    </div>
-                    {selectedProject.description && <div className="mt-4 pt-4 border-t border-border"><p className="text-xs text-muted-foreground mb-1">Description</p><p className="text-sm text-foreground leading-relaxed">{selectedProject.description}</p></div>}
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto bg-muted/30">
+              <div className="p-6 space-y-6">
+                {/* Description */}
+                {(data.description || isEditing) && (
+                  <div className="pb-4 border-b border-border">
+                    {isEditing ? (
+                      <Textarea value={editData?.description || ""} onChange={(e) => setEditData((prev) => prev ? { ...prev, description: e.target.value } : null)} className="min-h-[60px] resize-none" placeholder="Add a description..." />
+                    ) : (
+                      <p className="text-muted-foreground text-sm leading-relaxed">{data.description}</p>
+                    )}
                   </div>
+                )}
 
-                  {/* Project Scope */}
-                  <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                    <SectionHeader icon={Target} title="Project Scope & Objective" />
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {selectedProject.deliverable && <div><p className="text-xs text-muted-foreground">Deliverable</p><p className="text-sm font-medium text-foreground">{selectedProject.deliverable}</p></div>}
-                      {selectedProject.scopeDescription && <div><p className="text-xs text-muted-foreground">Scope</p><p className="text-sm font-medium text-foreground">{selectedProject.scopeDescription}</p></div>}
-                    </div>
-                  </div>
-
-                  {/* Timeline */}
-                  <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-                    <SectionHeader icon={CalendarDays} title="Timeline & Milestones" />
-                    <div className="grid grid-cols-3 gap-4 mb-5">
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                        <div className="w-10 h-10 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center"><Calendar className="w-5 h-5 text-[#5C6ECD]" /></div>
-                        <div><p className="text-xs text-muted-foreground">Start Date</p><p className="font-semibold text-foreground text-sm">{formatDate(selectedProject.startDate)}</p></div>
+                {/* Project Deliverables */}
+                <div className="bg-card rounded-xl border border-border p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                        <Layers2 className="w-4 h-4 text-[#5C6ECD]" />
                       </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                        <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center"><Calendar className="w-5 h-5 text-orange-500" /></div>
-                        <div><p className="text-xs text-muted-foreground">End Date</p><p className="font-semibold text-foreground text-sm">{formatDate(selectedProject.endDate)}</p></div>
-                      </div>
-                      {selectedProject.endTime && (
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                          <div className="w-10 h-10 rounded-lg bg-slate-500/10 flex items-center justify-center"><Clock className="w-5 h-5 text-slate-500" /></div>
-                          <div><p className="text-xs text-muted-foreground">End Time</p><p className="font-semibold text-foreground text-sm">{selectedProject.endTime}</p></div>
-                        </div>
-                      )}
-                    </div>
-                    {selectedProject.deliverableStages && selectedProject.deliverableStages.length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-3">DELIVERABLE STAGES</p>
-                        <div className="space-y-2">
-                          {selectedProject.deliverableStages.map((stage) => (
-                            <div key={stage.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background">
-                              <div className="px-3 py-1.5 rounded-full bg-[#5C6ECD] text-white text-xs font-bold">{stage.stage}</div>
-                              <div className="flex-1"><p className="text-sm font-medium text-foreground">{stage.description}</p></div>
-                              <div className="text-sm text-muted-foreground">{formatDate(stage.date)}</div>
+                        <h3 className="text-base font-semibold text-foreground">Deliverables</h3>
+                        <p className="text-xs text-muted-foreground">{getDeliverableStats(data.deliverables).completed}/{getDeliverableStats(data.deliverables).total} completed</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}><Plus className="w-4 h-4 mr-2" />Add</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {data.deliverables.map((deliverable) => (
+                      <div
+                        key={deliverable.id}
+                        onClick={() => handleToggleDeliverableStatus(deliverable.id)}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            {getStatusIcon(deliverable.status)}
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="w-4 h-4 rounded-full border-2 border-[#5C6ECD] bg-white" />
                             </div>
-                          ))}
+                          </div>
+                          <span className={cn("text-sm", deliverable.status === "completed" ? "text-muted-foreground line-through" : "text-foreground")}>{deliverable.name}</span>
                         </div>
+                        <div className="flex items-center gap-3">
+                          {deliverable.dueDate && <span className="text-xs text-muted-foreground">Due {deliverable.dueDate}</span>}
+                          <span className={cn(
+                            "text-xs px-2 py-0.5 rounded-full transition-colors",
+                            deliverable.status === "completed" && "bg-emerald-500/10 text-emerald-600",
+                            deliverable.status === "in_progress" && "bg-amber-500/10 text-amber-600",
+                            deliverable.status === "pending" && "bg-muted text-muted-foreground"
+                          )}>
+                            {deliverable.status === "completed" ? "Done" : deliverable.status === "in_progress" ? "In Progress" : "Pending"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {data.deliverables.length === 0 && (
+                      <div className="text-center py-6 text-muted-foreground text-sm">
+                        No deliverables yet. Click "Add" to create one.
                       </div>
                     )}
                   </div>
                 </div>
-              ) : (
-                /* Creatives Tab - List View */
-                <div className="p-6">
-                  <div className="space-y-3">
-                    {selectedProject.creatives && selectedProject.creatives.length > 0 ? (
-                      selectedProject.creatives.map((creative) => {
-                        const creativeStatusConfig: Record<string, { label: string; icon: typeof Eye; bg: string; text: string; iconBg: string }> = {
-                          in_review: { label: "In Review", icon: Eye, bg: "bg-amber-500/10", text: "text-amber-600", iconBg: "bg-amber-500/10" },
-                          approved: { label: "Approved", icon: CheckCircle, bg: "bg-emerald-500/10", text: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-                          pending: { label: "Pending", icon: Clock, bg: "bg-slate-500/10", text: "text-slate-600", iconBg: "bg-slate-500/10" },
-                          revision: { label: "Revision", icon: AlertCircle, bg: "bg-red-500/10", text: "text-red-600", iconBg: "bg-red-500/10" },
-                        }
-                        const typeColors: Record<string, { bg: string; text: string }> = {
-                          "Image": { bg: "bg-blue-500/10", text: "text-blue-600" },
-                          "Video": { bg: "bg-purple-500/10", text: "text-purple-600" },
-                          "Document": { bg: "bg-orange-500/10", text: "text-orange-600" },
-                          "Website": { bg: "bg-cyan-500/10", text: "text-cyan-600" },
-                        }
-                        const statusInfo = creativeStatusConfig[creative.status]
-                        const StatusIcon = statusInfo.icon
+
+                {/* Creatives */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-base font-semibold text-foreground">Creatives</h3>
+                      <span className="text-sm text-muted-foreground">({data.creatives.length})</span>
+                    </div>
+                    <Button size="sm" className="bg-[#5C6ECD] hover:bg-[#4a5bb8]" onClick={() => setAddCreativeOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Creative</Button>
+                  </div>
+
+                  {data.creatives.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      {[...data.creatives]
+                        .sort((a, b) => {
+                          // Sort in_progress first, then completed
+                          if (a.status === "in_progress" && b.status === "completed") return -1
+                          if (a.status === "completed" && b.status === "in_progress") return 1
+                          return 0
+                        })
+                        .map((creative) => {
+                        const TypeIcon = creativeTypeIcons[creative.type]
+                        const isInProgress = creative.status === "in_progress"
                         return (
-                          <div key={creative.id} className="bg-card rounded-xl border border-border p-4 hover:border-[#5C6ECD]/50 transition-all group">
-                            <div className="flex items-center gap-4">
-                              {/* Thumbnail */}
-                              <div className="relative w-20 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
-                                <img src={creative.thumbnail} alt={creative.name} className="w-full h-full object-cover" />
-                                {creative.type === "Video" && (
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                    <Play className="w-4 h-4 text-white" />
+                          <div
+                            key={creative.id}
+                            onClick={() => handleCreativeClick(creative)}
+                            className={cn(
+                              "bg-card rounded-2xl border overflow-hidden transition-all group cursor-pointer",
+                              isInProgress
+                                ? "border-[#5C6ECD]/30 hover:border-[#5C6ECD] hover:shadow-lg hover:shadow-[#5C6ECD]/10"
+                                : "border-border hover:border-[#5C6ECD]/50 hover:shadow-md"
+                            )}
+                          >
+                            {/* Thumbnail */}
+                            <div className="relative aspect-[4/3] bg-muted overflow-hidden">
+                              <img src={creative.thumbnailUrl} alt={creative.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                              {creative.type === "video" && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="w-14 h-14 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                                    <Play className="w-6 h-6 text-foreground ml-1" />
                                   </div>
-                                )}
-                              </div>
-
-                              {/* Info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-semibold text-foreground text-sm truncate">{creative.name}</h4>
                                 </div>
-                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                  <span>{creative.dimensions}</span>
-                                  <span>•</span>
-                                  <span>{creative.lastUpdated}</span>
+                              )}
+                              {/* Version Badge */}
+                              <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white text-xs font-bold rounded-lg">
+                                v{creative.iteration}
+                              </div>
+                              {/* Status Badge */}
+                              <div className={cn(
+                                "absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-lg backdrop-blur-sm",
+                                isInProgress
+                                  ? "bg-amber-500/90 text-white"
+                                  : "bg-emerald-500/90 text-white"
+                              )}>
+                                {isInProgress ? "In Progress" : "Completed"}
+                              </div>
+                              {/* Open in Revue overlay on hover */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                                <span className="text-white font-medium text-sm flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
+                                  <ExternalLink className="w-4 h-4" />
+                                  Open in Revue
+                                </span>
+                              </div>
+                            </div>
+                            {/* Info */}
+                            <div className="p-4">
+                              <div className="flex items-center gap-2.5 mb-1.5">
+                                <div className={cn(
+                                  "w-7 h-7 rounded-lg flex items-center justify-center",
+                                  isInProgress ? "bg-[#5C6ECD]/10" : "bg-emerald-500/10"
+                                )}>
+                                  <TypeIcon className={cn("w-4 h-4", isInProgress ? "text-[#5C6ECD]" : "text-emerald-600")} />
                                 </div>
+                                <h4 className="font-semibold text-foreground">{creative.name}</h4>
                               </div>
-
-                              {/* Type Badge */}
-                              <div className={cn("px-2.5 py-1 rounded-full text-[10px] font-semibold flex-shrink-0", typeColors[creative.type]?.bg || "bg-slate-500/10", typeColors[creative.type]?.text || "text-slate-600")}>
-                                {creative.type}
-                              </div>
-
+                              <p className="text-xs text-muted-foreground mb-3 pl-9">Updated {creative.updatedAt}</p>
                               {/* Stats */}
-                              <div className="flex items-center gap-4 flex-shrink-0">
-                                <div className="text-center">
-                                  <p className="text-sm font-bold text-foreground">{creative.iterations}</p>
-                                  <p className="text-[10px] text-muted-foreground">Iterations</p>
+                              <div className="flex items-center gap-3 pt-3 border-t border-border">
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>{creative.feedbackCount} feedbacks</span>
                                 </div>
-                                <div className="text-center">
-                                  <p className="text-sm font-bold text-foreground">{creative.activeFeedbacks}</p>
-                                  <p className="text-[10px] text-muted-foreground">Feedbacks</p>
+                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <Layers2 className="w-3.5 h-3.5" />
+                                  <span>Iteration {creative.iteration}</span>
                                 </div>
                               </div>
-
-                              {/* Status Badge - Matching dropdown style */}
-                              <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium flex-shrink-0", statusInfo.bg, statusInfo.text)}>
-                                <div className={cn("w-6 h-6 rounded-md flex items-center justify-center", statusInfo.iconBg)}>
-                                  <StatusIcon className="w-3.5 h-3.5" />
-                                </div>
-                                {statusInfo.label}
-                              </div>
-
-                              {/* Review Button */}
-                              <Button
-                                onClick={() => handleCreativeReview(creative.id)}
-                                size="sm"
-                                className="gap-1.5 bg-foreground hover:bg-foreground/90 text-background h-8 px-3 rounded-lg flex-shrink-0"
-                              >
-                                <ScanSearch className="w-3.5 h-3.5" />
-                                Enter Review
-                              </Button>
                             </div>
                           </div>
                         )
-                      })
-                    ) : (
-                      <div className="p-12 text-center text-muted-foreground">
-                        <LayoutGrid className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                        <p className="text-sm">No creatives uploaded yet</p>
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border-2 border-dashed border-border p-12 text-center bg-card">
+                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                        <ImageIcon className="w-8 h-8 text-muted-foreground" />
                       </div>
-                    )}
-                  </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">No creatives yet</h3>
+                      <p className="text-muted-foreground mb-6 max-w-sm mx-auto">Upload your first creative to start collaborating.</p>
+                      <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"><Upload className="w-4 h-4 mr-2" />Upload Creative</Button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Right Panel - Resources */}
+        {/* Right Panel - Team & Resources */}
         {selectedProject && (
           <div className="w-[280px] min-w-[280px] border-l border-border flex flex-col bg-card">
             <ScrollArea className="flex-1">
+              {/* Team Members */}
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+                    <Users className="w-4 h-4 text-[#5C6ECD]" />
+                    Team ({selectedProject.team.length})
+                  </h3>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTeamModalOpen(true)}>
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {selectedProject.team.slice(0, 4).map((member) => (
+                    <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => setTeamModalOpen(true)}>
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={member.avatar} alt={member.name} />
+                        <AvatarFallback className="bg-[#5C6ECD] text-white text-xs">{member.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{member.name}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{member.role}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {selectedProject.team.length > 4 && (
+                    <button onClick={() => setTeamModalOpen(true)} className="w-full text-xs text-[#5C6ECD] hover:underline py-2">
+                      View all {selectedProject.team.length} members
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* References Section */}
               {selectedProject.references && selectedProject.references.length > 0 && (
                 <div className="p-4 border-b border-border">
@@ -959,9 +944,7 @@ export function RoomContent({ clientId }: RoomContentProps) {
                           <p className="text-xs font-medium text-foreground truncate">{ref.name}</p>
                           {ref.size && <p className="text-[10px] text-muted-foreground">{ref.size}</p>}
                         </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Download className="w-3 h-3" />
-                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"><Download className="w-3 h-3" /></Button>
                       </div>
                     ))}
                   </div>
@@ -977,16 +960,8 @@ export function RoomContent({ clientId }: RoomContentProps) {
                   </h3>
                   <div className="space-y-2">
                     {selectedProject.externalLinks.map((link) => (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 hover:border-[#5C6ECD]/30 transition-colors group"
-                      >
-                        <div className="w-6 h-6 rounded bg-[#5C6ECD]/10 flex items-center justify-center flex-shrink-0">
-                          <ExternalLink className="w-3 h-3 text-[#5C6ECD]" />
-                        </div>
+                      <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 hover:border-[#5C6ECD]/30 transition-colors group">
+                        <div className="w-6 h-6 rounded bg-[#5C6ECD]/10 flex items-center justify-center flex-shrink-0"><ExternalLink className="w-3 h-3 text-[#5C6ECD]" /></div>
                         <span className="text-xs font-medium text-foreground truncate flex-1">{link.name}</span>
                         <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </a>
@@ -996,17 +971,11 @@ export function RoomContent({ clientId }: RoomContentProps) {
               )}
             </ScrollArea>
 
-            {/* Quick Stats - Fixed at Bottom */}
+            {/* Quick Stats */}
             <div className="p-4 border-t border-border space-y-3 flex-shrink-0 bg-muted/30">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Days Left</span>
-                <span className={cn("font-bold", selectedProject.daysLeft <= 3 ? "text-red-500" : selectedProject.daysLeft <= 5 ? "text-orange-500" : "text-foreground")}>
-                  {selectedProject.daysLeft} days
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Budget</span>
-                <span className="font-bold text-foreground">₹{selectedProject.budget}</span>
+                <span className={cn("font-bold", selectedProject.daysLeft <= 3 ? "text-red-500" : selectedProject.daysLeft <= 5 ? "text-orange-500" : "text-foreground")}>{selectedProject.daysLeft} days</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Mode</span>
@@ -1015,29 +984,165 @@ export function RoomContent({ clientId }: RoomContentProps) {
             </div>
           </div>
         )}
-        </div>
       </div>
 
       <AssetsDrawer open={assetsDrawerOpen} onOpenChange={setAssetsDrawerOpen} client={client} />
       {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} />}
 
-      {/* Add gradient animation keyframes and scrollbar hide */}
+      {/* Add Deliverable Modal */}
+      <Dialog open={addDeliverableOpen} onOpenChange={setAddDeliverableOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                <Layers2 className="w-4 h-4 text-[#5C6ECD]" />
+              </div>
+              Add Deliverable
+            </DialogTitle>
+            <DialogDescription>Create a new deliverable for this project</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Deliverable Name *</label>
+              <Input
+                placeholder="e.g., Homepage Design, Logo Variants..."
+                value={newDeliverable.name}
+                onChange={(e) => setNewDeliverable((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Due Date (Optional)</label>
+              <Input
+                type="date"
+                value={newDeliverable.dueDate}
+                onChange={(e) => setNewDeliverable((prev) => ({ ...prev, dueDate: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setAddDeliverableOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddDeliverable}
+              disabled={!newDeliverable.name.trim()}
+              className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Deliverable
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Creative Modal */}
+      <Dialog open={addCreativeOpen} onOpenChange={setAddCreativeOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                <Palette className="w-4 h-4 text-[#5C6ECD]" />
+              </div>
+              Add Creative
+            </DialogTitle>
+            <DialogDescription>Upload a new creative asset for this project</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Creative Name *</label>
+              <Input
+                placeholder="e.g., Hero Banner, Product Cards..."
+                value={newCreative.name}
+                onChange={(e) => setNewCreative((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Type</label>
+              <Select
+                value={newCreative.type}
+                onValueChange={(value: Creative["type"]) => setNewCreative((prev) => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="design">
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-4 h-4" />
+                      Design
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="image">
+                    <div className="flex items-center gap-2">
+                      <FileImage className="w-4 h-4" />
+                      Image
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="video">
+                    <div className="flex items-center gap-2">
+                      <Video className="w-4 h-4" />
+                      Video
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="document">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Document
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Thumbnail URL (Optional)</label>
+              <Input
+                placeholder="https://example.com/image.jpg"
+                value={newCreative.thumbnailUrl}
+                onChange={(e) => setNewCreative((prev) => ({ ...prev, thumbnailUrl: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Leave empty for a default thumbnail</p>
+            </div>
+            {/* Preview */}
+            {(newCreative.thumbnailUrl || newCreative.name) && (
+              <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30">
+                <p className="text-xs text-muted-foreground mb-2">Preview</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                    {newCreative.thumbnailUrl ? (
+                      <img src={newCreative.thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#5C6ECD] to-[#8B5CF6]">
+                        <Palette className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{newCreative.name || "Untitled"}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{newCreative.type}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setAddCreativeOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddCreative}
+              disabled={!newCreative.name.trim()}
+              className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Creative
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <style jsx global>{`
-        @keyframes gradient-x {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .animate-gradient-x {
-          background-size: 200% 200%;
-          animation: gradient-x 2s ease infinite;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
+        @keyframes gradient-x { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+        .animate-gradient-x { background-size: 200% 200%; animation: gradient-x 2s ease infinite; }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .animate-shimmer { animation: shimmer 3s ease-in-out infinite; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
     </main>
   )

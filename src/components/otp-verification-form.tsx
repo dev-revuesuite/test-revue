@@ -101,7 +101,40 @@ export function OtpVerificationForm({
       return
     }
 
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
+
+    const userId = userData.user?.id
+    if (userId) {
+      const signupName = sessionStorage.getItem("signupName")
+      await supabase.from("profiles").upsert(
+        {
+          id: userId,
+          email: userData.user?.email || email,
+          full_name: signupName || undefined,
+          onboarded: false,
+        },
+        { onConflict: "id" }
+      )
+    }
+
     sessionStorage.removeItem("verifyEmail")
+    sessionStorage.removeItem("signupName")
+
+    const { data: profile } = userId
+      ? await supabase.from("profiles").select("onboarded").eq("id", userId).single()
+      : { data: null }
+
+    if (profile && !profile.onboarded) {
+      router.push("/onboarding")
+      router.refresh()
+      return
+    }
+
     router.push("/studio")
     router.refresh()
   }

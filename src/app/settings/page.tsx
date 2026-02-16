@@ -25,7 +25,12 @@ export default async function SettingsPage() {
     <div className="flex h-svh">
       <AppSidebar user={userData} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <StudioHeader user={userData} />
+        <StudioHeader
+          user={userData}
+          organizationId={null}
+          organizationLogoUrl={null}
+          clientDirectory={[]}
+        />
         <main className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center">
             <Settings className="w-16 h-16 mx-auto text-muted-foreground mb-4" />

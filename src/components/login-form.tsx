@@ -48,6 +48,19 @@ export function LoginForm({
     })
 
     if (error) {
+      const message = error.message.toLowerCase()
+      if (
+        message.includes("signups") ||
+        message.includes("sign up") ||
+        message.includes("signup") ||
+        message.includes("user not found")
+      ) {
+        sessionStorage.setItem("signupEmail", email)
+        router.push(`/signup?email=${encodeURIComponent(email)}`)
+        setLoading(false)
+        return
+      }
+
       setError(error.message)
       setLoading(false)
       return
@@ -112,6 +125,28 @@ export function LoginForm({
       setError(error.message)
       setLoading(false)
       return
+    }
+
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
+
+    const userId = userData.user?.id
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("onboarded")
+        .eq("id", userId)
+        .single()
+
+      if (!profile || !profile.onboarded) {
+        router.push("/onboarding")
+        router.refresh()
+        return
+      }
     }
 
     router.push("/studio")

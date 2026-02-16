@@ -59,13 +59,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
-import { NewOrganizationDialog } from "@/components/studio/new-organization-dialog"
-
-const organizations = [
-  { id: "1", name: "Acme Studio", abbr: "AS" },
-  { id: "2", name: "Design Co", abbr: "DC" },
-  { id: "3", name: "Creative Labs", abbr: "CL" },
-]
 
 const notifications = [
   {
@@ -114,6 +107,9 @@ interface StudioHeaderProps {
     email: string
     avatar: string
   }
+  organizationId: string | null
+  organizationLogoUrl?: string | null
+  clientDirectory: { id: string; name: string }[]
 }
 
 const searchPlaceholders = [
@@ -136,11 +132,15 @@ const recentSearches = [
   { type: "asset", name: "Brand Guidelines.pdf", icon: FileText },
 ]
 
-export function StudioHeader({ user }: StudioHeaderProps) {
+export function StudioHeader({
+  user,
+  organizationId,
+  organizationLogoUrl,
+  clientDirectory,
+}: StudioHeaderProps) {
   const router = useRouter()
   const [notificationDialogOpen, setNotificationDialogOpen] = React.useState(false)
   const [messageDialogOpen, setMessageDialogOpen] = React.useState(false)
-  const [selectedOrg, setSelectedOrg] = React.useState(organizations[0])
   const [searchValue, setSearchValue] = React.useState("")
   const [searchModalOpen, setSearchModalOpen] = React.useState(false)
   const [selectedCategory, setSelectedCategory] = React.useState("projects")
@@ -152,7 +152,6 @@ export function StudioHeader({ user }: StudioHeaderProps) {
   const [inviteModalOpen, setInviteModalOpen] = React.useState(false)
   const [inviteEmail, setInviteEmail] = React.useState("")
   const [inviteEmails, setInviteEmails] = React.useState<string[]>([])
-  const [selectedOrgs, setSelectedOrgs] = React.useState<string[]>([organizations[0].id])
   const [inviteRole, setInviteRole] = React.useState("member")
   const [linkCopied, setLinkCopied] = React.useState(false)
 
@@ -166,8 +165,6 @@ export function StudioHeader({ user }: StudioHeaderProps) {
   const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false)
   // New brief dialog state
   const [newBriefDialogOpen, setNewBriefDialogOpen] = React.useState(false)
-  // New organization dialog state
-  const [newOrgDialogOpen, setNewOrgDialogOpen] = React.useState(false)
 
   React.useEffect(() => {
     const isDarkMode = document.documentElement.classList.contains("dark")
@@ -254,16 +251,6 @@ export function StudioHeader({ user }: StudioHeaderProps) {
     setInviteEmails(inviteEmails.filter(e => e !== email))
   }
 
-  const handleToggleOrg = (orgId: string) => {
-    if (selectedOrgs.includes(orgId)) {
-      if (selectedOrgs.length > 1) {
-        setSelectedOrgs(selectedOrgs.filter(id => id !== orgId))
-      }
-    } else {
-      setSelectedOrgs([...selectedOrgs, orgId])
-    }
-  }
-
   const handleCopyLink = () => {
     navigator.clipboard.writeText("https://revue.app/invite/abc123")
     setLinkCopied(true)
@@ -271,18 +258,39 @@ export function StudioHeader({ user }: StudioHeaderProps) {
   }
 
   const handleSendInvites = () => {
-    console.log("Sending invites:", { emails: inviteEmails, orgs: selectedOrgs, role: inviteRole })
+    console.log("Sending invites:", { emails: inviteEmails, role: inviteRole })
     setInviteModalOpen(false)
     setInviteEmails([])
     setInviteEmail("")
   }
 
+  const ensureClientId = async (clientName: string) => {
+    if (!organizationId || !clientName.trim()) return null
+
+    const existing = clientDirectory.find((client) => client.name === clientName)
+    if (existing) return existing.id
+
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("clients")
+      .insert({ organization_id: organizationId, name: clientName })
+      .select("id")
+      .single()
+
+    if (error) {
+      console.error("Failed to create client:", error)
+      return null
+    }
+
+    return data?.id ?? null
+  }
+
   return (
     <header className="flex items-center h-16 px-5 border-b border-[#e6e6e6] dark:border-[#333] bg-white dark:bg-[#1a1a1a]">
-      {/* Left section - Logo and Org Switcher */}
+      {/* Left section - Logo */}
       <div className="flex items-center h-full">
         {/* Logo - aligned with sidebar width */}
-        <div className="flex items-center justify-center w-16 h-full -ml-5">
+        <div className="relative flex items-center justify-center w-16 h-full -ml-5">
           <svg width="20" height="30" viewBox="0 0 38 57" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
             <path d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
@@ -290,51 +298,19 @@ export function StudioHeader({ user }: StudioHeaderProps) {
             <path d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
             <path d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
           </svg>
+          <div className="absolute right-0 top-1/2 h-6 w-px -translate-y-1/2 bg-[#e6e6e6] dark:bg-[#333]" />
         </div>
-
-        {/* Organization Switcher - Miro style */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="flex items-center gap-2.5 h-full px-4 hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors">
-              <div className="w-7 h-7 rounded bg-[#5C6ECD] flex items-center justify-center">
-                <span className="text-white font-semibold text-xs">{selectedOrg.abbr}</span>
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-medium text-[#1a1a1a] dark:text-white leading-tight">{selectedOrg.name}</p>
-                <p className="text-xs text-[#7a7a7a] dark:text-[#999] leading-tight">{selectedOrg.name}</p>
-              </div>
-              <ChevronDown className="w-4 h-4 text-[#7a7a7a] dark:text-[#999] ml-1" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-1.5" align="start" sideOffset={4}>
-            {organizations.map((org) => (
-              <button
-                key={org.id}
-                onClick={() => setSelectedOrg(org)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-2.5 py-2 rounded text-sm transition-colors",
-                  selectedOrg.id === org.id
-                    ? "bg-[#f0f0f0] dark:bg-[#333]"
-                    : "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]"
-                )}
-              >
-                <div className="w-7 h-7 rounded bg-[#5C6ECD] flex items-center justify-center">
-                  <span className="text-white font-semibold text-xs">{org.abbr}</span>
-                </div>
-                <span className="text-[#1a1a1a] dark:text-white font-medium">{org.name}</span>
-              </button>
-            ))}
-            <div className="border-t border-[#e6e6e6] dark:border-[#333] mt-1.5 pt-1.5">
-              <button
-                onClick={() => setNewOrgDialogOpen(true)}
-                className="w-full flex items-center gap-3 px-2.5 py-2 rounded text-sm text-[#7a7a7a] dark:text-[#999] hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Create new organization</span>
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Organisation Logo */}
+        <div className="ml-3 flex items-center">
+          <img
+            src={
+              organizationLogoUrl ||
+              "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg"
+            }
+            alt="Organization logo"
+            className="h-6 w-[72px] object-contain"
+          />
+        </div>
       </div>
 
       {/* Right section */}
@@ -556,13 +532,6 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               >
                 <Users className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
                 Team
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => router.push("/account?tab=organisations")}
-                className="gap-3 py-2 px-2 text-sm text-[#1a1a1a] dark:text-white cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded"
-              >
-                <Building2 className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
-                Organisations
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => router.push("/account?tab=billing")}
@@ -824,48 +793,6 @@ export function StudioHeader({ user }: StudioHeaderProps) {
               )}
             </div>
 
-            {/* Organization Selection */}
-            <div>
-              <label className="text-xs font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider mb-2 block">
-                Select Organizations
-              </label>
-              <div className="space-y-2">
-                {organizations.map((org) => {
-                  const isSelected = selectedOrgs.includes(org.id)
-                  return (
-                    <button
-                      key={org.id}
-                      onClick={() => handleToggleOrg(org.id)}
-                      className={cn(
-                        "w-full flex items-center gap-3 p-3 rounded-xl border transition-all",
-                        isSelected
-                          ? "border-[#5C6ECD] bg-[#5C6ECD]/5 dark:bg-[#5C6ECD]/10"
-                          : "border-[#e6e6e6] dark:border-[#444] hover:border-[#bbb] dark:hover:border-[#555]"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-8 h-8 rounded-lg flex items-center justify-center text-white font-semibold text-xs",
-                        isSelected ? "bg-[#5C6ECD]" : "bg-[#7a7a7a]"
-                      )}>
-                        {org.abbr}
-                      </div>
-                      <span className="flex-1 text-left text-sm font-medium text-[#1a1a1a] dark:text-white">
-                        {org.name}
-                      </span>
-                      <div className={cn(
-                        "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
-                        isSelected
-                          ? "border-[#5C6ECD] bg-[#5C6ECD]"
-                          : "border-[#d9d9d9] dark:border-[#555]"
-                      )}>
-                        {isSelected && <Check className="w-3 h-3 text-white" />}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
             {/* Role Selection */}
             <div>
               <label className="text-xs font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider mb-2 block">
@@ -948,9 +875,27 @@ export function StudioHeader({ user }: StudioHeaderProps) {
       <NewClientOnboarding
         open={newClientDialogOpen}
         onClose={() => setNewClientDialogOpen(false)}
-        onComplete={(data) => {
-          console.log("New client data:", data)
+        onComplete={async (data) => {
+          const name = data.brandName?.trim() || "Untitled Client"
+          if (!organizationId) {
+            console.error("Organization is required to create a client.")
+            setNewClientDialogOpen(false)
+            return
+          }
+
+          const supabase = createClient()
+          const { error } = await supabase.from("clients").insert({
+            organization_id: organizationId,
+            name,
+          })
+
+          if (error) {
+            console.error("Failed to create client:", error)
+            return
+          }
+
           setNewClientDialogOpen(false)
+          router.refresh()
         }}
       />
 
@@ -958,21 +903,35 @@ export function StudioHeader({ user }: StudioHeaderProps) {
       <NewBriefDialog
         open={newBriefDialogOpen}
         onClose={() => setNewBriefDialogOpen(false)}
-        onComplete={(data) => {
-          console.log("New brief data:", data)
+        onComplete={async (data) => {
+          const projectName = data.projectName?.trim() || "Untitled Project"
+          const clientName = data.clientName?.trim()
+
+          if (!organizationId) {
+            console.error("Organization is required to create a project.")
+            setNewBriefDialogOpen(false)
+            return
+          }
+
+          const clientId = clientName ? await ensureClientId(clientName) : null
+          if (!clientId) return
+
+          const supabase = createClient()
+          const { error } = await supabase.from("projects").insert({
+            client_id: clientId,
+            name: projectName,
+          })
+
+          if (error) {
+            console.error("Failed to create project:", error)
+            return
+          }
+
           setNewBriefDialogOpen(false)
+          router.refresh()
         }}
       />
 
-      {/* New Organization Dialog */}
-      <NewOrganizationDialog
-        open={newOrgDialogOpen}
-        onClose={() => setNewOrgDialogOpen(false)}
-        onComplete={(data) => {
-          console.log("New organization data:", data)
-          setNewOrgDialogOpen(false)
-        }}
-      />
     </header>
   )
 }
