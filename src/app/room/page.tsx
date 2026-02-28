@@ -235,7 +235,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
       />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
-        <RoomContent clientData={clientData} />
+        <RoomContent clientData={clientData} orgMembers={teamMembers} />
       </div>
     </div>
   )

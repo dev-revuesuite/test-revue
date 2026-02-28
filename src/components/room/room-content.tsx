@@ -358,9 +358,20 @@ function TeamMembersModal({ open, onOpenChange, team, projectName, onAddClick }:
   )
 }
 
-interface RoomContentProps { clientData: ClientRoom }
+interface OrgMember {
+  id: string
+  name: string
+  email: string
+  avatar: string
+  role: string
+}
 
-export function RoomContent({ clientData }: RoomContentProps) {
+interface RoomContentProps {
+  clientData: ClientRoom
+  orgMembers?: OrgMember[]
+}
+
+export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
   const router = useRouter()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
     clientData.projects.length > 0 ? clientData.projects[0] : null
@@ -390,6 +401,8 @@ export function RoomContent({ clientData }: RoomContentProps) {
   // Add team member state
   const [addTeamMemberOpen, setAddTeamMemberOpen] = useState(false)
   const [newTeamMember, setNewTeamMember] = useState({ name: "", role: "Designer" })
+  const [memberSearchQuery, setMemberSearchQuery] = useState("")
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
 
   // Close status dropdown when clicking outside
   useEffect(() => {
@@ -547,17 +560,19 @@ export function RoomContent({ clientData }: RoomContentProps) {
   // Team member handler
   const handleAddTeamMember = async () => {
     if (!selectedProject || !newTeamMember.name.trim()) return
+    const orgMember = orgMembers.find((m) => m.name === newTeamMember.name)
     const member: TeamMember = {
       id: `t${Date.now()}`,
       name: newTeamMember.name.trim(),
       role: newTeamMember.role,
-      avatar: undefined,
+      avatar: orgMember?.avatar || undefined,
     }
     const updatedTeam = [...selectedProject.team, member]
     const updatedProject = { ...selectedProject, team: updatedTeam }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
     setNewTeamMember({ name: "", role: "Designer" })
+    setMemberSearchQuery("")
     setAddTeamMemberOpen(false)
     // Persist to team_roles JSONB
     const teamRolesJson = updatedTeam.map((t) => ({ name: t.name, role: t.role }))
@@ -1174,8 +1189,8 @@ export function RoomContent({ clientData }: RoomContentProps) {
       </Dialog>
 
       {/* Add Team Member Dialog */}
-      <Dialog open={addTeamMemberOpen} onOpenChange={setAddTeamMemberOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={addTeamMemberOpen} onOpenChange={(open) => { setAddTeamMemberOpen(open); if (!open) { setMemberDropdownOpen(false); setMemberSearchQuery("") } }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
@@ -1183,23 +1198,107 @@ export function RoomContent({ clientData }: RoomContentProps) {
               </div>
               Add Team Member
             </DialogTitle>
-            <DialogDescription>Add a member to this project</DialogDescription>
+            <DialogDescription>Select an organization member to add to this project</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
+            {/* Member Selector Dropdown */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Name *</label>
-              <Input
-                placeholder="e.g., John Doe"
-                value={newTeamMember.name}
-                onChange={(e) => setNewTeamMember((prev) => ({ ...prev, name: e.target.value }))}
-              />
+              <label className="text-sm font-medium text-foreground mb-2 block">Team Member *</label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMemberDropdownOpen(!memberDropdownOpen)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 border rounded-lg text-left transition-colors",
+                    memberDropdownOpen
+                      ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-background"
+                      : "border-border bg-background hover:border-[#5C6ECD]/50"
+                  )}
+                >
+                  {(() => {
+                    const selected = orgMembers.find((m) => m.name === newTeamMember.name)
+                    if (selected) {
+                      return (
+                        <>
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={selected.avatar} alt={selected.name} />
+                            <AvatarFallback className="bg-[#5C6ECD] text-white text-xs">{selected.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{selected.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{selected.email}</p>
+                          </div>
+                        </>
+                      )
+                    }
+                    return <span className="flex-1 text-muted-foreground text-sm">Select team member...</span>
+                  })()}
+                  <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform shrink-0", memberDropdownOpen && "rotate-180 text-[#5C6ECD]")} />
+                </button>
+                {memberDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                    <div className="p-2 border-b border-border">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={memberSearchQuery}
+                          onChange={(e) => setMemberSearchQuery(e.target.value)}
+                          placeholder="Search members..."
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-md bg-muted/50 text-foreground placeholder:text-muted-foreground outline-none focus:border-[#5C6ECD] transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-48 overflow-auto">
+                      {(() => {
+                        const filtered = orgMembers.filter((m) =>
+                          m.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+                          m.email.toLowerCase().includes(memberSearchQuery.toLowerCase())
+                        )
+                        // Exclude members already on the team
+                        const available = filtered.filter((m) => !selectedProject?.team.some((t) => t.name === m.name))
+                        if (available.length === 0) {
+                          return <div className="px-4 py-3 text-sm text-muted-foreground text-center">No members found</div>
+                        }
+                        return available.map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => {
+                              setNewTeamMember((prev) => ({ ...prev, name: member.name }))
+                              setMemberDropdownOpen(false)
+                              setMemberSearchQuery("")
+                            }}
+                            className={cn(
+                              "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#5C6ECD]/10 transition-colors",
+                              newTeamMember.name === member.name && "bg-[#5C6ECD]/10"
+                            )}
+                          >
+                            <Avatar className="w-8 h-8">
+                              <AvatarImage src={member.avatar} alt={member.name} />
+                              <AvatarFallback className="bg-[#5C6ECD] text-white text-xs">{member.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-sm truncate", newTeamMember.name === member.name ? "font-medium text-[#5C6ECD]" : "text-foreground")}>{member.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                            </div>
+                            {newTeamMember.name === member.name && <CheckCircle className="w-4 h-4 text-[#5C6ECD] shrink-0" />}
+                          </button>
+                        ))
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+            {/* Role Selector */}
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">Role</label>
               <Select value={newTeamMember.role} onValueChange={(value) => setNewTeamMember((prev) => ({ ...prev, role: value }))}>
                 <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                 <SelectContent>
-                  {["Project Manager", "Lead Designer", "Designer", "UI Designer", "Developer", "Reviewer"].map((role) => (
+                  {["Client Servicing", "Designer", "Developer", "Project Manager", "QC Analyst", "Content Writer", "Marketing", "Lead Designer", "UI Designer", "Reviewer"].map((role) => (
                     <SelectItem key={role} value={role}>{role}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1207,7 +1306,7 @@ export function RoomContent({ clientData }: RoomContentProps) {
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setAddTeamMemberOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAddTeamMemberOpen(false); setMemberSearchQuery("") }}>Cancel</Button>
             <Button
               onClick={handleAddTeamMember}
               disabled={!newTeamMember.name.trim()}
