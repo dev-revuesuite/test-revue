@@ -24,11 +24,63 @@ export default async function AccountPage({
     redirect("/login")
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name,avatar_url")
+    .eq("id", user.id)
+    .single()
+
   const userData = {
-    name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+    name:
+      profile?.full_name ||
+      user.user_metadata?.full_name ||
+      user.email?.split("@")[0] ||
+      "User",
     email: user.email || "",
-    avatar: user.user_metadata?.avatar_url || "",
+    avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
+
+  // Fetch organization
+  const { data: orgs } = await supabase
+    .from("organizations")
+    .select("id,name,logo_url,email,phone,website,industry,size,country,state")
+    .eq("created_by", user.id)
+
+  const organization = orgs?.[0] ?? null
+
+  const orgData = organization
+    ? {
+        id: organization.id,
+        name: organization.name || "",
+        logo: organization.logo_url || "",
+        email: organization.email || "",
+        phone: organization.phone || "",
+        website: organization.website || "",
+        industry: organization.industry || "Design & Creative",
+        size: organization.size || "1-10",
+        country: organization.country || "India",
+        state: organization.state || "",
+      }
+    : null
+
+  // Fetch team members
+  const { data: membersRaw } = organization
+    ? await supabase
+        .from("organization_members")
+        .select("id,name,email,phone,avatar_url,role")
+        .eq("organization_id", organization.id)
+        .order("name")
+    : { data: [] }
+
+  const teamMembers =
+    membersRaw?.map((m) => ({
+      id: m.id,
+      name: m.name || "",
+      email: m.email || "",
+      phone: m.phone || "",
+      role: m.role || "Member",
+      avatar: m.avatar_url || "",
+    })) ?? []
 
   // Validate and get the tab from URL params
   const tabParam = params.tab as TabType | undefined
@@ -38,13 +90,18 @@ export default async function AccountPage({
     <div className="flex flex-col h-svh">
       <StudioHeader
         user={userData}
-        organizationId={null}
-        organizationLogoUrl={null}
+        organizationId={organization?.id ?? null}
+        organizationLogoUrl={organization?.logo_url ?? null}
         clientDirectory={[]}
       />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
-        <AccountContent user={userData} defaultTab={defaultTab} />
+        <AccountContent
+          user={userData}
+          defaultTab={defaultTab}
+          organization={orgData}
+          teamMembers={teamMembers}
+        />
       </div>
     </div>
   )

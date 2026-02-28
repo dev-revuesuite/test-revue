@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 
 // Types
 interface Deliverable {
@@ -137,111 +138,7 @@ const creativeTypeIcons: Record<Creative["type"], typeof ImageIcon> = {
   design: Palette,
 }
 
-// Sample data
-const sampleClientRoom: ClientRoom = {
-  id: "1",
-  name: "Dropbox, Inc.",
-  subtitle: "App Development",
-  logo: "DB",
-  logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Dropbox_Icon.svg/120px-Dropbox_Icon.svg.png",
-  primaryFont: "Gilroy",
-  secondaryFont: "IBM Flex Mono",
-  tertiaryFont: "Inter",
-  colors: ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F1F5F9"],
-  projects: [
-    {
-      id: "p1",
-      name: "WebUI Design",
-      type: "Mobile App",
-      description: "You need to develop an application on something like React native, so that it is for Android and IOS. There are about 30 screens, the design and layout in the sketch is ready.",
-      clientName: "Dropbox, Inc.",
-      createdOn: "10 June",
-      deadline: "04 Jul, 2024",
-      daysLeft: 7,
-      status: "brief_received",
-      workmode: "creative",
-      team: [
-        { id: "1", name: "Jacob Hawkins", role: "Project Manager", avatar: "https://i.pravatar.cc/150?img=1" },
-        { id: "2", name: "Regina Cooper", role: "Lead Designer", avatar: "https://i.pravatar.cc/150?img=2" },
-        { id: "3", name: "Jane Wilson", role: "UI Designer", avatar: "https://i.pravatar.cc/150?img=3" },
-        { id: "4", name: "Ronald Robertson", role: "Reviewer", avatar: "https://i.pravatar.cc/150?img=4" },
-      ],
-      additionalMembers: 2,
-      references: [
-        { id: "1", name: "Wireframe UI Kit.zip", size: "5.8 MB" },
-        { id: "2", name: "Brand Styles Guide.pdf", size: "487KB" },
-      ],
-      externalLinks: [
-        { id: "1", name: "Figma Design File", url: "https://figma.com/file/xxx" },
-        { id: "2", name: "Notion Brief Document", url: "https://notion.so/xxx" },
-      ],
-      budget: "2,08,000",
-      deliverables: [
-        { id: "d1", name: "Home Screen Design", status: "completed" },
-        { id: "d2", name: "User Profile Screens", status: "completed" },
-        { id: "d3", name: "Settings & Preferences", status: "in_progress", dueDate: "Jul 2" },
-        { id: "d4", name: "Onboarding Flow", status: "in_progress", dueDate: "Jul 3" },
-        { id: "d5", name: "Notification System", status: "pending", dueDate: "Jul 4" },
-      ],
-      creatives: [
-        { id: "c1", name: "Hero Banner", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop", updatedAt: "2 hours ago", feedbackCount: 5, iteration: 3, status: "in_progress" },
-        { id: "c2", name: "Product Cards", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&h=300&fit=crop", updatedAt: "1 day ago", feedbackCount: 3, iteration: 2, status: "completed" },
-        { id: "c3", name: "Onboarding Flow", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=400&h=300&fit=crop", updatedAt: "5 hours ago", feedbackCount: 8, iteration: 4, status: "in_progress" },
-        { id: "c4", name: "App Promo Video", type: "video", thumbnailUrl: "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop", updatedAt: "3 days ago", feedbackCount: 2, iteration: 1, status: "completed" },
-      ],
-    },
-    {
-      id: "p2",
-      name: "Dashboard Redesign",
-      type: "Web Design",
-      description: "Complete redesign of the analytics dashboard with modern UI patterns.",
-      clientName: "Dropbox, Inc.",
-      createdOn: "5 July",
-      deadline: "20 July",
-      daysLeft: 7,
-      status: "qc_pending",
-      workmode: "productive",
-      team: [
-        { id: "1", name: "John Lee", role: "Project Manager", avatar: "https://i.pravatar.cc/150?img=7" },
-        { id: "2", name: "Lisa Park", role: "Designer", avatar: "https://i.pravatar.cc/150?img=8" },
-      ],
-      additionalMembers: 0,
-      references: [{ id: "1", name: "Current Site Analysis.pdf", size: "2.1 MB" }],
-      budget: "1,50,000",
-      deliverables: [
-        { id: "d6", name: "Dashboard Overview", status: "in_progress", dueDate: "Jul 15" },
-        { id: "d7", name: "Analytics Charts", status: "pending", dueDate: "Jul 18" },
-      ],
-      creatives: [
-        { id: "c5", name: "Dashboard Overview", type: "design", thumbnailUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop", updatedAt: "3 hours ago", feedbackCount: 2, iteration: 1, status: "in_progress" },
-      ],
-    },
-    {
-      id: "p3",
-      name: "Landing Page",
-      type: "Web Design",
-      description: "Create a high-converting landing page for product launch.",
-      clientName: "Dropbox, Inc.",
-      createdOn: "1 July",
-      deadline: "20 July",
-      daysLeft: 7,
-      status: "iteration_shared",
-      workmode: "creative",
-      team: [
-        { id: "1", name: "Tom Hardy", role: "Developer", avatar: "https://i.pravatar.cc/150?img=9" },
-        { id: "2", name: "Amy Liu", role: "Designer", avatar: "https://i.pravatar.cc/150?img=10" },
-      ],
-      additionalMembers: 0,
-      references: [{ id: "1", name: "Brand Guidelines.pdf", size: "3.2 MB" }],
-      budget: "79,000",
-      deliverables: [
-        { id: "d8", name: "Hero Section", status: "completed" },
-        { id: "d9", name: "Features Section", status: "in_progress", dueDate: "Jul 12" },
-      ],
-      creatives: [],
-    },
-  ],
-}
+// Data is now passed via props from the server component
 
 // Mode Badge Component
 function ModeBadge({ mode }: { mode?: "productive" | "creative" }) {
@@ -461,19 +358,23 @@ function TeamMembersModal({ open, onOpenChange, team, projectName }: { open: boo
   )
 }
 
-interface RoomContentProps { clientId?: string }
+interface RoomContentProps { clientData: ClientRoom }
 
-export function RoomContent({ clientId }: RoomContentProps) {
+export function RoomContent({ clientData }: RoomContentProps) {
   const router = useRouter()
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [selectedProject, setSelectedProject] = useState<Project | null>(
+    clientData.projects.length > 0 ? clientData.projects[0] : null
+  )
+  const [isLoading] = useState(false)
   const [assetsDrawerOpen, setAssetsDrawerOpen] = useState(false)
   const [teamModalOpen, setTeamModalOpen] = useState(false)
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusKey | "all">("all")
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<Project | null>(null)
+  const [editData, setEditData] = useState<Project | null>(
+    clientData.projects.length > 0 ? clientData.projects[0] : null
+  )
 
   // Deliverable modal state
   const [addDeliverableOpen, setAddDeliverableOpen] = useState(false)
@@ -483,7 +384,7 @@ export function RoomContent({ clientId }: RoomContentProps) {
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
   const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], thumbnailUrl: "" })
 
-  const client = sampleClientRoom
+  const client = clientData
 
   const projectCounts = client.projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; acc.all = (acc.all || 0) + 1; return acc }, {} as Record<string, number>)
   const filteredProjects = client.projects.filter(p => {
@@ -492,26 +393,36 @@ export function RoomContent({ clientId }: RoomContentProps) {
     return matchesSearch && matchesStatus
   })
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-      if (client.projects.length > 0) {
-        const firstProject = client.projects[0]
-        setSelectedProject(firstProject)
-        setEditData(firstProject)
-      }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [])
-
   const handleProjectSelect = (project: Project) => {
     setSelectedProject(project)
     setEditData(project)
     setIsEditing(false)
   }
 
-  const handleStatusChange = (newStatus: StatusKey) => {
-    if (selectedProject) setSelectedProject({ ...selectedProject, status: newStatus })
+  const supabase = createClient()
+
+  const persistDeliverables = async (projectId: string, deliverables: Deliverable[]) => {
+    await supabase.from("projects").update({ project_deliverables: deliverables }).eq("id", projectId)
+  }
+
+  const deriveBriefStatus = (creatives: Creative[]): StatusKey => {
+    if (creatives.length === 0) return "brief_received"
+    if (creatives.every((c) => c.status === "completed")) return "completed"
+    if (creatives.some((c) => c.status === "completed")) return "feedback_received"
+    return "qc_pending"
+  }
+
+  const recalculateBriefStatus = async (projectId: string, creatives: Creative[]) => {
+    const newStatus = deriveBriefStatus(creatives)
+    await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectId)
+    return newStatus
+  }
+
+  const handleStatusChange = async (newStatus: StatusKey) => {
+    if (selectedProject) {
+      setSelectedProject({ ...selectedProject, status: newStatus })
+      await supabase.from("projects").update({ brief_status: newStatus }).eq("id", selectedProject.id)
+    }
     setStatusDropdownOpen(false)
   }
 
@@ -529,7 +440,7 @@ export function RoomContent({ clientId }: RoomContentProps) {
   }
 
   // Deliverable handlers
-  const handleAddDeliverable = () => {
+  const handleAddDeliverable = async () => {
     if (!selectedProject || !newDeliverable.name.trim()) return
     const deliverable: Deliverable = {
       id: `d${Date.now()}`,
@@ -537,21 +448,22 @@ export function RoomContent({ clientId }: RoomContentProps) {
       status: "pending",
       dueDate: newDeliverable.dueDate || undefined,
     }
+    const updatedDeliverables = [...selectedProject.deliverables, deliverable]
     const updatedProject = {
       ...selectedProject,
-      deliverables: [...selectedProject.deliverables, deliverable],
+      deliverables: updatedDeliverables,
     }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
     setNewDeliverable({ name: "", dueDate: "" })
     setAddDeliverableOpen(false)
+    await persistDeliverables(selectedProject.id, updatedDeliverables)
   }
 
-  const handleToggleDeliverableStatus = (deliverableId: string) => {
+  const handleToggleDeliverableStatus = async (deliverableId: string) => {
     if (!selectedProject) return
     const updatedDeliverables = selectedProject.deliverables.map((d) => {
       if (d.id === deliverableId) {
-        // Cycle through statuses: pending -> in_progress -> completed -> pending
         const nextStatus: Record<Deliverable["status"], Deliverable["status"]> = {
           pending: "in_progress",
           in_progress: "completed",
@@ -564,29 +476,50 @@ export function RoomContent({ clientId }: RoomContentProps) {
     const updatedProject = { ...selectedProject, deliverables: updatedDeliverables }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
+    await persistDeliverables(selectedProject.id, updatedDeliverables)
   }
 
   // Creative handlers
-  const handleAddCreative = () => {
+  const handleAddCreative = async () => {
     if (!selectedProject || !newCreative.name.trim()) return
-    const creative: Creative = {
-      id: `c${Date.now()}`,
-      name: newCreative.name.trim(),
-      type: newCreative.type,
-      thumbnailUrl: newCreative.thumbnailUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop",
-      updatedAt: "Just now",
-      feedbackCount: 0,
-      iteration: 1,
-      status: "in_progress",
+    const { data: inserted, error } = await supabase
+      .from("creatives")
+      .insert({
+        project_id: selectedProject.id,
+        name: newCreative.name.trim(),
+        type: newCreative.type,
+        thumbnail_url: newCreative.thumbnailUrl || null,
+      })
+      .select()
+      .single()
+
+    if (error || !inserted) {
+      console.error("Failed to add creative:", error)
+      return
     }
+
+    const creative: Creative = {
+      id: inserted.id,
+      name: inserted.name,
+      type: inserted.type as Creative["type"],
+      thumbnailUrl: inserted.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop",
+      updatedAt: "Just now",
+      feedbackCount: inserted.feedback_count,
+      iteration: inserted.iteration,
+      status: inserted.status as Creative["status"],
+    }
+    const updatedCreatives = [...selectedProject.creatives, creative]
     const updatedProject = {
       ...selectedProject,
-      creatives: [...selectedProject.creatives, creative],
+      creatives: updatedCreatives,
     }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
     setNewCreative({ name: "", type: "design", thumbnailUrl: "" })
     setAddCreativeOpen(false)
+
+    const newStatus = await recalculateBriefStatus(selectedProject.id, updatedCreatives)
+    setSelectedProject((prev) => prev ? { ...prev, status: newStatus } : prev)
   }
 
   const getDeliverableStats = (deliverables: Deliverable[]) => {

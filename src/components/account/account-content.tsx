@@ -22,6 +22,29 @@ import {
   Download
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
+
+interface OrgData {
+  id: string
+  name: string
+  logo: string
+  email: string
+  phone: string
+  website: string
+  industry: string
+  size: string
+  country: string
+  state: string
+}
+
+interface TeamMemberData {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: string
+  avatar: string
+}
 
 interface AccountContentProps {
   user: {
@@ -30,19 +53,13 @@ interface AccountContentProps {
     avatar: string
   }
   defaultTab?: TabType
+  organization?: OrgData | null
+  teamMembers?: TeamMemberData[]
 }
 
 type TabType = "profile" | "settings" | "team" | "organisations" | "billing" | "roles"
 
-// Mock data for team members
-const mockTeamMembers = [
-  { id: "1", name: "Aashish Soni", email: "aashishsoni910@gmail.com", phone: "+91 9876543210", role: "Team admin", designation: "Creative Director", avatar: "https://i.pravatar.cc/150?img=1", status: "active", organisations: ["Revue Studios", "StreamCorn Media"], stats: { qcMistake: { current: 5, total: 7 }, avgTime: { current: 60, total: 120 }, feedback: { current: 8, total: 12 } }, mostBriefFrom: "Senshi", mostCommonIssue: "Alignment", workingOn: [{ client: "Balwaan", projects: ["B2C Project", "CRM tool", "Customer mapping"] }, { client: "Senshi", projects: ["Logo designing"] }, { client: "Opt-culture", projects: ["Branding"] }] },
-  { id: "2", name: "Stream Corn", email: "streamcorn@gmail.com", phone: "+91 8765432109", role: "Member", designation: "Graphic Designer", avatar: "https://i.pravatar.cc/150?img=2", status: "active", organisations: ["StreamCorn Media"], stats: { qcMistake: { current: 3, total: 10 }, avgTime: { current: 45, total: 90 }, feedback: { current: 9, total: 10 } }, mostBriefFrom: "Balwaan", mostCommonIssue: "Typography", workingOn: [{ client: "Balwaan", projects: ["Social Media"] }] },
-  { id: "3", name: "Liam Patel", email: "liam@example.com", phone: "+44 1234567890", role: "Editor", designation: "Video Editor", avatar: "https://i.pravatar.cc/150?img=3", status: "inactive", organisations: ["Design Labs"], stats: { qcMistake: { current: 2, total: 8 }, avgTime: { current: 120, total: 180 }, feedback: { current: 7, total: 8 } }, mostBriefFrom: "Design Labs", mostCommonIssue: "Color grading", workingOn: [{ client: "Design Labs", projects: ["Product Video"] }] },
-  { id: "4", name: "Ava Sharma", email: "ava@example.com", phone: "+91 7654321098", role: "Viewer", designation: "UI/UX Designer", avatar: "https://i.pravatar.cc/150?img=4", status: "active", organisations: ["Revue Studios", "Design Labs"], stats: { qcMistake: { current: 4, total: 6 }, avgTime: { current: 80, total: 100 }, feedback: { current: 10, total: 12 } }, mostBriefFrom: "Senshi", mostCommonIssue: "Spacing", workingOn: [{ client: "Senshi", projects: ["App Redesign", "Website"] }] },
-  { id: "5", name: "Ethan Gupta", email: "ethan@example.com", phone: "+91 6543210987", role: "Editor", designation: "Content Creator", avatar: "https://i.pravatar.cc/150?img=5", status: "active", organisations: ["Revue Studios"], stats: { qcMistake: { current: 1, total: 5 }, avgTime: { current: 30, total: 60 }, feedback: { current: 8, total: 9 } }, mostBriefFrom: "Opt-culture", mostCommonIssue: "Grammar", workingOn: [{ client: "Opt-culture", projects: ["Blog posts", "Social copy"] }] },
-  { id: "6", name: "Olivia Singh", email: "olivia@example.com", phone: "+91 5432109876", role: "Member", designation: "Social Media Manager", avatar: "https://i.pravatar.cc/150?img=6", status: "active", organisations: ["StreamCorn Media", "Revue Studios"], stats: { qcMistake: { current: 2, total: 4 }, avgTime: { current: 25, total: 50 }, feedback: { current: 9, total: 10 } }, mostBriefFrom: "Balwaan", mostCommonIssue: "Hashtags", workingOn: [{ client: "Balwaan", projects: ["Instagram", "LinkedIn"] }] },
-]
+// mockTeamMembers removed — now uses real data from props
 
 const mockRoles = [
   { id: "1", name: "Team admin", description: "Full access to all features and settings", members: 2, permissions: ["manage_team", "manage_billing", "manage_roles", "edit_content", "view_content"] },
@@ -51,11 +68,7 @@ const mockRoles = [
   { id: "4", name: "Member", description: "Standard team member access", members: 8, permissions: ["edit_content", "view_content"] },
 ]
 
-const mockOrganisations = [
-  { id: "1", name: "Revue Studios", email: "contact@revuestudios.com", phone: "+91 9876543210", website: "revuestudios.com", industry: "Design & Creative", size: "11-50", country: "India", state: "Uttar Pradesh", logo: "" },
-  { id: "2", name: "StreamCorn Media", email: "hello@streamcorn.com", phone: "+91 8765432109", website: "streamcorn.com", industry: "Technology", size: "1-10", country: "India", state: "Maharashtra", logo: "" },
-  { id: "3", name: "Design Labs", email: "info@designlabs.io", phone: "+44 2012345678", website: "designlabs.io", industry: "Design & Creative", size: "51-200", country: "United Kingdom", state: "London", logo: "" },
-]
+// mockOrganisations removed — now uses real data from props
 
 const allPermissions = [
   { id: "manage_team", label: "Manage Team", description: "Add, remove and manage team members" },
@@ -68,7 +81,7 @@ const allPermissions = [
   { id: "export_data", label: "Export Data", description: "Export data and reports" },
 ]
 
-export function AccountContent({ user, defaultTab = "profile" }: AccountContentProps) {
+export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [] }: AccountContentProps) {
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
 
   const tabs: { id: TabType; label: string }[] = [
@@ -115,8 +128,8 @@ export function AccountContent({ user, defaultTab = "profile" }: AccountContentP
         <div className="animate-in fade-in duration-200">
           {activeTab === "profile" && <ProfileTab user={user} />}
           {activeTab === "settings" && <SettingsTab />}
-          {activeTab === "team" && <TeamTab />}
-          {activeTab === "organisations" && <OrganisationsTab />}
+          {activeTab === "team" && <TeamTab initialMembers={teamMembers} />}
+          {activeTab === "organisations" && <OrganisationsTab initialOrg={organization} />}
           {activeTab === "billing" && <BillingTab />}
           {activeTab === "roles" && <RolesTab />}
         </div>
@@ -348,16 +361,45 @@ function SettingsTab() {
 }
 
 // Team Tab - Matching the reference design
-function TeamTab() {
+type FullTeamMember = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: string
+  designation: string
+  avatar: string
+  status: string
+  organisations: string[]
+  stats: { qcMistake: { current: number; total: number }; avgTime: { current: number; total: number }; feedback: { current: number; total: number } }
+  mostBriefFrom: string
+  mostCommonIssue: string
+  workingOn: { client: string; projects: string[] }[]
+}
+
+function toFullMember(m: TeamMemberData): FullTeamMember {
+  return {
+    ...m,
+    designation: "",
+    status: "active",
+    organisations: [],
+    stats: { qcMistake: { current: 0, total: 0 }, avgTime: { current: 0, total: 0 }, feedback: { current: 0, total: 0 } },
+    mostBriefFrom: "",
+    mostCommonIssue: "",
+    workingOn: [],
+  }
+}
+
+function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("Active")
   const [groupFilter, setGroupFilter] = useState("All")
-  const [members, setMembers] = useState(mockTeamMembers)
+  const [members, setMembers] = useState<FullTeamMember[]>(initialMembers.map(toFullMember))
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [performanceMember, setPerformanceMember] = useState<typeof mockTeamMembers[0] | null>(null)
-  const [editingMember, setEditingMember] = useState<typeof mockTeamMembers[0] | null>(null)
+  const [performanceMember, setPerformanceMember] = useState<FullTeamMember | null>(null)
+  const [editingMember, setEditingMember] = useState<FullTeamMember | null>(null)
 
   const roleOptions = ["Team admin", "Editor", "Viewer", "Member"]
 
@@ -400,7 +442,7 @@ function TeamTab() {
     setSelectedMembers(selectedMembers.filter(m => m !== id))
   }
 
-  const updateMember = (updatedMember: typeof mockTeamMembers[0]) => {
+  const updateMember = (updatedMember: FullTeamMember) => {
     setMembers(members.map(m => m.id === updatedMember.id ? updatedMember : m))
   }
 
@@ -591,9 +633,9 @@ function EditMemberModal({
   onClose,
   onSave
 }: {
-  member: typeof mockTeamMembers[0]
+  member: FullTeamMember
   onClose: () => void
-  onSave: (member: typeof mockTeamMembers[0]) => void
+  onSave: (member: FullTeamMember) => void
 }) {
   const [name, setName] = useState(member.name)
   const [email, setEmail] = useState(member.email)
@@ -795,7 +837,7 @@ function PerformanceModal({
   onClose,
   onDelete
 }: {
-  member: typeof mockTeamMembers[0]
+  member: FullTeamMember
   onClose: () => void
   onDelete: () => void
 }) {
@@ -933,9 +975,9 @@ function PerformanceModal({
 }
 
 // Organisations Tab
-function OrganisationsTab() {
-  const [org, setOrg] = useState(mockOrganisations[0] || {
-    id: "1",
+function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
+  const [org, setOrg] = useState(initialOrg || {
+    id: "",
     name: "",
     email: "",
     phone: "",
@@ -947,8 +989,36 @@ function OrganisationsTab() {
     logo: ""
   })
 
-  const updateOrg = (field: string, value: string) => {
+  const updateOrg = async (field: string, value: string) => {
     setOrg({ ...org, [field]: value })
+    if (!org.id) return
+    const supabase = createClient()
+    const dbField = field === "logo" ? "logo_url" : field
+    await supabase.from("organizations").update({ [dbField]: value }).eq("id", org.id)
+  }
+
+  const handleLogoUpload = async () => {
+    if (!org.id) return
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "image/*"
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const supabase = createClient()
+      const ext = file.name.split(".").pop()
+      const path = `${org.id}/${Date.now()}-logo.${ext}`
+      const { error: uploadErr } = await supabase.storage.from("org-logos").upload(path, file)
+      if (uploadErr) {
+        console.error("Logo upload failed:", uploadErr)
+        return
+      }
+      const { data: urlData } = supabase.storage.from("org-logos").getPublicUrl(path)
+      const logoUrl = urlData.publicUrl
+      await supabase.from("organizations").update({ logo_url: logoUrl }).eq("id", org.id)
+      setOrg({ ...org, logo: logoUrl })
+    }
+    input.click()
   }
 
   return (
@@ -980,7 +1050,7 @@ function OrganisationsTab() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Upload</button>
+              <button onClick={handleLogoUpload} className="text-sm text-foreground hover:text-muted-foreground font-medium">Upload</button>
             </div>
           </div>
         </div>

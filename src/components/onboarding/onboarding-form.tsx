@@ -79,11 +79,16 @@ export function OnboardingForm({ userEmail }: { userEmail: string }) {
     }
 
     if (orgId) {
-      await supabase.from("organization_members").upsert({
-        organization_id: orgId,
-        user_id: userId,
-        role: "owner",
-      })
+      await supabase.from("organization_members").upsert(
+        {
+          organization_id: orgId,
+          user_id: userId,
+          role: "owner",
+          name: fullName || userEmail.split("@")[0],
+          email: userEmail,
+        },
+        { onConflict: "organization_id,user_id" }
+      )
     }
 
     router.push("/studio")

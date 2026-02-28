@@ -58,6 +58,22 @@ interface ClientFormData {
   colorRows: ColorRow[]
 }
 
+interface FormErrors {
+  brandName?: string
+  industry?: string
+  websiteUrl?: string
+  contactNames?: Record<string, string>
+  contactEmails?: Record<string, string>
+  contactPhones?: Record<string, string>
+  socialUrls?: Record<string, string>
+  hexColors?: Record<string, string>
+}
+
+// Validation helpers
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const phoneRegex = /^\d{10}$/
+const urlRegex = /^(https?:\/\/)?(www\.)?[\w-]+(\.[\w-]+)+(\/[\w\-./?%&=@#]*)?$/i
+
 // Data
 const industries = [
   "Graphic Designing",
@@ -150,9 +166,59 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
     ],
   })
 
+  const [errors, setErrors] = useState<FormErrors>({})
+
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
   const [socialPopoverOpen, setSocialPopoverOpen] = useState<string | null>(null)
   const fontUploadRef = useRef<HTMLInputElement>(null)
+  const officeAddressRef = useRef<HTMLInputElement>(null)
+  const contactAddressRef = useRef<HTMLInputElement>(null)
+
+  // Google Places Autocomplete setup
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY
+    if (!apiKey) return
+
+    // Load Google Places script if not already loaded
+    if (!document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
+      const script = document.createElement('script')
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+      script.async = true
+      script.defer = true
+      script.onload = () => initAutocomplete()
+      document.head.appendChild(script)
+    } else if (window.google?.maps?.places) {
+      initAutocomplete()
+    }
+
+    function initAutocomplete() {
+      if (!window.google?.maps?.places) return
+
+      if (officeAddressRef.current) {
+        const officeAuto = new window.google.maps.places.Autocomplete(officeAddressRef.current, {
+          types: ['address'],
+        })
+        officeAuto.addListener('place_changed', () => {
+          const place = officeAuto.getPlace()
+          if (place?.formatted_address) {
+            setFormData(prev => ({ ...prev, officeAddress: place.formatted_address! }))
+          }
+        })
+      }
+
+      if (contactAddressRef.current) {
+        const contactAuto = new window.google.maps.places.Autocomplete(contactAddressRef.current, {
+          types: ['address'],
+        })
+        contactAuto.addListener('place_changed', () => {
+          const place = contactAuto.getPlace()
+          if (place?.formatted_address) {
+            setFormData(prev => ({ ...prev, contactAddress: place.formatted_address! }))
+          }
+        })
+      }
+    }
+  }, [open, step])
 
   // Close dropdown/popover when clicking outside
   useEffect(() => {
@@ -189,7 +255,104 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
     }))
   }
 
+  // Clear a specific field error when user types
+  const clearError = (field: keyof FormErrors) => {
+    setErrors(prev => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const clearNestedError = (field: 'contactNames' | 'contactEmails' | 'contactPhones' | 'socialUrls' | 'hexColors', id: string) => {
+    setErrors(prev => {
+      const nested = { ...prev[field] }
+      if (nested) delete nested[id]
+      const isEmpty = Object.keys(nested).length === 0
+      const next = { ...prev }
+      if (isEmpty) delete next[field]
+      else next[field] = nested
+      return next
+    })
+  }
+
+  const validateStep = (currentStep: number): FormErrors => {
+    const newErrors: FormErrors = {}
+
+    if (currentStep === 1) {
+      if (!formData.brandName.trim()) {
+        newErrors.brandName = "Brand name is required"
+      }
+      if (!formData.industry) {
+        newErrors.industry = "Please select an industry"
+      }
+      if (formData.websiteUrl.trim() && !urlRegex.test(formData.websiteUrl.trim())) {
+        newErrors.websiteUrl = "Please enter a valid URL"
+      }
+      // Validate social link URLs (only non-empty ones)
+      const socialErrors: Record<string, string> = {}
+      formData.socialLinks.forEach(link => {
+        if (link.url.trim() && !urlRegex.test(link.url.trim())) {
+          socialErrors[link.id] = "Invalid URL"
+        }
+      })
+      if (Object.keys(socialErrors).length > 0) newErrors.socialUrls = socialErrors
+    }
+
+    if (currentStep === 2) {
+      const nameErrors: Record<string, string> = {}
+      const emailErrors: Record<string, string> = {}
+      const phoneErrors: Record<string, string> = {}
+
+      // First contact is required
+      const first = formData.contacts[0]
+      if (first) {
+        if (!first.name.trim()) nameErrors[first.id] = "Contact name is required"
+        if (!first.email.trim()) {
+          emailErrors[first.id] = "Email is required"
+        } else if (!emailRegex.test(first.email.trim())) {
+          emailErrors[first.id] = "Please enter a valid email"
+        }
+        if (first.phone.trim() && !phoneRegex.test(first.phone.trim())) {
+          phoneErrors[first.id] = "Phone number must be 10 digits"
+        }
+      }
+
+      // Additional contacts - validate only filled ones
+      formData.contacts.slice(1).forEach(c => {
+        if (c.email.trim() && !emailRegex.test(c.email.trim())) {
+          emailErrors[c.id] = "Please enter a valid email"
+        }
+        if (c.phone.trim() && !phoneRegex.test(c.phone.trim())) {
+          phoneErrors[c.id] = "Phone number must be 10 digits"
+        }
+      })
+
+      if (Object.keys(nameErrors).length > 0) newErrors.contactNames = nameErrors
+      if (Object.keys(emailErrors).length > 0) newErrors.contactEmails = emailErrors
+      if (Object.keys(phoneErrors).length > 0) newErrors.contactPhones = phoneErrors
+    }
+
+    if (currentStep === 3) {
+      const hexErrors: Record<string, string> = {}
+      formData.colorRows.forEach(row => {
+        if (row.hex.trim() && !/^[0-9a-fA-F]{3,6}$/.test(row.hex.trim())) {
+          hexErrors[row.id] = "Invalid hex"
+        }
+      })
+      if (Object.keys(hexErrors).length > 0) newErrors.hexColors = hexErrors
+    }
+
+    return newErrors
+  }
+
   const handleNext = () => {
+    const stepErrors = validateStep(step)
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors)
+      return
+    }
+    setErrors({})
     if (step < totalSteps) {
       setStep(step + 1)
     } else {
@@ -198,6 +361,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
   }
 
   const handlePrevious = () => {
+    setErrors({})
     if (step > 1) {
       setStep(step - 1)
     }
@@ -210,7 +374,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
       case 2:
         return formData.contacts[0]?.name.trim() !== "" && formData.contacts[0]?.email.trim() !== ""
       case 3:
-        return true // Brand assets are optional
+        return true
       default:
         return true
     }
@@ -565,10 +729,19 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     <input
                       type="text"
                       value={formData.brandName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, brandName: e.target.value }))}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, brandName: e.target.value }))
+                        clearError('brandName')
+                      }}
                       placeholder="Enter brand name"
-                      className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                      className={cn(
+                        "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                        errors.brandName
+                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                          : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                      )}
                     />
+                    {errors.brandName && <p className="text-xs text-red-500 mt-1">{errors.brandName}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
@@ -579,8 +752,12 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                       value={formData.industry}
                       options={industries}
                       placeholder="Select industry"
-                      onChange={(value) => setFormData(prev => ({ ...prev, industry: value }))}
+                      onChange={(value) => {
+                        setFormData(prev => ({ ...prev, industry: value }))
+                        clearError('industry')
+                      }}
                     />
+                    {errors.industry && <p className="text-xs text-red-500 mt-1">{errors.industry}</p>}
                   </div>
                 </div>
 
@@ -592,16 +769,26 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                   <input
                     type="url"
                     value={formData.websiteUrl}
-                    onChange={(e) => setFormData(prev => ({ ...prev, websiteUrl: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, websiteUrl: e.target.value }))
+                      clearError('websiteUrl')
+                    }}
                     placeholder="https://example.com"
-                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                    className={cn(
+                      "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                      errors.websiteUrl
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                        : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                    )}
                   />
+                  {errors.websiteUrl && <p className="text-xs text-red-500 mt-1">{errors.websiteUrl}</p>}
                 </div>
 
                 {/* Office Location */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Office Location</h3>
                   <input
+                    ref={officeAddressRef}
                     type="text"
                     value={formData.officeAddress}
                     onChange={(e) => setFormData(prev => ({ ...prev, officeAddress: e.target.value }))}
@@ -677,13 +864,24 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                             </div>
                           )}
                         </div>
-                        <input
-                          type="url"
-                          value={link.url}
-                          onChange={(e) => updateSocialLink(link.id, 'url', e.target.value)}
-                          placeholder={`Enter ${link.platform} URL`}
-                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
+                        <div className="flex-1">
+                          <input
+                            type="url"
+                            value={link.url}
+                            onChange={(e) => {
+                              updateSocialLink(link.id, 'url', e.target.value)
+                              clearNestedError('socialUrls', link.id)
+                            }}
+                            placeholder={`Enter ${link.platform} URL`}
+                            className={cn(
+                              "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                              errors.socialUrls?.[link.id]
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                                : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                            )}
+                          />
+                          {errors.socialUrls?.[link.id] && <p className="text-xs text-red-500 mt-1">{errors.socialUrls[link.id]}</p>}
+                        </div>
                         {formData.socialLinks.length > 1 && (
                           <button
                             type="button"
@@ -750,29 +948,47 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                     {/* Name */}
                     <div>
                       <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                        Name <span className="text-[#5C6ECD] font-normal">*</span>
+                        Name {index === 0 && <span className="text-[#5C6ECD] font-normal">*</span>}
                       </label>
                       <input
                         type="text"
                         value={contact.name}
-                        onChange={(e) => updateContact(contact.id, 'name', e.target.value)}
+                        onChange={(e) => {
+                          updateContact(contact.id, 'name', e.target.value)
+                          clearNestedError('contactNames', contact.id)
+                        }}
                         placeholder="Enter contact name"
-                        className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                        className={cn(
+                          "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                          errors.contactNames?.[contact.id]
+                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                            : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                        )}
                       />
+                      {errors.contactNames?.[contact.id] && <p className="text-xs text-red-500 mt-1">{errors.contactNames[contact.id]}</p>}
                     </div>
 
                     {/* Email */}
                     <div>
                       <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                        Email <span className="text-[#5C6ECD] font-normal">*</span>
+                        Email {index === 0 && <span className="text-[#5C6ECD] font-normal">*</span>}
                       </label>
                       <input
                         type="email"
                         value={contact.email}
-                        onChange={(e) => updateContact(contact.id, 'email', e.target.value)}
+                        onChange={(e) => {
+                          updateContact(contact.id, 'email', e.target.value)
+                          clearNestedError('contactEmails', contact.id)
+                        }}
                         placeholder="Enter email address"
-                        className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                        className={cn(
+                          "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                          errors.contactEmails?.[contact.id]
+                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                            : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                        )}
                       />
+                      {errors.contactEmails?.[contact.id] && <p className="text-xs text-red-500 mt-1">{errors.contactEmails[contact.id]}</p>}
                     </div>
 
                     {/* Phone */}
@@ -793,13 +1009,26 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                             }}
                           />
                         </div>
-                        <input
-                          type="tel"
-                          value={contact.phone}
-                          onChange={(e) => updateContact(contact.id, 'phone', e.target.value)}
-                          placeholder="Enter phone number"
-                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
+                        <div className="flex-1">
+                          <input
+                            type="tel"
+                            value={contact.phone}
+                            onChange={(e) => {
+                              // Only allow digits
+                              const digits = e.target.value.replace(/\D/g, '')
+                              updateContact(contact.id, 'phone', digits)
+                              clearNestedError('contactPhones', contact.id)
+                            }}
+                            placeholder="Enter phone number"
+                            className={cn(
+                              "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                              errors.contactPhones?.[contact.id]
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                                : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                            )}
+                          />
+                          {errors.contactPhones?.[contact.id] && <p className="text-xs text-red-500 mt-1">{errors.contactPhones[contact.id]}</p>}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -835,10 +1064,11 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                         Contact Address
                       </label>
                       <input
+                        ref={contactAddressRef}
                         type="text"
                         value={formData.contactAddress || ""}
                         onChange={(e) => setFormData(prev => ({ ...prev, contactAddress: e.target.value }))}
-                        placeholder="Enter contact address..."
+                        placeholder="Start typing address..."
                         className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
                       />
                       <p className="text-xs text-[#999] mt-2">Enter full address including city, state and country</p>
@@ -1082,14 +1312,27 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                         {/* Color Input */}
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-[#999]">#</span>
-                          <input
-                            type="text"
-                            value={row.hex}
-                            onChange={(e) => updateColorRow(row.id, 'hex', e.target.value.replace("#", "").slice(0, 6))}
-                            placeholder="000000"
-                            className="w-16 px-2 py-2border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors font-mono text-xs"
-                            maxLength={6}
-                          />
+                          <div>
+                            <input
+                              type="text"
+                              value={row.hex}
+                              onChange={(e) => {
+                                // Only allow hex characters
+                                const hex = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6)
+                                updateColorRow(row.id, 'hex', hex)
+                                clearNestedError('hexColors', row.id)
+                              }}
+                              placeholder="000000"
+                              className={cn(
+                                "w-16 px-2 py-2 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors font-mono text-xs",
+                                errors.hexColors?.[row.id]
+                                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                                  : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                              )}
+                              maxLength={6}
+                            />
+                            {errors.hexColors?.[row.id] && <p className="text-xs text-red-500 mt-0.5">{errors.hexColors[row.id]}</p>}
+                          </div>
                           <div className="relative">
                             <input
                               type="color"

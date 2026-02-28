@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -36,6 +36,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -43,6 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 
 // Types
 interface Deliverable {
@@ -93,128 +101,48 @@ const creativeTypeIcons: Record<Creative["type"], typeof ImageIcon> = {
   design: Palette,
 }
 
-// Sample data
-const sampleProjectData: Record<string, ProjectData> = {
-  "p1": {
-    id: "p1",
-    name: "Revitalise Brand Identity",
-    type: "Branding",
-    description: "Complete brand refresh including logo redesign, color palette update, and brand guidelines documentation for TechVision Labs.",
-    creatives: [
-      {
-        id: "c1",
-        name: "Logo Concepts",
-        type: "design",
-        thumbnailUrl: "https://images.unsplash.com/photo-1626785774573-4b799315345d?w=400&h=300&fit=crop",
-        createdAt: "2024-07-10",
-        updatedAt: "2 hours ago",
-        feedbackCount: 5,
-        unresolvedCount: 2,
-        deliverables: [
-          { id: "d1", name: "Primary Logo", status: "completed" },
-          { id: "d2", name: "Logo Variations", status: "in_progress", dueDate: "Jul 15" },
-          { id: "d3", name: "Icon/Favicon", status: "pending", dueDate: "Jul 18" },
-        ],
-      },
-      {
-        id: "c2",
-        name: "Color Palette",
-        type: "design",
-        thumbnailUrl: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400&h=300&fit=crop",
-        createdAt: "2024-07-11",
-        updatedAt: "1 day ago",
-        feedbackCount: 3,
-        unresolvedCount: 0,
-        deliverables: [
-          { id: "d4", name: "Primary Colors", status: "completed" },
-          { id: "d5", name: "Secondary Colors", status: "completed" },
-          { id: "d6", name: "Gradient Variations", status: "in_progress", dueDate: "Jul 16" },
-        ],
-      },
-      {
-        id: "c3",
-        name: "Typography System",
-        type: "design",
-        thumbnailUrl: "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=300&fit=crop",
-        createdAt: "2024-07-12",
-        updatedAt: "3 days ago",
-        feedbackCount: 8,
-        unresolvedCount: 1,
-        deliverables: [
-          { id: "d7", name: "Heading Styles", status: "in_progress", dueDate: "Jul 14" },
-          { id: "d8", name: "Body Text Styles", status: "pending", dueDate: "Jul 17" },
-        ],
-      },
-      {
-        id: "c4",
-        name: "Brand Guidelines",
-        type: "document",
-        thumbnailUrl: "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=400&h=300&fit=crop",
-        createdAt: "2024-07-13",
-        updatedAt: "5 hours ago",
-        feedbackCount: 2,
-        unresolvedCount: 2,
-        deliverables: [
-          { id: "d9", name: "Logo Usage Guidelines", status: "pending", dueDate: "Jul 19" },
-          { id: "d10", name: "Color Usage Guidelines", status: "pending", dueDate: "Jul 19" },
-          { id: "d11", name: "Typography Guidelines", status: "pending", dueDate: "Jul 20" },
-          { id: "d12", name: "Final Brand Book PDF", status: "pending", dueDate: "Jul 20" },
-        ],
-      },
-    ],
-  },
-}
-
-// Fill in sample data for other IDs
-for (let i = 2; i <= 6; i++) {
-  sampleProjectData[`p${i}`] = {
-    ...sampleProjectData["p1"],
-    id: `p${i}`,
-    name: `Project ${i}`,
-    creatives: [
-      {
-        id: `c${i}1`,
-        name: "Initial Design",
-        type: "design",
-        thumbnailUrl: `https://images.unsplash.com/photo-162678577457${i}-4b799315345d?w=400&h=300&fit=crop`,
-        createdAt: "2024-07-10",
-        updatedAt: "1 day ago",
-        feedbackCount: 3,
-        unresolvedCount: 1,
-        deliverables: [
-          { id: `d${i}1`, name: "First Draft", status: "completed" },
-          { id: `d${i}2`, name: "Revisions", status: "in_progress" },
-        ],
-      },
-    ],
-  }
-}
-
 interface BriefContentProps {
-  briefId: string
+  projectData: ProjectData | null
 }
 
-export function BriefContent({ briefId }: BriefContentProps) {
+export function BriefContent({ projectData: initialData }: BriefContentProps) {
   const router = useRouter()
+  const supabase = createClient()
   const [isEditing, setIsEditing] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [projectData, setProjectData] = useState<ProjectData | null>(null)
-  const [editData, setEditData] = useState<ProjectData | null>(null)
-  const [expandedCreatives, setExpandedCreatives] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const data = sampleProjectData[briefId] || sampleProjectData["p1"]
-      setProjectData(data)
-      setEditData(data)
-      // Expand first creative by default
-      if (data.creatives.length > 0) {
-        setExpandedCreatives(new Set([data.creatives[0].id]))
+  const [isLoading] = useState(false)
+  const [projectData, setProjectData] = useState<ProjectData | null>(initialData)
+  const [editData, setEditData] = useState<ProjectData | null>(initialData)
+  const [expandedCreatives, setExpandedCreatives] = useState<Set<string>>(
+    () => {
+      if (initialData && initialData.creatives.length > 0) {
+        return new Set([initialData.creatives[0].id])
       }
-      setIsLoading(false)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [briefId])
+      return new Set()
+    }
+  )
+
+  // Add Creative dialog state
+  const [addCreativeOpen, setAddCreativeOpen] = useState(false)
+  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], thumbnailUrl: "" })
+
+  // Add Deliverable per-creative state
+  const [addDeliverableCreativeId, setAddDeliverableCreativeId] = useState<string | null>(null)
+  const [newDeliverableName, setNewDeliverableName] = useState("")
+
+  type StatusKey = "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
+
+  const deriveBriefStatus = (creatives: Creative[]): StatusKey => {
+    if (creatives.length === 0) return "brief_received"
+    if (creatives.every((c) => c.deliverables.length > 0 && c.deliverables.every((d) => d.status === "completed"))) return "completed"
+    if (creatives.some((c) => c.deliverables.some((d) => d.status === "completed"))) return "feedback_received"
+    return "qc_pending"
+  }
+
+  const recalculateBriefStatus = async (creatives: Creative[]) => {
+    if (!projectData) return
+    const newStatus = deriveBriefStatus(creatives)
+    await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectData.id)
+  }
 
   const handleSave = () => {
     if (editData) {
@@ -241,7 +169,7 @@ export function BriefContent({ briefId }: BriefContentProps) {
   }
 
   const handleCreativeClick = (creative: Creative) => {
-    router.push(`/communication?briefId=${briefId}&iterationId=${creative.id}`)
+    router.push(`/communication?briefId=${projectData?.id}&iterationId=${creative.id}`)
   }
 
   const getDeliverableStats = (deliverables: Deliverable[]) => {
@@ -260,6 +188,94 @@ export function BriefContent({ briefId }: BriefContentProps) {
       default:
         return <Circle className="w-4 h-4 text-muted-foreground" />
     }
+  }
+
+  // Add Creative handler
+  const handleAddCreative = async () => {
+    if (!projectData || !newCreative.name.trim()) return
+    const { data: inserted, error } = await supabase
+      .from("creatives")
+      .insert({
+        project_id: projectData.id,
+        name: newCreative.name.trim(),
+        type: newCreative.type,
+        thumbnail_url: newCreative.thumbnailUrl || null,
+      })
+      .select()
+      .single()
+
+    if (error || !inserted) {
+      console.error("Failed to add creative:", error)
+      return
+    }
+
+    const creative: Creative = {
+      id: inserted.id,
+      name: inserted.name,
+      type: inserted.type as Creative["type"],
+      thumbnailUrl: inserted.thumbnail_url || "",
+      createdAt: inserted.created_at || "",
+      updatedAt: "Just now",
+      feedbackCount: 0,
+      unresolvedCount: 0,
+      deliverables: [],
+    }
+    const updatedCreatives = [...projectData.creatives, creative]
+    const updated = { ...projectData, creatives: updatedCreatives }
+    setProjectData(updated)
+    setEditData(updated)
+    setNewCreative({ name: "", type: "design", thumbnailUrl: "" })
+    setAddCreativeOpen(false)
+    setExpandedCreatives((prev) => new Set([...prev, creative.id]))
+    await recalculateBriefStatus(updatedCreatives)
+  }
+
+  // Delete Creative handler
+  const handleDeleteCreative = async (creativeId: string) => {
+    if (!projectData) return
+    const { error } = await supabase.from("creatives").delete().eq("id", creativeId)
+    if (error) {
+      console.error("Failed to delete creative:", error)
+      return
+    }
+    const updatedCreatives = projectData.creatives.filter((c) => c.id !== creativeId)
+    const updated = { ...projectData, creatives: updatedCreatives }
+    setProjectData(updated)
+    setEditData(updated)
+    await recalculateBriefStatus(updatedCreatives)
+  }
+
+  // Add Deliverable to a creative handler
+  const handleAddDeliverableToCreative = async (creativeId: string) => {
+    if (!projectData || !newDeliverableName.trim()) return
+    const creative = projectData.creatives.find((c) => c.id === creativeId)
+    if (!creative) return
+
+    const newDeliverable: Deliverable = {
+      id: `d${Date.now()}`,
+      name: newDeliverableName.trim(),
+      status: "pending",
+    }
+    const updatedDeliverables = [...creative.deliverables, newDeliverable]
+
+    const { error } = await supabase
+      .from("creatives")
+      .update({ deliverables: updatedDeliverables })
+      .eq("id", creativeId)
+
+    if (error) {
+      console.error("Failed to add deliverable:", error)
+      return
+    }
+
+    const updatedCreatives = projectData.creatives.map((c) =>
+      c.id === creativeId ? { ...c, deliverables: updatedDeliverables } : c
+    )
+    const updated = { ...projectData, creatives: updatedCreatives }
+    setProjectData(updated)
+    setEditData(updated)
+    setNewDeliverableName("")
+    setAddDeliverableCreativeId(null)
   }
 
   if (isLoading || !projectData) {
@@ -400,7 +416,10 @@ export function BriefContent({ briefId }: BriefContentProps) {
                 ({data.creatives.length})
               </span>
             </div>
-            <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8]">
+            <Button
+              className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+              onClick={() => setAddCreativeOpen(true)}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Creative
             </Button>
@@ -426,11 +445,17 @@ export function BriefContent({ briefId }: BriefContentProps) {
                           onClick={() => handleCreativeClick(creative)}
                           className="w-32 h-24 rounded-lg overflow-hidden bg-muted shrink-0 cursor-pointer group relative"
                         >
-                          <img
-                            src={creative.thumbnailUrl}
-                            alt={creative.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
+                          {creative.thumbnailUrl ? (
+                            <img
+                              src={creative.thumbnailUrl}
+                              alt={creative.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#5C6ECD] to-[#8B5CF6]">
+                              <TypeIcon className="w-8 h-8 text-white" />
+                            </div>
+                          )}
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                             <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
@@ -477,7 +502,10 @@ export function BriefContent({ briefId }: BriefContentProps) {
                                     Duplicate
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-destructive">
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => handleDeleteCreative(creative.id)}
+                                  >
                                     <Trash2 className="w-4 h-4 mr-2" />
                                     Delete
                                   </DropdownMenuItem>
@@ -500,7 +528,7 @@ export function BriefContent({ briefId }: BriefContentProps) {
                               <div
                                 className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                                 style={{
-                                  width: `${(stats.completed / stats.total) * 100}%`,
+                                  width: stats.total > 0 ? `${(stats.completed / stats.total) * 100}%` : "0%",
                                 }}
                               />
                             </div>
@@ -524,7 +552,7 @@ export function BriefContent({ briefId }: BriefContentProps) {
                     </div>
 
                     {/* Deliverables List */}
-                    {isExpanded && creative.deliverables.length > 0 && (
+                    {isExpanded && (
                       <div className="border-t border-border bg-muted/30 p-4">
                         <div className="space-y-2">
                           {creative.deliverables.map((deliverable) => (
@@ -573,7 +601,13 @@ export function BriefContent({ briefId }: BriefContentProps) {
                           ))}
 
                           {/* Add Deliverable Button */}
-                          <button className="flex items-center gap-2 w-full p-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-[#5C6ECD]/50 transition-colors">
+                          <button
+                            onClick={() => {
+                              setAddDeliverableCreativeId(creative.id)
+                              setNewDeliverableName("")
+                            }}
+                            className="flex items-center gap-2 w-full p-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-[#5C6ECD]/50 transition-colors"
+                          >
                             <Plus className="w-4 h-4" />
                             Add deliverable
                           </button>
@@ -594,17 +628,131 @@ export function BriefContent({ briefId }: BriefContentProps) {
                 No creatives yet
               </h3>
               <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-                Start by uploading your first creative. Each creative can have its
+                Start by adding your first creative. Each creative can have its
                 own deliverables to track.
               </p>
-              <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8]">
+              <Button
+                className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+                onClick={() => setAddCreativeOpen(true)}
+              >
                 <Upload className="w-4 h-4 mr-2" />
-                Upload Creative
+                Add Creative
               </Button>
             </div>
           )}
         </section>
       </div>
+
+      {/* Add Creative Dialog */}
+      <Dialog open={addCreativeOpen} onOpenChange={setAddCreativeOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                <Palette className="w-4 h-4 text-[#5C6ECD]" />
+              </div>
+              Add Creative
+            </DialogTitle>
+            <DialogDescription>Add a new creative asset for this project</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Creative Name *</label>
+              <Input
+                placeholder="e.g., Hero Banner, Product Cards..."
+                value={newCreative.name}
+                onChange={(e) => setNewCreative((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Type</label>
+              <Select
+                value={newCreative.type}
+                onValueChange={(value: Creative["type"]) => setNewCreative((prev) => ({ ...prev, type: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="design">
+                    <div className="flex items-center gap-2"><Palette className="w-4 h-4" /> Design</div>
+                  </SelectItem>
+                  <SelectItem value="image">
+                    <div className="flex items-center gap-2"><FileImage className="w-4 h-4" /> Image</div>
+                  </SelectItem>
+                  <SelectItem value="video">
+                    <div className="flex items-center gap-2"><Video className="w-4 h-4" /> Video</div>
+                  </SelectItem>
+                  <SelectItem value="document">
+                    <div className="flex items-center gap-2"><FileText className="w-4 h-4" /> Document</div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Thumbnail URL (Optional)</label>
+              <Input
+                placeholder="https://example.com/image.jpg"
+                value={newCreative.thumbnailUrl}
+                onChange={(e) => setNewCreative((prev) => ({ ...prev, thumbnailUrl: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Leave empty for a default thumbnail</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setAddCreativeOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddCreative}
+              disabled={!newCreative.name.trim()}
+              className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Creative
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Deliverable Dialog */}
+      <Dialog open={!!addDeliverableCreativeId} onOpenChange={(open) => { if (!open) setAddDeliverableCreativeId(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                <Plus className="w-4 h-4 text-[#5C6ECD]" />
+              </div>
+              Add Deliverable
+            </DialogTitle>
+            <DialogDescription>Add a deliverable to this creative</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Deliverable Name *</label>
+              <Input
+                placeholder="e.g., Final mockup, Icon set..."
+                value={newDeliverableName}
+                onChange={(e) => setNewDeliverableName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newDeliverableName.trim() && addDeliverableCreativeId) {
+                    handleAddDeliverableToCreative(addDeliverableCreativeId)
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setAddDeliverableCreativeId(null)}>Cancel</Button>
+            <Button
+              onClick={() => addDeliverableCreativeId && handleAddDeliverableToCreative(addDeliverableCreativeId)}
+              disabled={!newDeliverableName.trim()}
+              className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Deliverable
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

@@ -101,6 +101,14 @@ const messages = [
   },
 ]
 
+interface OrgMember {
+  id: string
+  name: string
+  email: string
+  avatar: string
+  role: string
+}
+
 interface StudioHeaderProps {
   user: {
     name: string
@@ -110,6 +118,7 @@ interface StudioHeaderProps {
   organizationId: string | null
   organizationLogoUrl?: string | null
   clientDirectory: { id: string; name: string }[]
+  teamMembers?: OrgMember[]
 }
 
 const searchPlaceholders = [
@@ -137,6 +146,7 @@ export function StudioHeader({
   organizationId,
   organizationLogoUrl,
   clientDirectory,
+  teamMembers = [],
 }: StudioHeaderProps) {
   const router = useRouter()
   const [notificationDialogOpen, setNotificationDialogOpen] = React.useState(false)
@@ -884,9 +894,94 @@ export function StudioHeader({
           }
 
           const supabase = createClient()
+
+          // Upload logo to storage if provided
+          let logoUrl: string | null = null
+          if (data.logo) {
+            const ext = data.logo.name.split(".").pop()
+            const path = `${organizationId}/${Date.now()}-logo.${ext}`
+            const { error: uploadErr } = await supabase.storage
+              .from("client-assets")
+              .upload(path, data.logo)
+            if (!uploadErr) {
+              const { data: urlData } = supabase.storage
+                .from("client-assets")
+                .getPublicUrl(path)
+              logoUrl = urlData.publicUrl
+            }
+          }
+
+          // Upload brand images to storage and collect URLs
+          const brandImageUrls: string[] = []
+          for (const imageDataUrl of data.brandImages) {
+            const res = await fetch(imageDataUrl)
+            const blob = await res.blob()
+            const ext = blob.type.split("/").pop() || "png"
+            const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+            const { error: imgErr } = await supabase.storage
+              .from("client-assets")
+              .upload(path, blob)
+            if (!imgErr) {
+              const { data: imgUrl } = supabase.storage
+                .from("client-assets")
+                .getPublicUrl(path)
+              brandImageUrls.push(imgUrl.publicUrl)
+            }
+          }
+
+          // Upload custom fonts and build full fonts array
+          const fontsJson = data.fontRows
+            .filter((f) => f.font.trim())
+            .map((f) => ({ label: f.label, font_name: f.font, font_url: null as string | null }))
+
+          for (const customFont of data.customFonts) {
+            const path = `${organizationId}/${Date.now()}-${customFont.name}`
+            const { error: fontErr } = await supabase.storage
+              .from("client-assets")
+              .upload(path, customFont.file)
+            if (!fontErr) {
+              const { data: fontUrl } = supabase.storage
+                .from("client-assets")
+                .getPublicUrl(path)
+              fontsJson.push({
+                label: customFont.name,
+                font_name: customFont.name,
+                font_url: fontUrl.publicUrl,
+              })
+            }
+          }
+
+          // Insert client — single row with all data
           const { error } = await supabase.from("clients").insert({
             organization_id: organizationId,
             name,
+            industry: data.industry || null,
+            website_url: data.websiteUrl || null,
+            office_address: data.officeAddress || null,
+            contact_address: data.sameAsOffice
+              ? data.officeAddress || null
+              : data.contactAddress || null,
+            logo_url: logoUrl,
+            contacts: data.contacts
+              .filter((c) => c.name.trim() || c.email.trim())
+              .map((c) => ({
+                name: c.name.trim(),
+                email: c.email.trim() || null,
+                country_code: c.countryCode,
+                phone: c.phone.trim() || null,
+              })),
+            social_links: data.socialLinks
+              .filter((s) => s.url.trim())
+              .map((s) => ({ platform: s.platform, url: s.url.trim() })),
+            fonts: fontsJson,
+            colors: data.colorRows
+              .filter((c) => c.hex.trim())
+              .map((c) => ({
+                hex: c.hex,
+                font_label: c.font || null,
+                name: c.name || null,
+              })),
+            brand_image_urls: brandImageUrls,
           })
 
           if (error) {
@@ -903,6 +998,8 @@ export function StudioHeader({
       <NewBriefDialog
         open={newBriefDialogOpen}
         onClose={() => setNewBriefDialogOpen(false)}
+        clientDirectory={clientDirectory}
+        teamMembers={teamMembers}
         onComplete={async (data) => {
           const projectName = data.projectName?.trim() || "Untitled Project"
           const clientName = data.clientName?.trim()
@@ -917,9 +1014,70 @@ export function StudioHeader({
           if (!clientId) return
 
           const supabase = createClient()
+
+          // Upload reference files to storage
+          const referencesJson = []
+          for (const ref of data.references) {
+            if (!ref.name.trim() && !ref.file) continue
+            let fileUrl: string | null = null
+            if (ref.file) {
+              const ext = ref.file.name.split(".").pop()
+              const path = `${organizationId}/${clientId}/refs/${Date.now()}-${ref.file.name}`
+              const { error: refErr } = await supabase.storage
+                .from("client-assets")
+                .upload(path, ref.file)
+              if (!refErr) {
+                const { data: refUrl } = supabase.storage
+                  .from("client-assets")
+                  .getPublicUrl(path)
+                fileUrl = refUrl.publicUrl
+              }
+            }
+            referencesJson.push({
+              name: ref.name.trim(),
+              file_url: fileUrl,
+            })
+          }
+
           const { error } = await supabase.from("projects").insert({
             client_id: clientId,
             name: projectName,
+            description: data.description || null,
+            project_type: data.projectType || null,
+            industry: data.industry || null,
+            deliverable: data.deliverable || null,
+            scope_description: data.scopeDescription || null,
+            start_date: data.startDate || null,
+            end_date: data.endDate || null,
+            end_time: null,
+            account_manager: data.accountManager || null,
+            auto_delete_iteration: data.autoDeleteIteration || "30 Days",
+            need_qc_tool: data.needQCTool,
+            workmode: data.workmode,
+            other_description: data.otherDescription || null,
+            deliverable_stages: data.deliverableStages
+              .filter((s) => s.description.trim() || s.date)
+              .map((s) => ({
+                stage: s.stage,
+                description: s.description.trim(),
+                date: s.date || null,
+              })),
+            project_deliverables: data.deliverableStages
+              .filter((s) => s.description.trim())
+              .map((s) => ({
+                id: `d${Math.random().toString(36).slice(2)}`,
+                name: s.description.trim(),
+                status: "pending",
+                dueDate: s.date || null,
+              })),
+            team_roles: data.teamRoles
+              .filter((r) => r.name.trim())
+              .map((r) => ({ name: r.name.trim(), role: r.role })),
+            references_data: referencesJson,
+            external_links: data.externalLinks
+              .filter((l) => l.name.trim())
+              .map((l) => ({ name: l.name.trim() })),
+            naming_columns: data.namingColumns.map((c) => c.value),
           })
 
           if (error) {

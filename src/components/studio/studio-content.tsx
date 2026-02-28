@@ -17,6 +17,7 @@ interface StudioContentProps {
 interface StudioClient {
   id: string
   name: string
+  logoUrl?: string
   createdAt?: string | null
   interactionDate?: string | null
   feedbackDate?: string | null

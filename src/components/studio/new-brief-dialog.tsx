@@ -14,8 +14,7 @@ import {
   Search,
   Sparkles,
   Zap,
-  CalendarIcon,
-  Clock
+  CalendarIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -67,7 +66,6 @@ interface BriefFormData {
   // Step 3: Timeline & Milestone
   startDate: string
   endDate: string
-  endTime: string
   deliverableStages: DeliverableStage[]
   // Step 4: Team & Roles
   accountManager: string
@@ -129,33 +127,6 @@ interface TeamMember {
   role?: string
 }
 
-const accountManagersData: TeamMember[] = [
-  { id: "1", name: "John Doe", email: "john@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John" },
-  { id: "2", name: "Jane Smith", email: "jane@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jane" },
-  { id: "3", name: "Mike Johnson", email: "mike@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike" },
-  { id: "4", name: "Sarah Williams", email: "sarah@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" },
-  { id: "5", name: "Robert Brown", email: "robert@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Robert" },
-]
-
-const teamMembersData: TeamMember[] = [
-  { id: "1", name: "Alex Turner", email: "alex@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex", role: "Designer" },
-  { id: "2", name: "Emma Wilson", email: "emma@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma", role: "Developer" },
-  { id: "3", name: "Chris Davis", email: "chris@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Chris", role: "Project Manager" },
-  { id: "4", name: "Lisa Anderson", email: "lisa@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Lisa", role: "QC Analyst" },
-  { id: "5", name: "David Lee", email: "david@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=David", role: "Content Writer" },
-  { id: "6", name: "Sophie Clark", email: "sophie@company.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sophie", role: "Designer" },
-]
-
-const clientsData: TeamMember[] = [
-  { id: "1", name: "TechVision Labs", email: "contact@techvision.com", avatar: "https://api.dicebear.com/7.x/initials/svg?seed=TV" },
-  { id: "2", name: "Design Co", email: "hello@designco.com", avatar: "https://api.dicebear.com/7.x/initials/svg?seed=DC" },
-  { id: "3", name: "StartUp Inc", email: "info@startup.com", avatar: "https://api.dicebear.com/7.x/initials/svg?seed=SI" },
-  { id: "4", name: "Global Media", email: "media@global.com", avatar: "https://api.dicebear.com/7.x/initials/svg?seed=GM" },
-  { id: "5", name: "Creative Agency", email: "team@creative.com", avatar: "https://api.dicebear.com/7.x/initials/svg?seed=CA" },
-]
-
-const accountManagers = accountManagersData.map(m => m.name)
-
 const deleteIterationOptions = [
   "7 Days",
   "14 Days",
@@ -186,38 +157,51 @@ const namingOptions = [
   "Status"
 ]
 
-const clientOptions = clientsData.map(c => c.name)
+// Validation helpers
+interface BriefFormErrors {
+  projectName?: string
+  clientName?: string
+  startDate?: string
+  endDate?: string
+  accountManager?: string
+}
 
 interface NewBriefDialogProps {
   open: boolean
   onClose: () => void
   onComplete: (data: BriefFormData) => void
+  clientDirectory?: { id: string; name: string }[]
+  teamMembers?: { id: string; name: string; email: string; avatar: string; role: string }[]
 }
 
-export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProps) {
+export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = [], teamMembers = [] }: NewBriefDialogProps) {
   const [step, setStep] = useState(1)
   const totalSteps = 5
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
-  const [formData, setFormData] = useState<BriefFormData>({
-    // Step 1
+  // Convert teamMembers to TeamMember format for dropdowns
+  const teamMembersData: TeamMember[] = teamMembers.map(m => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    avatar: m.avatar || undefined,
+    role: m.role || undefined,
+  }))
+
+  const initialFormData: BriefFormData = {
     projectName: "",
     description: "",
     clientName: "",
     projectType: "UI Designing",
-    // Step 2
     industry: "",
     deliverable: "",
     scopeDescription: "",
-    // Step 3
     startDate: "",
     endDate: "",
-    endTime: "",
     deliverableStages: [
       { id: "1", stage: "Stage 1", description: "", date: "" },
       { id: "2", stage: "Stage 2", description: "", date: "" },
     ],
-    // Step 4
     accountManager: "",
     autoDeleteIteration: "30 Days",
     needQCTool: false,
@@ -226,7 +210,6 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
       { id: "1", name: "", role: "Client Servicing" },
       { id: "2", name: "", role: "Client Servicing" },
     ],
-    // Step 5
     references: [{ id: "1", name: "" }],
     externalLinks: [{ id: "1", name: "" }],
     namingColumns: [
@@ -236,7 +219,20 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
       { id: "4", value: "Version" },
     ],
     otherDescription: "",
-  })
+  }
+
+  const [formData, setFormData] = useState<BriefFormData>(initialFormData)
+  const [errors, setErrors] = useState<BriefFormErrors>({})
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setFormData(initialFormData)
+      setStep(1)
+      setErrors({})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
 
@@ -251,7 +247,44 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [dropdownOpen])
 
+  const clearError = (field: keyof BriefFormErrors) => {
+    setErrors(prev => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const validateStep = (currentStep: number): BriefFormErrors => {
+    const newErrors: BriefFormErrors = {}
+
+    if (currentStep === 1) {
+      if (!formData.projectName.trim()) newErrors.projectName = "Project name is required"
+      if (!formData.clientName.trim()) newErrors.clientName = "Please select a client"
+    }
+
+    if (currentStep === 3) {
+      if (!formData.startDate) newErrors.startDate = "Start date is required"
+      if (!formData.endDate) newErrors.endDate = "End date is required"
+      if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
+        newErrors.endDate = "End date must be after start date"
+      }
+    }
+
+    if (currentStep === 4) {
+      if (!formData.accountManager) newErrors.accountManager = "Please select an account manager"
+    }
+
+    return newErrors
+  }
+
   const handleNext = () => {
+    const stepErrors = validateStep(step)
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors)
+      return
+    }
+    setErrors({})
     if (step < totalSteps) {
       setStep(step + 1)
     } else {
@@ -260,6 +293,7 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
   }
 
   const handlePrevious = () => {
+    setErrors({})
     if (step > 1) {
       setStep(step - 1)
     }
@@ -719,10 +753,19 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                   <input
                     type="text"
                     value={formData.projectName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, projectName: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, projectName: e.target.value }))
+                      clearError('projectName')
+                    }}
                     placeholder="Enter project name"
-                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                    className={cn(
+                      "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                      errors.projectName
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                        : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
+                    )}
                   />
+                  {errors.projectName && <p className="text-xs text-red-500 mt-1">{errors.projectName}</p>}
                 </div>
 
                 {/* Description */}
@@ -747,10 +790,14 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                   <RichDropdown
                     id="clientName"
                     value={formData.clientName}
-                    members={clientsData}
+                    members={clientDirectory.map(c => ({ id: c.id, name: c.name, email: "" }))}
                     placeholder="Select Client"
-                    onChange={(value) => setFormData(prev => ({ ...prev, clientName: value }))}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, clientName: value }))
+                      clearError('clientName')
+                    }}
                   />
+                  {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
                 </div>
 
                 {/* Project Type */}
@@ -852,7 +899,7 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
 
               <div className="space-y-6 overflow-visible">
                 {/* Date Row */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {/* Start Date Picker */}
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
@@ -863,7 +910,10 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            "w-full justify-start text-left font-normal h-12 px-4 bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            errors.startDate
+                              ? "border-red-500"
+                              : "border-[#e5e5e5] dark:border-[#444]",
                             !formData.startDate && "text-[#999]"
                           )}
                         >
@@ -875,11 +925,15 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                         <Calendar
                           mode="single"
                           selected={formData.startDate ? new Date(formData.startDate) : undefined}
-                          onSelect={(date) => setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" }))}
+                          onSelect={(date) => {
+                            setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" }))
+                            clearError('startDate')
+                          }}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
+                    {errors.startDate && <p className="text-xs text-red-500 mt-1">{errors.startDate}</p>}
                   </div>
 
                   {/* End Date Picker */}
@@ -892,7 +946,10 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            "w-full justify-start text-left font-normal h-12 px-4 bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            errors.endDate
+                              ? "border-red-500"
+                              : "border-[#e5e5e5] dark:border-[#444]",
                             !formData.endDate && "text-[#999]"
                           )}
                         >
@@ -904,58 +961,16 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                         <Calendar
                           mode="single"
                           selected={formData.endDate ? new Date(formData.endDate) : undefined}
-                          onSelect={(date) => setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" }))}
+                          onSelect={(date) => {
+                            setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" }))
+                            clearError('endDate')
+                          }}
                           disabled={(date) => formData.startDate ? date < new Date(formData.startDate) : false}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
-                  </div>
-
-                  {/* End Time Picker */}
-                  <div>
-                    <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                      End Time <span className="text-[#5C6ECD] font-normal">*</span>
-                    </label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
-                            !formData.endTime && "text-[#999]"
-                          )}
-                        >
-                          <Clock className="mr-3 h-4 w-4 text-[#5C6ECD]" />
-                          {formData.endTime ? format(new Date(`2000-01-01T${formData.endTime}`), "h:mm a") : "Select time"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-48 p-2" align="start">
-                        <div className="grid grid-cols-3 gap-1 max-h-[200px] overflow-y-auto">
-                          {Array.from({ length: 24 }, (_, hour) =>
-                            ["00", "30"].map(min => {
-                              const timeValue = `${hour.toString().padStart(2, "0")}:${min}`
-                              const displayTime = format(new Date(`2000-01-01T${timeValue}`), "h:mm a")
-                              return (
-                                <button
-                                  key={timeValue}
-                                  type="button"
-                                  onClick={() => setFormData(prev => ({ ...prev, endTime: timeValue }))}
-                                  className={cn(
-                                    "px-2 py-1.5 text-xs font-medium transition-colors",
-                                    formData.endTime === timeValue
-                                      ? "bg-[#5C6ECD] text-white"
-                                      : "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] text-[#1a1a1a] dark:text-white"
-                                  )}
-                                >
-                                  {displayTime}
-                                </button>
-                              )
-                            })
-                          ).flat()}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                    {errors.endDate && <p className="text-xs text-red-500 mt-1">{errors.endDate}</p>}
                   </div>
                 </div>
 
@@ -1052,10 +1067,14 @@ export function NewBriefDialog({ open, onClose, onComplete }: NewBriefDialogProp
                   <RichDropdown
                     id="accountManager"
                     value={formData.accountManager}
-                    members={accountManagersData}
+                    members={teamMembersData}
                     placeholder="Select Manager"
-                    onChange={(value) => setFormData(prev => ({ ...prev, accountManager: value }))}
+                    onChange={(value) => {
+                      setFormData(prev => ({ ...prev, accountManager: value }))
+                      clearError('accountManager')
+                    }}
                   />
+                  {errors.accountManager && <p className="text-xs text-red-500 mt-1">{errors.accountManager}</p>}
                 </div>
 
                 {/* Auto delete iteration */}

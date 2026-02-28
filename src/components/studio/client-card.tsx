@@ -13,6 +13,7 @@ interface TeamMember {
 interface Client {
   id: string
   name: string
+  logoUrl?: string
   createdOn: string
   activeProjects: number
   interactionDate: string
@@ -32,9 +33,18 @@ export function ClientCard({ client }: ClientCardProps) {
     <div className="group rounded-xl border border-black/10 dark:border-white/10 bg-card p-5 flex flex-col hover:border-[#5C6ECD]/60 hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-white/5 transition-all duration-300 hover:-translate-y-1">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-[#4A5BC7] dark:text-[#7B8AE0] text-lg">
-          {client.name}
-        </h3>
+        <div className="flex items-center gap-2.5">
+          {client.logoUrl ? (
+            <img src={client.logoUrl} alt={client.name} className="w-8 h-8 rounded-lg object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-[#4A5BC7] flex items-center justify-center">
+              <span className="text-white font-bold text-xs">{client.name.substring(0, 2).toUpperCase()}</span>
+            </div>
+          )}
+          <h3 className="font-bold text-[#4A5BC7] dark:text-[#7B8AE0] text-lg">
+            {client.name}
+          </h3>
+        </div>
         <span className="text-[11px] text-foreground/60 px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/10 font-medium">
           {client.createdOn}
         </span>

@@ -60,6 +60,9 @@ export default async function StudioPage() {
         organization_id: createdOrg.id,
         user_id: user.id,
         role: "owner",
+        name: userData.name,
+        email: userData.email,
+        avatar_url: userData.avatar || null,
       })
     }
   }
@@ -67,7 +70,7 @@ export default async function StudioPage() {
   const { data: clients } = organization
     ? await supabase
         .from("clients")
-        .select("id,name,created_at,interaction_date,feedback_date,projects(count)")
+        .select("id,name,logo_url,created_at,interaction_date,feedback_date,projects(count)")
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false })
     : { data: [] }
@@ -76,6 +79,7 @@ export default async function StudioPage() {
     clients?.map((client) => ({
       id: client.id,
       name: client.name,
+      logoUrl: client.logo_url || undefined,
       createdAt: client.created_at,
       interactionDate: client.interaction_date,
       feedbackDate: client.feedback_date,
@@ -90,6 +94,24 @@ export default async function StudioPage() {
       name: client.name,
     })) ?? []
 
+  // Fetch organization members for manager/team dropdowns in brief dialog
+  const { data: orgMembersRaw } = organization
+    ? await supabase
+        .from("organization_members")
+        .select("id, name, email, avatar_url, role")
+        .eq("organization_id", organization.id)
+        .order("name")
+    : { data: [] }
+
+  const teamMembers =
+    orgMembersRaw?.map((m) => ({
+      id: m.id,
+      name: m.name || "",
+      email: m.email || "",
+      avatar: m.avatar_url || "",
+      role: m.role || "",
+    })) ?? []
+
   return (
     <div className="flex flex-col h-svh">
       <StudioHeader
@@ -97,6 +119,7 @@ export default async function StudioPage() {
         organizationId={organization?.id ?? null}
         organizationLogoUrl={organization?.logo_url ?? null}
         clientDirectory={clientDirectory}
+        teamMembers={teamMembers}
       />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
