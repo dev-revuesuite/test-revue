@@ -317,7 +317,7 @@ function AssetsDrawer({ open, onOpenChange, client }: { open: boolean; onOpenCha
 }
 
 // Team Members Modal
-function TeamMembersModal({ open, onOpenChange, team, projectName }: { open: boolean; onOpenChange: (open: boolean) => void; team: TeamMember[]; projectName: string }) {
+function TeamMembersModal({ open, onOpenChange, team, projectName, onAddClick }: { open: boolean; onOpenChange: (open: boolean) => void; team: TeamMember[]; projectName: string; onAddClick: () => void }) {
   const roleColors: Record<string, string> = {
     "Project Manager": "bg-[#5C6ECD]",
     "Lead Designer": "bg-[#5C6ECD]",
@@ -352,7 +352,7 @@ function TeamMembersModal({ open, onOpenChange, team, projectName }: { open: boo
             </div>
           ))}
         </div>
-        <Button className="w-full mt-4 gap-2 bg-[#5C6ECD] hover:bg-[#4a5bb8]"><UserPlus className="w-4 h-4" /> Add Team Member</Button>
+        <Button onClick={onAddClick} className="w-full mt-4 gap-2 bg-[#5C6ECD] hover:bg-[#4a5bb8]"><UserPlus className="w-4 h-4" /> Add Team Member</Button>
       </DialogContent>
     </Dialog>
   )
@@ -383,6 +383,21 @@ export function RoomContent({ clientData }: RoomContentProps) {
   // Creative modal state
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
   const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], thumbnailUrl: "" })
+
+  // Reference preview state
+  const [previewRef, setPreviewRef] = useState<Reference | null>(null)
+
+  // Add team member state
+  const [addTeamMemberOpen, setAddTeamMemberOpen] = useState(false)
+  const [newTeamMember, setNewTeamMember] = useState({ name: "", role: "Designer" })
+
+  // Close status dropdown when clicking outside
+  useEffect(() => {
+    if (!statusDropdownOpen) return
+    const handleClick = () => setStatusDropdownOpen(false)
+    document.addEventListener("click", handleClick)
+    return () => document.removeEventListener("click", handleClick)
+  }, [statusDropdownOpen])
 
   const client = clientData
 
@@ -426,8 +441,15 @@ export function RoomContent({ clientData }: RoomContentProps) {
     setStatusDropdownOpen(false)
   }
 
-  const handleSave = () => {
-    if (editData) { setSelectedProject(editData); setIsEditing(false) }
+  const handleSave = async () => {
+    if (!editData || !selectedProject) return
+    setSelectedProject(editData)
+    setIsEditing(false)
+    await supabase.from("projects").update({
+      name: editData.name,
+      project_type: editData.type,
+      description: editData.description,
+    }).eq("id", selectedProject.id)
   }
 
   const handleCancel = () => {
@@ -520,6 +542,26 @@ export function RoomContent({ clientData }: RoomContentProps) {
 
     const newStatus = await recalculateBriefStatus(selectedProject.id, updatedCreatives)
     setSelectedProject((prev) => prev ? { ...prev, status: newStatus } : prev)
+  }
+
+  // Team member handler
+  const handleAddTeamMember = async () => {
+    if (!selectedProject || !newTeamMember.name.trim()) return
+    const member: TeamMember = {
+      id: `t${Date.now()}`,
+      name: newTeamMember.name.trim(),
+      role: newTeamMember.role,
+      avatar: undefined,
+    }
+    const updatedTeam = [...selectedProject.team, member]
+    const updatedProject = { ...selectedProject, team: updatedTeam }
+    setSelectedProject(updatedProject)
+    setEditData(updatedProject)
+    setNewTeamMember({ name: "", role: "Designer" })
+    setAddTeamMemberOpen(false)
+    // Persist to team_roles JSONB
+    const teamRolesJson = updatedTeam.map((t) => ({ name: t.name, role: t.role }))
+    await supabase.from("projects").update({ team_roles: teamRolesJson }).eq("id", selectedProject.id)
   }
 
   const getDeliverableStats = (deliverables: Deliverable[]) => {
@@ -617,7 +659,7 @@ export function RoomContent({ clientData }: RoomContentProps) {
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <button onClick={() => setStatusDropdownOpen(!statusDropdownOpen)} className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all", currentStatus.bgColor, "text-white border-transparent hover:opacity-90")}>
+                  <button onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(!statusDropdownOpen) }} className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all", currentStatus.bgColor, "text-white border-transparent hover:opacity-90")}>
                     <currentStatus.icon className="w-4 h-4" />
                     <span className="font-medium text-sm">{currentStatus.label}</span>
                     {statusDropdownOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -817,7 +859,7 @@ export function RoomContent({ clientData }: RoomContentProps) {
                       </div>
                       <h3 className="text-lg font-semibold text-foreground mb-2">No creatives yet</h3>
                       <p className="text-muted-foreground mb-6 max-w-sm mx-auto">Upload your first creative to start collaborating.</p>
-                      <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"><Upload className="w-4 h-4 mr-2" />Upload Creative</Button>
+                      <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8]" onClick={() => setAddCreativeOpen(true)}><Upload className="w-4 h-4 mr-2" />Add Creative</Button>
                     </div>
                   )}
                 </div>
@@ -871,13 +913,17 @@ export function RoomContent({ clientData }: RoomContentProps) {
                   </h3>
                   <div className="space-y-2">
                     {selectedProject.references.map((ref, index) => (
-                      <div key={ref.id} className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 transition-colors group">
+                      <div
+                        key={ref.id}
+                        onClick={() => ref.url && setPreviewRef(ref)}
+                        className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 transition-colors group cursor-pointer"
+                      >
                         <div className="w-6 h-6 rounded bg-foreground text-background flex items-center justify-center text-[10px] font-bold flex-shrink-0">{index + 1}</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">{ref.name}</p>
                           {ref.size && <p className="text-[10px] text-muted-foreground">{ref.size}</p>}
                         </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"><Download className="w-3 h-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); ref.url && setPreviewRef(ref) }}><Eye className="w-3 h-3" /></Button>
                       </div>
                     ))}
                   </div>
@@ -920,7 +966,7 @@ export function RoomContent({ clientData }: RoomContentProps) {
       </div>
 
       <AssetsDrawer open={assetsDrawerOpen} onOpenChange={setAssetsDrawerOpen} client={client} />
-      {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} />}
+      {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} onAddClick={() => { setTeamModalOpen(false); setAddTeamMemberOpen(true) }} />}
 
       {/* Add Deliverable Modal */}
       <Dialog open={addDeliverableOpen} onOpenChange={setAddDeliverableOpen}>
@@ -1064,6 +1110,111 @@ export function RoomContent({ clientData }: RoomContentProps) {
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Creative
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reference Preview Dialog */}
+      <Dialog open={!!previewRef} onOpenChange={(open) => { if (!open) setPreviewRef(null) }}>
+        <DialogContent className="max-w-3xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                <FolderOpen className="w-4 h-4 text-[#5C6ECD]" />
+              </div>
+              {previewRef?.name}
+            </DialogTitle>
+            <DialogDescription>Reference file preview</DialogDescription>
+          </DialogHeader>
+          {previewRef?.url && (
+            <div className="mt-4 flex items-center justify-center overflow-auto max-h-[65vh] rounded-lg bg-muted/30 border border-border">
+              {(() => {
+                const url = previewRef.url!
+                const ext = url.split('.').pop()?.toLowerCase().split('?')[0] || ''
+                const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp']
+                const videoExts = ['mp4', 'webm', 'ogg', 'mov']
+                const pdfExts = ['pdf']
+                if (imageExts.includes(ext)) {
+                  return <img src={url} alt={previewRef.name} className="max-w-full max-h-[65vh] object-contain" />
+                }
+                if (videoExts.includes(ext)) {
+                  return <video src={url} controls className="max-w-full max-h-[65vh]" />
+                }
+                if (pdfExts.includes(ext)) {
+                  return <iframe src={url} className="w-full h-[65vh]" title={previewRef.name} />
+                }
+                return (
+                  <div className="p-12 text-center">
+                    <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground mb-4">Preview not available for this file type</p>
+                    <Button asChild variant="outline">
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        <Download className="w-4 h-4 mr-2" />
+                        Download File
+                      </a>
+                    </Button>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+          <div className="flex justify-end gap-3 mt-2">
+            {previewRef?.url && (
+              <Button asChild variant="outline" size="sm">
+                <a href={previewRef.url} download>
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </a>
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setPreviewRef(null)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Team Member Dialog */}
+      <Dialog open={addTeamMemberOpen} onOpenChange={setAddTeamMemberOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                <UserPlus className="w-4 h-4 text-[#5C6ECD]" />
+              </div>
+              Add Team Member
+            </DialogTitle>
+            <DialogDescription>Add a member to this project</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Name *</label>
+              <Input
+                placeholder="e.g., John Doe"
+                value={newTeamMember.name}
+                onChange={(e) => setNewTeamMember((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">Role</label>
+              <Select value={newTeamMember.role} onValueChange={(value) => setNewTeamMember((prev) => ({ ...prev, role: value }))}>
+                <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                <SelectContent>
+                  {["Project Manager", "Lead Designer", "Designer", "UI Designer", "Developer", "Reviewer"].map((role) => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setAddTeamMemberOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddTeamMember}
+              disabled={!newTeamMember.name.trim()}
+              className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Member
             </Button>
           </div>
         </DialogContent>
