@@ -38,7 +38,7 @@ interface CustomFont {
   file: File
 }
 
-interface ClientFormData {
+export interface ClientFormData {
   // Step 1: Brand Info
   brandName: string
   industry: string
@@ -132,16 +132,18 @@ interface NewClientOnboardingProps {
   open: boolean
   onClose: () => void
   onComplete: (data: ClientFormData) => void
+  editMode?: boolean
+  initialData?: Partial<ClientFormData>
 }
 
-export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnboardingProps) {
+export function NewClientOnboarding({ open, onClose, onComplete, editMode = false, initialData }: NewClientOnboardingProps) {
   const [step, setStep] = useState(1)
   const totalSteps = 3
   const logoInputRef = useRef<HTMLInputElement>(null)
   const brandImageInputRef = useRef<HTMLInputElement>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
-  const [formData, setFormData] = useState<ClientFormData>({
+  const defaultFormData: ClientFormData = {
     brandName: "",
     industry: "",
     websiteUrl: "",
@@ -164,7 +166,21 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
       { id: "3", hex: "", font: "", name: "" },
       { id: "4", hex: "", font: "", name: "" },
     ],
-  })
+  }
+
+  const [formData, setFormData] = useState<ClientFormData>(
+    initialData ? { ...defaultFormData, ...initialData } : defaultFormData
+  )
+
+  // Reset form when dialog opens with new initialData
+  useEffect(() => {
+    if (open) {
+      setFormData(initialData ? { ...defaultFormData, ...initialData } : defaultFormData)
+      setStep(1)
+      setErrors({})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const [errors, setErrors] = useState<FormErrors>({})
 
@@ -1426,7 +1442,7 @@ export function NewClientOnboarding({ open, onClose, onComplete }: NewClientOnbo
                 : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
             )}
           >
-            {step === totalSteps ? "Add Client" : "Continue"}
+            {step === totalSteps ? (editMode ? "Save Changes" : "Add Client") : "Continue"}
             <ArrowRight className={cn(
               "w-4 h-4 transition-transform duration-200",
               canContinue() && "group-hover:translate-x-1"

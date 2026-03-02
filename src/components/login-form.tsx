@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import { Send } from "lucide-react"
+import Image from "next/image"
 
 export function LoginForm({
   className,
@@ -181,9 +182,24 @@ export function LoginForm({
 
   return (
     <div className={cn("flex flex-col gap-8", className)} {...props}>
-      {/* Logo placeholder */}
+      {/* Logo */}
       <div className="flex justify-center">
-        <div className="w-40 h-14 bg-muted rounded-md" />
+        <Image
+          src="/Logo/Artboard 8@2x.png"
+          alt="Revue"
+          width={160}
+          height={49}
+          priority
+          className="dark:hidden"
+        />
+        <Image
+          src="/Logo/Artboard 8 copy@2x.png"
+          alt="Revue"
+          width={160}
+          height={49}
+          priority
+          className="hidden dark:block"
+        />
       </div>
 
       {/* Header */}

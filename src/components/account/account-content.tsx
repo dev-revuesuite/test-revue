@@ -17,9 +17,6 @@ import {
   Pencil,
   ArrowUpDown,
   BarChart3,
-  CreditCard,
-  Receipt,
-  Download
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -46,6 +43,12 @@ interface TeamMemberData {
   avatar: string
 }
 
+interface ProfileData {
+  phone: string
+  jobTitle: string
+  preferences: Record<string, unknown>
+}
+
 interface AccountContentProps {
   user: {
     name: string
@@ -55,9 +58,11 @@ interface AccountContentProps {
   defaultTab?: TabType
   organization?: OrgData | null
   teamMembers?: TeamMemberData[]
+  profileData?: ProfileData
+  organizationId?: string | null
 }
 
-type TabType = "profile" | "settings" | "team" | "organisations" | "billing" | "roles"
+type TabType = "profile" | "settings" | "team" | "organisations" | "roles"
 
 // mockTeamMembers removed — now uses real data from props
 
@@ -81,7 +86,7 @@ const allPermissions = [
   { id: "export_data", label: "Export Data", description: "Export data and reports" },
 ]
 
-export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [] }: AccountContentProps) {
+export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId }: AccountContentProps) {
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
 
   const tabs: { id: TabType; label: string }[] = [
@@ -89,7 +94,6 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
     { id: "settings", label: "Settings" },
     { id: "team", label: "Team" },
     { id: "organisations", label: "Organisations" },
-    { id: "billing", label: "Billing" },
     { id: "roles", label: "Manage Roles" },
   ]
 
@@ -126,11 +130,10 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
 
         {/* Tab Content */}
         <div className="animate-in fade-in duration-200">
-          {activeTab === "profile" && <ProfileTab user={user} />}
-          {activeTab === "settings" && <SettingsTab />}
-          {activeTab === "team" && <TeamTab initialMembers={teamMembers} />}
+          {activeTab === "profile" && <ProfileTab user={user} profileData={profileData} />}
+          {activeTab === "settings" && <SettingsTab initialPreferences={profileData?.preferences} />}
+          {activeTab === "team" && <TeamTab initialMembers={teamMembers} organizationId={organizationId ?? null} />}
           {activeTab === "organisations" && <OrganisationsTab initialOrg={organization} />}
-          {activeTab === "billing" && <BillingTab />}
           {activeTab === "roles" && <RolesTab />}
         </div>
       </div>
@@ -203,16 +206,55 @@ function EditableRow({
 }
 
 // Profile Tab
-function ProfileTab({ user }: { user: { name: string; email: string; avatar: string } }) {
+function ProfileTab({ user, profileData }: { user: { name: string; email: string; avatar: string }; profileData?: ProfileData }) {
   const [profile, setProfile] = useState({
     fullName: user.name,
     email: user.email,
-    phone: "+91 9876543210",
-    designation: "Graphic Designer",
-    industries: ["Technology", "Design"],
-    country: "India",
-    state: "Uttar Pradesh",
+    phone: profileData?.phone || "",
+    designation: profileData?.jobTitle || "",
   })
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar)
+
+  const updateProfileField = async (field: string, value: string) => {
+    const supabase = createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser) return
+    const dbField = field === "fullName" ? "full_name" : field === "designation" ? "job_title" : field
+    await supabase.from("profiles").update({ [dbField]: value }).eq("id", currentUser.id)
+  }
+
+  const handleAvatarUpload = async () => {
+    const supabase = createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser) return
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "image/*"
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const ext = file.name.split(".").pop()
+      const path = `${currentUser.id}/${Date.now()}-avatar.${ext}`
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file)
+      if (uploadErr) {
+        console.error("Avatar upload failed:", uploadErr)
+        return
+      }
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path)
+      const newUrl = urlData.publicUrl
+      await supabase.from("profiles").update({ avatar_url: newUrl }).eq("id", currentUser.id)
+      setAvatarUrl(newUrl)
+    }
+    input.click()
+  }
+
+  const handleDeleteAvatar = async () => {
+    const supabase = createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser) return
+    await supabase.from("profiles").update({ avatar_url: null }).eq("id", currentUser.id)
+    setAvatarUrl("")
+  }
 
   return (
     <div className="w-full">
@@ -222,8 +264,8 @@ function ProfileTab({ user }: { user: { name: string; email: string; avatar: str
         <div className="flex items-center justify-between py-4 border-b border-border">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-muted overflow-hidden">
-              {user.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={user.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl font-semibold text-muted-foreground">
                   {user.name.charAt(0).toUpperCase()}
@@ -235,8 +277,8 @@ function ProfileTab({ user }: { user: { name: string; email: string; avatar: str
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
-            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Delete</button>
+            <button onClick={handleAvatarUpload} className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
+            <button onClick={handleDeleteAvatar} className="text-sm text-foreground hover:text-muted-foreground font-medium">Delete</button>
           </div>
         </div>
       </div>
@@ -244,40 +286,10 @@ function ProfileTab({ user }: { user: { name: string; email: string; avatar: str
       {/* Personal Information */}
       <SectionHeader title="Personal Information" icon={<User className="w-4 h-4 text-muted-foreground" />} />
       <div className="border-t border-border">
-        <EditableRow label="Full Name" value={profile.fullName} onSave={(v) => setProfile({...profile, fullName: v})} />
-        <EditableRow label="Email Address" value={profile.email} onSave={(v) => setProfile({...profile, email: v})} type="email" />
-        <EditableRow label="Phone Number" value={profile.phone} onSave={(v) => setProfile({...profile, phone: v})} type="tel" />
-        <EditableRow label="Designation" value={profile.designation} onSave={(v) => setProfile({...profile, designation: v})} />
-        <div className="flex items-center justify-between py-3 border-b border-border">
-          <span className="text-sm text-foreground">Industries</span>
-          <div className="flex items-center gap-2">
-            {profile.industries.map((industry, idx) => (
-              <span key={idx} className="px-2 py-1 text-xs bg-muted rounded">{industry}</span>
-            ))}
-            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Location */}
-      <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
-      <div className="border-t border-border">
-        <div className="flex items-center justify-between py-3 border-b border-border">
-          <span className="text-sm text-foreground">Country</span>
-          <Dropdown
-            value={profile.country}
-            options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
-            onChange={(v) => setProfile({...profile, country: v})}
-          />
-        </div>
-        <div className="flex items-center justify-between py-3 border-b border-border">
-          <span className="text-sm text-foreground">State</span>
-          <Dropdown
-            value={profile.state}
-            options={["Uttar Pradesh", "Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"]}
-            onChange={(v) => setProfile({...profile, state: v})}
-          />
-        </div>
+        <EditableRow label="Full Name" value={profile.fullName} onSave={(v) => { setProfile({...profile, fullName: v}); updateProfileField("fullName", v) }} />
+        <EditableRow label="Email Address" value={profile.email} onSave={(v) => { setProfile({...profile, email: v}); updateProfileField("email", v) }} type="email" />
+        <EditableRow label="Phone Number" value={profile.phone} onSave={(v) => { setProfile({...profile, phone: v}); updateProfileField("phone", v) }} type="tel" />
+        <EditableRow label="Designation" value={profile.designation} onSave={(v) => { setProfile({...profile, designation: v}); updateProfileField("designation", v) }} />
       </div>
 
       {/* Danger Zone */}
@@ -297,11 +309,33 @@ function ProfileTab({ user }: { user: { name: string; email: string; avatar: str
 }
 
 // Settings Tab
-function SettingsTab() {
+function SettingsTab({ initialPreferences }: { initialPreferences?: Record<string, unknown> }) {
   const [settings, setSettings] = useState({
-    appearance: "System",
-    timezone: "(GMT +05:30) India Standard Time",
+    appearance: (initialPreferences?.appearance as string) || "System",
+    timezone: (initialPreferences?.timezone as string) || "(GMT +05:30) India Standard Time",
+    emailNotifications: initialPreferences?.emailNotifications !== false,
+    pushNotifications: initialPreferences?.pushNotifications !== false,
   })
+
+  const persistPreferences = async (updated: typeof settings) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from("profiles").update({
+      preferences: {
+        appearance: updated.appearance,
+        timezone: updated.timezone,
+        emailNotifications: updated.emailNotifications,
+        pushNotifications: updated.pushNotifications,
+      }
+    }).eq("id", user.id)
+  }
+
+  const updateSetting = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => {
+    const updated = { ...settings, [key]: value }
+    setSettings(updated)
+    persistPreferences(updated)
+  }
 
   return (
     <div className="w-full">
@@ -313,7 +347,7 @@ function SettingsTab() {
           <Dropdown
             value={settings.appearance}
             options={["System", "Light", "Dark"]}
-            onChange={(v) => setSettings({...settings, appearance: v})}
+            onChange={(v) => updateSetting("appearance", v)}
           />
         </div>
         <div className="flex items-center justify-between py-3 border-b border-border">
@@ -321,7 +355,7 @@ function SettingsTab() {
           <Dropdown
             value={settings.timezone}
             options={["(GMT +05:30) India Standard Time", "(GMT +00:00) UTC", "(GMT -05:00) Eastern Time", "(GMT -08:00) Pacific Time"]}
-            onChange={(v) => setSettings({...settings, timezone: v})}
+            onChange={(v) => updateSetting("timezone", v)}
           />
         </div>
       </div>
@@ -334,14 +368,14 @@ function SettingsTab() {
             <span className="text-sm text-foreground">Email notifications</span>
             <p className="text-xs text-muted-foreground mt-0.5">Receive email updates about activity</p>
           </div>
-          <Toggle checked={true} onChange={() => {}} />
+          <Toggle checked={settings.emailNotifications} onChange={(v) => updateSetting("emailNotifications", v)} />
         </div>
         <div className="flex items-center justify-between py-3 border-b border-border">
           <div>
             <span className="text-sm text-foreground">Push notifications</span>
             <p className="text-xs text-muted-foreground mt-0.5">Receive push notifications on your devices</p>
           </div>
-          <Toggle checked={true} onChange={() => {}} />
+          <Toggle checked={settings.pushNotifications} onChange={(v) => updateSetting("pushNotifications", v)} />
         </div>
       </div>
 
@@ -390,7 +424,7 @@ function toFullMember(m: TeamMemberData): FullTeamMember {
   }
 }
 
-function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] }) {
+function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: TeamMemberData[]; organizationId: string | null }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("Active")
   const [groupFilter, setGroupFilter] = useState("All")
@@ -433,17 +467,61 @@ function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] })
     }
   }
 
-  const updateMemberRole = (id: string, newRole: string) => {
+  const updateMemberRole = async (id: string, newRole: string) => {
     setMembers(members.map(m => m.id === id ? { ...m, role: newRole } : m))
+    const supabase = createClient()
+    await supabase.from("organization_members").update({ role: newRole }).eq("id", id)
   }
 
-  const deleteMember = (id: string) => {
+  const deleteMember = async (id: string) => {
     setMembers(members.filter(m => m.id !== id))
     setSelectedMembers(selectedMembers.filter(m => m !== id))
+    const supabase = createClient()
+    await supabase.from("organization_members").delete().eq("id", id)
   }
 
-  const updateMember = (updatedMember: FullTeamMember) => {
+  const bulkDeleteMembers = async (ids: string[]) => {
+    setMembers(members.filter(m => !ids.includes(m.id)))
+    setSelectedMembers([])
+    const supabase = createClient()
+    await supabase.from("organization_members").delete().in("id", ids)
+  }
+
+  const updateMember = async (updatedMember: FullTeamMember) => {
     setMembers(members.map(m => m.id === updatedMember.id ? updatedMember : m))
+    const supabase = createClient()
+    await supabase.from("organization_members").update({
+      name: updatedMember.name,
+      email: updatedMember.email,
+      phone: updatedMember.phone,
+      role: updatedMember.role,
+    }).eq("id", updatedMember.id)
+  }
+
+  const handleInviteMember = async (data: { name: string; email: string; designation: string; role: string }) => {
+    if (!organizationId) return
+    const supabase = createClient()
+    const { data: inserted, error } = await supabase.from("organization_members").insert({
+      organization_id: organizationId,
+      name: data.name,
+      email: data.email,
+      phone: "",
+      role: data.role,
+    }).select().single()
+    if (error || !inserted) {
+      console.error("Failed to invite member:", error)
+      return
+    }
+    const newMember = toFullMember({
+      id: inserted.id,
+      name: inserted.name || "",
+      email: inserted.email || "",
+      phone: inserted.phone || "",
+      role: inserted.role || "Member",
+      avatar: inserted.avatar_url || "",
+    })
+    setMembers([...members, newMember])
+    setShowInviteModal(false)
   }
 
   return (
@@ -479,10 +557,7 @@ function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] })
         <div className="flex items-center gap-3">
           {selectedMembers.length > 0 && (
             <button
-              onClick={() => {
-                setMembers(members.filter(m => !selectedMembers.includes(m.id)))
-                setSelectedMembers([])
-              }}
+              onClick={() => bulkDeleteMembers(selectedMembers)}
               className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -597,7 +672,7 @@ function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] })
 
       {/* Invite Member Modal */}
       {showInviteModal && (
-        <InviteMemberModal onClose={() => setShowInviteModal(false)} />
+        <InviteMemberModal onClose={() => setShowInviteModal(false)} onInvite={handleInviteMember} />
       )}
 
       {/* Performance Modal */}
@@ -605,8 +680,8 @@ function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] })
         <PerformanceModal
           member={performanceMember}
           onClose={() => setPerformanceMember(null)}
-          onDelete={() => {
-            deleteMember(performanceMember.id)
+          onDelete={async () => {
+            await deleteMember(performanceMember.id)
             setPerformanceMember(null)
           }}
         />
@@ -617,8 +692,8 @@ function TeamTab({ initialMembers = [] }: { initialMembers?: TeamMemberData[] })
         <EditMemberModal
           member={editingMember}
           onClose={() => setEditingMember(null)}
-          onSave={(updatedMember) => {
-            updateMember(updatedMember)
+          onSave={async (updatedMember) => {
+            await updateMember(updatedMember)
             setEditingMember(null)
           }}
         />
@@ -752,7 +827,7 @@ function EditMemberModal({
 }
 
 // Invite Member Modal
-function InviteMemberModal({ onClose }: { onClose: () => void }) {
+function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvite: (data: { name: string; email: string; designation: string; role: string }) => void }) {
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
   const [designation, setDesignation] = useState("")
@@ -820,6 +895,7 @@ function InviteMemberModal({ onClose }: { onClose: () => void }) {
             Cancel
           </button>
           <button
+            onClick={() => onInvite({ name, email, designation, role })}
             disabled={!email.trim() || !name.trim()}
             className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -1100,109 +1176,6 @@ function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
             />
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
-
-// Billing Tab
-function BillingTab() {
-  const mockInvoices = [
-    { id: "INV-001", date: "Dec 1, 2024", amount: "₹4,999", status: "Paid" },
-    { id: "INV-002", date: "Nov 1, 2024", amount: "₹4,999", status: "Paid" },
-    { id: "INV-003", date: "Oct 1, 2024", amount: "₹4,999", status: "Paid" },
-    { id: "INV-004", date: "Sep 1, 2024", amount: "₹4,999", status: "Paid" },
-  ]
-
-  return (
-    <div className="w-full">
-      {/* Current Plan */}
-      <SectionHeader title="Current Plan" icon={<CreditCard className="w-4 h-4 text-muted-foreground" />} />
-      <div className="border-t border-border">
-        <div className="py-6 border-b border-border">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-lg font-semibold text-foreground">Pro Plan</h3>
-                <span className="px-2 py-0.5 text-xs bg-[#DBFE52] text-black rounded-full font-medium">Active</span>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Unlimited projects, team members, and advanced features
-              </p>
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-foreground">₹4,999</span>
-                <span className="text-sm text-muted-foreground">/month</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
-                Change Plan
-              </button>
-              <button className="px-4 py-2 text-sm text-destructive hover:text-destructive/80 font-medium">
-                Cancel Subscription
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Payment Method */}
-      <SectionHeader title="Payment Method" icon={<CreditCard className="w-4 h-4 text-muted-foreground" />} />
-      <div className="border-t border-border">
-        <div className="flex items-center justify-between py-4 border-b border-border">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-8 rounded bg-gradient-to-r from-[#1a1f71] to-[#2b3990] flex items-center justify-center">
-              <span className="text-white text-xs font-bold">VISA</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">•••• •••• •••• 4242</p>
-              <p className="text-xs text-muted-foreground">Expires 12/2026</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
-            <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Remove</button>
-          </div>
-        </div>
-        <button className="flex items-center gap-2 py-3 text-sm text-[#5C6ECD] hover:text-[#5C6ECD]/80 font-medium">
-          <Plus className="w-4 h-4" />
-          Add payment method
-        </button>
-      </div>
-
-      {/* Billing History */}
-      <SectionHeader title="Billing History" icon={<Receipt className="w-4 h-4 text-muted-foreground" />} />
-      <div className="border-t border-border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Invoice</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-              <th className="text-left py-3 px-4 w-20"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockInvoices.map((invoice) => (
-              <tr key={invoice.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                <td className="py-3 px-4 text-sm font-medium text-foreground">{invoice.id}</td>
-                <td className="py-3 px-4 text-sm text-muted-foreground">{invoice.date}</td>
-                <td className="py-3 px-4 text-sm text-foreground">{invoice.amount}</td>
-                <td className="py-3 px-4">
-                  <span className="px-2 py-0.5 text-xs bg-[#10b981]/10 text-[#10b981] rounded-full font-medium">
-                    {invoice.status}
-                  </span>
-                </td>
-                <td className="py-3 px-4">
-                  <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   )

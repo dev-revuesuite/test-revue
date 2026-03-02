@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -123,7 +123,8 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
 
   // Add Creative dialog state
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
-  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], thumbnailUrl: "" })
+  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], file: null as File | null, filePreview: "" })
+  const creativeFileInputRef = useRef<HTMLInputElement>(null)
 
   // Add Deliverable per-creative state
   const [addDeliverableCreativeId, setAddDeliverableCreativeId] = useState<string | null>(null)
@@ -193,13 +194,25 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
   // Add Creative handler
   const handleAddCreative = async () => {
     if (!projectData || !newCreative.name.trim()) return
+
+    let uploadedUrl: string | null = null
+    if (newCreative.file) {
+      const path = `${projectData.id}/${Date.now()}-${newCreative.file.name}`
+      const { error: uploadError } = await supabase.storage.from("creatives").upload(path, newCreative.file)
+      if (uploadError) {
+        console.error("Failed to upload file:", uploadError)
+        return
+      }
+      uploadedUrl = supabase.storage.from("creatives").getPublicUrl(path).data.publicUrl
+    }
+
     const { data: inserted, error } = await supabase
       .from("creatives")
       .insert({
         project_id: projectData.id,
         name: newCreative.name.trim(),
         type: newCreative.type,
-        thumbnail_url: newCreative.thumbnailUrl || null,
+        thumbnail_url: uploadedUrl,
       })
       .select()
       .single()
@@ -207,6 +220,16 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
     if (error || !inserted) {
       console.error("Failed to add creative:", error)
       return
+    }
+
+    if (uploadedUrl && newCreative.file) {
+      await supabase.from("creative_iterations").insert({
+        creative_id: inserted.id,
+        version: 1,
+        file_url: uploadedUrl,
+        file_type: newCreative.file.type,
+        file_name: newCreative.file.name,
+      })
     }
 
     const creative: Creative = {
@@ -224,7 +247,8 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
     const updated = { ...projectData, creatives: updatedCreatives }
     setProjectData(updated)
     setEditData(updated)
-    setNewCreative({ name: "", type: "design", thumbnailUrl: "" })
+    if (newCreative.filePreview) URL.revokeObjectURL(newCreative.filePreview)
+    setNewCreative({ name: "", type: "design", file: null, filePreview: "" })
     setAddCreativeOpen(false)
     setExpandedCreatives((prev) => new Set([...prev, creative.id]))
     await recalculateBriefStatus(updatedCreatives)
@@ -690,13 +714,59 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Thumbnail URL (Optional)</label>
-              <Input
-                placeholder="https://example.com/image.jpg"
-                value={newCreative.thumbnailUrl}
-                onChange={(e) => setNewCreative((prev) => ({ ...prev, thumbnailUrl: e.target.value }))}
+              <label className="text-sm font-medium text-foreground mb-2 block">Upload File (Optional)</label>
+              <input
+                ref={creativeFileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,video/*,.pdf,.psd,.ai,.fig"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    setNewCreative((prev) => ({
+                      ...prev,
+                      file,
+                      filePreview: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+                    }))
+                  }
+                }}
               />
-              <p className="text-xs text-muted-foreground mt-1">Leave empty for a default thumbnail</p>
+              {newCreative.file ? (
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                  {newCreative.filePreview ? (
+                    <img src={newCreative.filePreview} alt="Preview" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-6 h-6 text-[#5C6ECD]" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{newCreative.file.name}</p>
+                    <p className="text-xs text-muted-foreground">{(newCreative.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (newCreative.filePreview) URL.revokeObjectURL(newCreative.filePreview)
+                      setNewCreative((prev) => ({ ...prev, file: null, filePreview: "" }))
+                      if (creativeFileInputRef.current) creativeFileInputRef.current.value = ""
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => creativeFileInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-[#5C6ECD]/50 hover:bg-[#5C6ECD]/5 transition-colors cursor-pointer"
+                >
+                  <Upload className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Click to upload a file</span>
+                  <span className="text-xs text-muted-foreground">Images, Videos, PDF, PSD, AI, Figma</span>
+                </button>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">

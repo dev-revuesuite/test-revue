@@ -80,7 +80,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   // Fetch client data
   const { data: client } = await supabase
     .from("clients")
-    .select("id,name,industry,logo_url,fonts,colors")
+    .select("id,name,industry,logo_url,fonts,colors,contacts,social_links,brand_image_urls,website_url,office_address,contact_address")
     .eq("id", clientId)
     .single()
 
@@ -224,6 +224,67 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     }),
   }
 
+  // Build edit data for the client onboarding form
+  const contactsRaw = (client.contacts as { name: string; email: string; country_code: string; phone: string }[]) || []
+  const socialLinksRaw = (client.social_links as { platform: string; url: string }[]) || []
+  const brandImageUrlsRaw = (client.brand_image_urls as string[]) || []
+
+  const clientEditData = {
+    brandName: client.name || "",
+    industry: client.industry || "",
+    websiteUrl: client.website_url || "",
+    officeAddress: client.office_address || "",
+    contactAddress: client.contact_address || "",
+    sameAsOffice: (client.contact_address || "") === (client.office_address || ""),
+    logoPreview: client.logo_url || "",
+    contacts: contactsRaw.length > 0
+      ? contactsRaw.map((c, i) => ({
+          id: String(i + 1),
+          name: c.name || "",
+          email: c.email || "",
+          countryCode: c.country_code || "+91",
+          phone: c.phone || "",
+        }))
+      : [{ id: "1", name: "", email: "", countryCode: "+91", phone: "" }],
+    socialLinks: socialLinksRaw.length > 0
+      ? socialLinksRaw.map((s, i) => ({
+          id: String(i + 1),
+          platform: s.platform || "Instagram",
+          url: s.url || "",
+        }))
+      : [
+          { id: "1", platform: "Instagram", url: "" },
+          { id: "2", platform: "Facebook", url: "" },
+          { id: "3", platform: "LinkedIn", url: "" },
+        ],
+    fontRows: fontsRaw.length > 0
+      ? fontsRaw.map((f, i) => ({
+          id: String(i + 1),
+          label: f.label || (i === 0 ? "Primary" : "Secondary"),
+          font: f.font_name || "",
+        }))
+      : [
+          { id: "1", label: "Primary", font: "" },
+          { id: "2", label: "Secondary", font: "" },
+        ],
+    colorRows: colorsRaw.length > 0
+      ? colorsRaw.map((c, i) => ({
+          id: String(i + 1),
+          hex: c.hex || "",
+          font: c.font_label || "",
+          name: c.name || "",
+        }))
+      : [
+          { id: "1", hex: "", font: "", name: "" },
+          { id: "2", hex: "", font: "", name: "" },
+          { id: "3", hex: "", font: "", name: "" },
+          { id: "4", hex: "", font: "", name: "" },
+        ],
+    brandImages: brandImageUrlsRaw,
+    logo: null as File | null,
+    customFonts: [] as { name: string; file: File }[],
+  }
+
   return (
     <div className="flex flex-col h-svh">
       <StudioHeader
@@ -235,7 +296,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
       />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={userData} />
-        <RoomContent clientData={clientData} orgMembers={teamMembers} />
+        <RoomContent clientData={clientData} orgMembers={teamMembers} clientEditData={clientEditData} organizationId={organization?.id ?? null} />
       </div>
     </div>
   )

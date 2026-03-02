@@ -4,9 +4,9 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { AccountContent } from "@/components/account/account-content"
 
-type TabType = "profile" | "settings" | "team" | "organisations" | "billing" | "roles"
+type TabType = "profile" | "settings" | "team" | "organisations" | "roles"
 
-const validTabs: TabType[] = ["profile", "settings", "team", "organisations", "billing", "roles"]
+const validTabs: TabType[] = ["profile", "settings", "team", "organisations", "roles"]
 
 export default async function AccountPage({
   searchParams,
@@ -26,7 +26,7 @@ export default async function AccountPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name,avatar_url")
+    .select("full_name,avatar_url,phone,job_title,preferences")
     .eq("id", user.id)
     .single()
 
@@ -38,6 +38,12 @@ export default async function AccountPage({
       "User",
     email: user.email || "",
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
+  }
+
+  const profileData = {
+    phone: profile?.phone || "",
+    jobTitle: profile?.job_title || "",
+    preferences: (profile?.preferences as Record<string, unknown>) || {},
   }
 
   // Fetch organization
@@ -101,6 +107,8 @@ export default async function AccountPage({
           defaultTab={defaultTab}
           organization={orgData}
           teamMembers={teamMembers}
+          profileData={profileData}
+          organizationId={organization?.id ?? null}
         />
       </div>
     </div>

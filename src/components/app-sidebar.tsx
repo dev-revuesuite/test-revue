@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
+import Image from "next/image"
 import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -85,6 +86,50 @@ export function AppSidebar({ user }: AppSidebarProps) {
       "flex flex-col h-full border-r border-border bg-background transition-all duration-300",
       isExpanded ? "w-52" : "w-16"
     )}>
+      {/* Logo */}
+      <div className={cn(
+        "flex items-center justify-center py-4 px-2 border-b border-border",
+        isExpanded ? "px-3" : ""
+      )}>
+        <Link href="/studio" className="flex items-center gap-2">
+          {isExpanded ? (
+            <>
+              <Image
+                src="/Logo/Artboard 8@2x.png"
+                alt="Revue"
+                width={110}
+                height={34}
+                className="dark:hidden"
+              />
+              <Image
+                src="/Logo/Artboard 8 copy@2x.png"
+                alt="Revue"
+                width={110}
+                height={34}
+                className="hidden dark:block"
+              />
+            </>
+          ) : (
+            <>
+              <Image
+                src="/Logo/Artboard 6@2x.png"
+                alt="Revue"
+                width={32}
+                height={32}
+                className="dark:hidden"
+              />
+              <Image
+                src="/Logo/Artboard 5@2x.png"
+                alt="Revue"
+                width={32}
+                height={32}
+                className="hidden dark:block"
+              />
+            </>
+          )}
+        </Link>
+      </div>
+
       {/* Navigation Items - Top */}
       <nav className="flex flex-col items-center gap-2 py-4 px-2">
         {navItems.map((item) => {

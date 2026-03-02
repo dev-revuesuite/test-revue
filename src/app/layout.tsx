@@ -17,6 +17,10 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Revue - Design Review Tool",
   description: "Collaborative design review and feedback tool",
+  icons: {
+    icon: "/Logo/Artboard 7@2x.png",
+    apple: "/Logo/Artboard 7@2x.png",
+  },
 };
 
 export default function RootLayout({

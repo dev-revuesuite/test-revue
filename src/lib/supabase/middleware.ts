@@ -27,9 +27,13 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    // If Supabase is unreachable, allow the request through
+  }
 
   // Protected routes
   const protectedRoutes = ['/studio']

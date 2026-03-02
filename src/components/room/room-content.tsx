@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useRef } from "react"
 import {
   Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare,
   CheckCircle, ArrowLeft, Plus,
   Briefcase, Palette, Type, Image as ImageIcon,
   ExternalLink, Search,
   Sparkles, Zap, FolderOpen,
-  X, UserPlus, Pencil, ChevronUp, FolderKanban, CircleDot, Upload, CircleCheck,
+  X, UserPlus, Pencil, FolderKanban, CircleDot, Upload, CircleCheck,
   Settings, Layers, Link, Circle, CheckCircle2, Copy,
   FileImage, Video, FileCheck, Layers2, Play
 } from "lucide-react"
@@ -40,6 +40,7 @@ import {
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
 
 // Types
 interface Deliverable {
@@ -369,9 +370,11 @@ interface OrgMember {
 interface RoomContentProps {
   clientData: ClientRoom
   orgMembers?: OrgMember[]
+  clientEditData?: Record<string, unknown>
+  organizationId?: string | null
 }
 
-export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
+export function RoomContent({ clientData, orgMembers = [], clientEditData, organizationId }: RoomContentProps) {
   const router = useRouter()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
     clientData.projects.length > 0 ? clientData.projects[0] : null
@@ -379,7 +382,6 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
   const [isLoading] = useState(false)
   const [assetsDrawerOpen, setAssetsDrawerOpen] = useState(false)
   const [teamModalOpen, setTeamModalOpen] = useState(false)
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusKey | "all">("all")
   const [isEditing, setIsEditing] = useState(false)
@@ -393,7 +395,8 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
 
   // Creative modal state
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
-  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], thumbnailUrl: "" })
+  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], file: null as File | null, filePreview: "" })
+  const creativeFileInputRef = useRef<HTMLInputElement>(null)
 
   // Reference preview state
   const [previewRef, setPreviewRef] = useState<Reference | null>(null)
@@ -404,13 +407,8 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
   const [memberSearchQuery, setMemberSearchQuery] = useState("")
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
 
-  // Close status dropdown when clicking outside
-  useEffect(() => {
-    if (!statusDropdownOpen) return
-    const handleClick = () => setStatusDropdownOpen(false)
-    document.addEventListener("click", handleClick)
-    return () => document.removeEventListener("click", handleClick)
-  }, [statusDropdownOpen])
+  // Edit Client state
+  const [editClientOpen, setEditClientOpen] = useState(false)
 
   const client = clientData
 
@@ -444,14 +442,6 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
     const newStatus = deriveBriefStatus(creatives)
     await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectId)
     return newStatus
-  }
-
-  const handleStatusChange = async (newStatus: StatusKey) => {
-    if (selectedProject) {
-      setSelectedProject({ ...selectedProject, status: newStatus })
-      await supabase.from("projects").update({ brief_status: newStatus }).eq("id", selectedProject.id)
-    }
-    setStatusDropdownOpen(false)
   }
 
   const handleSave = async () => {
@@ -517,13 +507,28 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
   // Creative handlers
   const handleAddCreative = async () => {
     if (!selectedProject || !newCreative.name.trim()) return
+
+    // Upload file if provided
+    let thumbnailUrl: string | null = null
+    const file = newCreative.file
+    if (file) {
+      const path = `${selectedProject.id}/${Date.now()}-${file.name}`
+      const { error: uploadErr } = await supabase.storage.from("creatives").upload(path, file)
+      if (uploadErr) {
+        console.error("File upload failed:", uploadErr)
+        return
+      }
+      const { data: urlData } = supabase.storage.from("creatives").getPublicUrl(path)
+      thumbnailUrl = urlData.publicUrl
+    }
+
     const { data: inserted, error } = await supabase
       .from("creatives")
       .insert({
         project_id: selectedProject.id,
         name: newCreative.name.trim(),
         type: newCreative.type,
-        thumbnail_url: newCreative.thumbnailUrl || null,
+        thumbnail_url: thumbnailUrl,
       })
       .select()
       .single()
@@ -533,11 +538,22 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
       return
     }
 
+    // Insert first iteration if file was uploaded
+    if (file && thumbnailUrl) {
+      await supabase.from("creative_iterations").insert({
+        creative_id: inserted.id,
+        version: 1,
+        file_url: thumbnailUrl,
+        file_type: file.type,
+        file_name: file.name,
+      })
+    }
+
     const creative: Creative = {
       id: inserted.id,
       name: inserted.name,
       type: inserted.type as Creative["type"],
-      thumbnailUrl: inserted.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=300&fit=crop",
+      thumbnailUrl: thumbnailUrl || "",
       updatedAt: "Just now",
       feedbackCount: inserted.feedback_count,
       iteration: inserted.iteration,
@@ -550,7 +566,7 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
     }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
-    setNewCreative({ name: "", type: "design", thumbnailUrl: "" })
+    setNewCreative({ name: "", type: "design", file: null, filePreview: "" })
     setAddCreativeOpen(false)
 
     const newStatus = await recalculateBriefStatus(selectedProject.id, updatedCreatives)
@@ -577,6 +593,102 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
     // Persist to team_roles JSONB
     const teamRolesJson = updatedTeam.map((t) => ({ name: t.name, role: t.role }))
     await supabase.from("projects").update({ team_roles: teamRolesJson }).eq("id", selectedProject.id)
+  }
+
+  const handleUpdateClient = async (data: Record<string, unknown>) => {
+    if (!organizationId) return
+    const d = data as {
+      brandName: string
+      industry: string
+      websiteUrl: string
+      officeAddress: string
+      contactAddress: string
+      sameAsOffice: boolean
+      logo: File | null
+      logoPreview: string
+      contacts: { name: string; email: string; countryCode: string; phone: string }[]
+      socialLinks: { platform: string; url: string }[]
+      fontRows: { label: string; font: string }[]
+      customFonts: { name: string; file: File }[]
+      brandImages: string[]
+      colorRows: { hex: string; font: string; name: string }[]
+    }
+
+    // Upload logo if a new file was selected
+    let logoUrl: string | null = d.logoPreview || null
+    if (d.logo) {
+      const ext = d.logo.name.split(".").pop()
+      const path = `${organizationId}/${Date.now()}-logo.${ext}`
+      const { error: uploadErr } = await supabase.storage.from("client-assets").upload(path, d.logo)
+      if (!uploadErr) {
+        logoUrl = supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl
+      }
+    }
+
+    // Upload new brand images (data URLs from file picker)
+    const brandImageUrls: string[] = []
+    for (const img of d.brandImages) {
+      if (img.startsWith("http")) {
+        brandImageUrls.push(img)
+      } else {
+        const res = await fetch(img)
+        const blob = await res.blob()
+        const ext = blob.type.split("/").pop() || "png"
+        const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const { error: imgErr } = await supabase.storage.from("client-assets").upload(path, blob)
+        if (!imgErr) {
+          brandImageUrls.push(supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl)
+        }
+      }
+    }
+
+    // Upload custom fonts
+    const fontsJson = d.fontRows
+      .filter((f) => f.font.trim())
+      .map((f) => ({ label: f.label, font_name: f.font, font_url: null as string | null }))
+
+    for (const customFont of d.customFonts) {
+      const path = `${organizationId}/${Date.now()}-${customFont.name}`
+      const { error: fontErr } = await supabase.storage.from("client-assets").upload(path, customFont.file)
+      if (!fontErr) {
+        fontsJson.push({
+          label: customFont.name,
+          font_name: customFont.name,
+          font_url: supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl,
+        })
+      }
+    }
+
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        name: d.brandName?.trim() || client.name,
+        industry: d.industry || null,
+        website_url: d.websiteUrl || null,
+        office_address: d.officeAddress || null,
+        contact_address: d.sameAsOffice ? d.officeAddress || null : d.contactAddress || null,
+        logo_url: logoUrl,
+        contacts: d.contacts
+          .filter((c) => c.name.trim() || c.email.trim())
+          .map((c) => ({ name: c.name.trim(), email: c.email.trim() || null, country_code: c.countryCode, phone: c.phone.trim() || null })),
+        social_links: d.socialLinks
+          .filter((s) => s.url.trim())
+          .map((s) => ({ platform: s.platform, url: s.url.trim() })),
+        fonts: fontsJson,
+        colors: d.colorRows
+          .filter((c) => c.hex.trim())
+          .map((c) => ({ hex: c.hex, font_label: c.font || null, name: c.name || null })),
+        brand_image_urls: brandImageUrls,
+      })
+      .eq("id", client.id)
+
+    if (error) {
+      console.error("Failed to update client:", error)
+      return
+    }
+
+    setEditClientOpen(false)
+    router.refresh()
   }
 
   const getDeliverableStats = (deliverables: Deliverable[]) => {
@@ -623,7 +735,7 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
             <Layers className="w-4 h-4 text-[#5C6ECD]" />
             <span className="text-sm font-medium text-foreground">Brand Assets</span>
           </button>
-          <button className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
+          <button onClick={() => setEditClientOpen(true)} className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
             <Settings className="w-4 h-4 text-[#5C6ECD] group-hover:rotate-90 transition-transform duration-300" />
             <span className="text-sm font-medium text-foreground">Edit Client</span>
           </button>
@@ -673,31 +785,9 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
                 <ModeBadge mode={data.workmode} />
               </div>
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <button onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(!statusDropdownOpen) }} className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all", currentStatus.bgColor, "text-white border-transparent hover:opacity-90")}>
-                    <currentStatus.icon className="w-4 h-4" />
-                    <span className="font-medium text-sm">{currentStatus.label}</span>
-                    {statusDropdownOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
-                  {statusDropdownOpen && (
-                    <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden py-2">
-                      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Change Status</div>
-                      {statusList.map((statusKey) => {
-                        const config = statusConfig[statusKey]
-                        const StatusIcon = config.icon
-                        const isSelected = selectedProject.status === statusKey
-                        return (
-                          <button key={statusKey} onClick={() => handleStatusChange(statusKey)} className={cn("w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors", isSelected ? "bg-muted" : "hover:bg-muted/50")}>
-                            <div className="flex items-center gap-3">
-                              <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", config.iconBg)}><StatusIcon className={cn("w-4 h-4", config.color)} /></div>
-                              <span className={cn("font-medium", isSelected ? config.color : "text-foreground")}>{config.label}</span>
-                            </div>
-                            {isSelected && <CheckCircle className="w-4 h-4 text-[#5C6ECD]" />}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-lg", currentStatus.bgColor, "text-white")}>
+                  <currentStatus.icon className="w-4 h-4" />
+                  <span className="font-medium text-sm">{currentStatus.label}</span>
                 </div>
                 {isEditing ? (
                   <>
@@ -1086,35 +1176,60 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Thumbnail URL (Optional)</label>
-              <Input
-                placeholder="https://example.com/image.jpg"
-                value={newCreative.thumbnailUrl}
-                onChange={(e) => setNewCreative((prev) => ({ ...prev, thumbnailUrl: e.target.value }))}
+              <label className="text-sm font-medium text-foreground mb-2 block">Upload File (Optional)</label>
+              <input
+                ref={creativeFileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,video/*,.pdf,.psd,.ai,.fig"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    setNewCreative((prev) => ({
+                      ...prev,
+                      file,
+                      filePreview: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+                    }))
+                  }
+                }}
               />
-              <p className="text-xs text-muted-foreground mt-1">Leave empty for a default thumbnail</p>
-            </div>
-            {/* Preview */}
-            {(newCreative.thumbnailUrl || newCreative.name) && (
-              <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30">
-                <p className="text-xs text-muted-foreground mb-2">Preview</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-16 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                    {newCreative.thumbnailUrl ? (
-                      <img src={newCreative.thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#5C6ECD] to-[#8B5CF6]">
-                        <Palette className="w-5 h-5 text-white" />
-                      </div>
-                    )}
+              {newCreative.file ? (
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                  {newCreative.filePreview ? (
+                    <img src={newCreative.filePreview} alt="Preview" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-6 h-6 text-[#5C6ECD]" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{newCreative.file.name}</p>
+                    <p className="text-xs text-muted-foreground">{(newCreative.file.size / 1024 / 1024).toFixed(2)} MB</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{newCreative.name || "Untitled"}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{newCreative.type}</p>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (newCreative.filePreview) URL.revokeObjectURL(newCreative.filePreview)
+                      setNewCreative((prev) => ({ ...prev, file: null, filePreview: "" }))
+                      if (creativeFileInputRef.current) creativeFileInputRef.current.value = ""
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
-              </div>
-            )}
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => creativeFileInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-[#5C6ECD]/50 hover:bg-[#5C6ECD]/5 transition-colors cursor-pointer"
+                >
+                  <Upload className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Click to upload a file</span>
+                  <span className="text-xs text-muted-foreground">Images, Videos, PDF, PSD, AI, Figma</span>
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
             <Button variant="outline" onClick={() => setAddCreativeOpen(false)}>Cancel</Button>
@@ -1327,6 +1442,17 @@ export function RoomContent({ clientData, orgMembers = [] }: RoomContentProps) {
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
       `}</style>
+
+      {/* Edit Client Onboarding */}
+      {clientEditData && (
+        <NewClientOnboarding
+          open={editClientOpen}
+          onClose={() => setEditClientOpen(false)}
+          editMode
+          initialData={clientEditData as Partial<ClientFormData>}
+          onComplete={(data) => handleUpdateClient(data as unknown as Record<string, unknown>)}
+        />
+      )}
     </main>
   )
 }
