@@ -503,7 +503,10 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
         )} />
       </button>
       {dropdownOpen === id && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-2xl max-h-48 overflow-auto" style={{ zIndex: 99999 }}>
+        <div className={cn(
+          "absolute left-0 right-0 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-2xl max-h-48 overflow-auto",
+          className.includes("dropdown-upward") ? "bottom-full mb-1" : "top-full mt-1"
+        )} style={{ zIndex: 99999 }}>
           {options.map((opt) => (
             <button
               key={opt}
@@ -1364,7 +1367,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-1">Naming Convention</h3>
                   <p className="text-xs text-[#999] mb-3">Suggested order : Brand Name_Project name_Date_Version</p>
-                  <div className="flex items-center gap-1 overflow-x-auto pb-2">
+                  <div className="flex items-center gap-1 flex-wrap pb-2">
                     {formData.namingColumns.map((col, index) => (
                       <React.Fragment key={col.id}>
                         <div className="shrink-0 min-w-[120px]">
@@ -1374,6 +1377,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                             options={namingOptions}
                             placeholder="Select"
                             onChange={(value) => updateNamingColumn(col.id, value)}
+                            className="dropdown-upward"
                           />
                         </div>
                         {index < formData.namingColumns.length - 1 && (
