@@ -654,9 +654,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
         <div className="flex items-center justify-between">
           {/* Revue Logo */}
-          <div className="flex items-center gap-3">
-            <img src="/Logo/Artboard 5@2x.png" alt="Revue" width={32} height={32} />
-            <span className="text-lg font-semibold text-[#1a1a1a] dark:text-white">Revue</span>
+          <div className="flex items-center">
+            <img src="/Logo/Artboard 8@2x.png" alt="Revue" width={120} height={37} className="dark:hidden" />
+            <img src="/Logo/Artboard 8 copy@2x.png" alt="Revue" width={120} height={37} className="hidden dark:block" />
           </div>
 
           {/* Steps Indicator - Same style as NewClientOnboarding */}

@@ -225,7 +225,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   }
 
   // Build edit data for the client onboarding form
-  const contactsRaw = (client.contacts as { name: string; email: string; country_code: string; phone: string }[]) || []
+  const contactsRaw = (client.contacts as { name: string; email: string; country_code: string; phone: string; whatsapp?: boolean }[]) || []
   const socialLinksRaw = (client.social_links as { platform: string; url: string }[]) || []
   const brandImageUrlsRaw = (client.brand_image_urls as string[]) || []
 
@@ -244,8 +244,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
           email: c.email || "",
           countryCode: c.country_code || "+91",
           phone: c.phone || "",
+          whatsapp: c.whatsapp ?? false,
         }))
-      : [{ id: "1", name: "", email: "", countryCode: "+91", phone: "" }],
+      : [{ id: "1", name: "", email: "", countryCode: "+91", phone: "", whatsapp: false }],
     socialLinks: socialLinksRaw.length > 0
       ? socialLinksRaw.map((s, i) => ({
           id: String(i + 1),
