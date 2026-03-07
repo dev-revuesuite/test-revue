@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare,
   CheckCircle, ArrowLeft, Plus,
@@ -412,6 +412,14 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
 
   const client = clientData
 
+  // Sync selectedProject when clientData.projects changes (e.g. after router.refresh())
+  useEffect(() => {
+    if (clientData.projects.length > 0 && !selectedProject) {
+      setSelectedProject(clientData.projects[0])
+      setEditData(clientData.projects[0])
+    }
+  }, [clientData.projects, selectedProject])
+
   const projectCounts = client.projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; acc.all = (acc.all || 0) + 1; return acc }, {} as Record<string, number>)
   const filteredProjects = client.projects.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -758,10 +766,48 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
               {filteredProjects.map((project) => (
                 <ProjectCard key={project.id} project={project} isSelected={selectedProject?.id === project.id} onClick={() => handleProjectSelect(project)} clientLogo={client.logoUrl} />
               ))}
-              {filteredProjects.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">No projects found</div>}
+              {filteredProjects.length === 0 && client.projects.length > 0 && <div className="p-8 text-center text-muted-foreground text-sm">No projects found</div>}
+              {client.projects.length === 0 && (
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-3">
+                    <FolderOpen className="w-6 h-6 text-[#5C6ECD]" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground mb-1">No projects yet</p>
+                  <p className="text-xs text-muted-foreground mb-4">Create your first project to get started</p>
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Project
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Center Panel - Empty State */}
+        {!selectedProject && (
+          <div className="flex-1 flex flex-col items-center justify-center min-w-0 h-full bg-muted/20">
+            <div className="text-center max-w-sm mx-auto px-6">
+              <div className="w-20 h-20 rounded-2xl bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-5">
+                <Briefcase className="w-10 h-10 text-[#5C6ECD]" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-2">Add your first project</h3>
+              <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                Create a project to start managing briefs, deliverables, and creatives for {client.name}.
+              </p>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
+                className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-xl shadow-lg shadow-[#5C6ECD]/25 transition-all"
+              >
+                <Plus className="w-5 h-5" />
+                Create Project
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Center Panel - Project Details */}
         {selectedProject && currentStatus && data && (

@@ -188,6 +188,13 @@ export function StudioHeader({
     return () => window.removeEventListener("revue:open-add-client", handler)
   }, [])
 
+  // Listen for custom event to open Add Brief/Project dialog
+  React.useEffect(() => {
+    const handler = () => setNewBriefDialogOpen(true)
+    window.addEventListener("revue:open-add-brief", handler)
+    return () => window.removeEventListener("revue:open-add-brief", handler)
+  }, [])
+
   const toggleTheme = () => {
     const newIsDark = !isDark
     setIsDark(newIsDark)
