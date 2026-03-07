@@ -1026,7 +1026,7 @@ export function StudioHeader({
 
           // Upload reference files to storage
           const referencesJson = []
-          for (const ref of data.references) {
+          for (const ref of data.references.filter(r => r.type === "file")) {
             if (!ref.name.trim() && !ref.file) continue
             let fileUrl: string | null = null
             if (ref.file) {
@@ -1053,9 +1053,6 @@ export function StudioHeader({
             name: projectName,
             description: data.description || null,
             project_type: data.projectType || null,
-            industry: data.industry || null,
-            deliverable: data.deliverable || null,
-            scope_description: data.scopeDescription || null,
             start_date: data.startDate || null,
             end_date: data.endDate || null,
             end_time: null,
@@ -1083,9 +1080,9 @@ export function StudioHeader({
               .filter((r) => r.name.trim())
               .map((r) => ({ name: r.name.trim(), role: r.role })),
             references_data: referencesJson,
-            external_links: data.externalLinks
-              .filter((l) => l.name.trim())
-              .map((l) => ({ name: l.name.trim() })),
+            external_links: data.references
+              .filter((r) => r.type === "link" && r.name.trim())
+              .map((r) => ({ name: r.name.trim() })),
             naming_columns: data.namingColumns.map((c) => c.value),
           })
 

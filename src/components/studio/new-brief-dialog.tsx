@@ -14,7 +14,8 @@ import {
   Search,
   Sparkles,
   Zap,
-  CalendarIcon
+  CalendarIcon,
+  ExternalLink as LinkIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -40,12 +41,8 @@ interface TeamRole {
 interface Reference {
   id: string
   name: string
+  type: "file" | "link"
   file?: File
-}
-
-interface ExternalLink {
-  id: string
-  name: string
 }
 
 interface NamingColumn {
@@ -59,23 +56,18 @@ interface BriefFormData {
   description: string
   clientName: string
   projectType: string
-  // Step 2: Project Scope & Objective
-  industry: string
-  deliverable: string
-  scopeDescription: string
-  // Step 3: Timeline & Milestone
+  // Step 2: Timeline & Milestone
   startDate: string
   endDate: string
   deliverableStages: DeliverableStage[]
-  // Step 4: Team & Roles
+  // Step 3: Team & Roles
   accountManager: string
   autoDeleteIteration: string
   needQCTool: boolean
   workmode: "productive" | "creative"
   teamRoles: TeamRole[]
-  // Step 5: Resources
+  // Step 4: Resources
   references: Reference[]
-  externalLinks: ExternalLink[]
   namingColumns: NamingColumn[]
   otherDescription: string
 }
@@ -92,30 +84,6 @@ const projectTypes = [
   "Video Production",
   "Photography",
   "Social Media",
-  "Other"
-]
-
-const industries = [
-  "Technology",
-  "Healthcare",
-  "Finance",
-  "Education",
-  "E-commerce",
-  "Manufacturing",
-  "Real Estate",
-  "Entertainment",
-  "Food & Beverage",
-  "Travel & Hospitality",
-  "Other"
-]
-
-const scopeDescriptions = [
-  "Full project scope",
-  "Partial scope - Design only",
-  "Partial scope - Development only",
-  "Consultation",
-  "Revision/Updates",
-  "Maintenance",
   "Other"
 ]
 
@@ -176,7 +144,7 @@ interface NewBriefDialogProps {
 
 export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = [], teamMembers = [] }: NewBriefDialogProps) {
   const [step, setStep] = useState(1)
-  const totalSteps = 5
+  const totalSteps = 4
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
   // Convert teamMembers to TeamMember format for dropdowns
@@ -193,9 +161,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     description: "",
     clientName: "",
     projectType: "UI Designing",
-    industry: "",
-    deliverable: "",
-    scopeDescription: "",
     startDate: "",
     endDate: "",
     deliverableStages: [
@@ -210,8 +175,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       { id: "1", name: "", role: "Client Servicing" },
       { id: "2", name: "", role: "Client Servicing" },
     ],
-    references: [{ id: "1", name: "" }],
-    externalLinks: [{ id: "1", name: "" }],
+    references: [],
     namingColumns: [
       { id: "1", value: "Brand Name" },
       { id: "2", value: "Project Name" },
@@ -235,6 +199,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   }, [open])
 
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
+  const [refTypePopoverOpen, setRefTypePopoverOpen] = useState(false)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -242,10 +207,13 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       if (dropdownOpen && !(e.target as Element).closest('.dropdown-container')) {
         setDropdownOpen(null)
       }
+      if (refTypePopoverOpen && !(e.target as Element).closest('.ref-type-popover')) {
+        setRefTypePopoverOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [dropdownOpen])
+  }, [dropdownOpen, refTypePopoverOpen])
 
   const clearError = (field: keyof BriefFormErrors) => {
     setErrors(prev => {
@@ -263,7 +231,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       if (!formData.clientName.trim()) newErrors.clientName = "Please select a client"
     }
 
-    if (currentStep === 3) {
+    if (currentStep === 2) {
       if (!formData.startDate) newErrors.startDate = "Start date is required"
       if (!formData.endDate) newErrors.endDate = "End date is required"
       if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
@@ -271,7 +239,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       }
     }
 
-    if (currentStep === 4) {
+    if (currentStep === 3) {
       if (!formData.accountManager) newErrors.accountManager = "Please select an account manager"
     }
 
@@ -304,12 +272,10 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       case 1:
         return formData.projectName.trim() !== "" && formData.clientName.trim() !== ""
       case 2:
-        return true
-      case 3:
         return formData.startDate !== "" && formData.endDate !== ""
-      case 4:
+      case 3:
         return formData.accountManager !== ""
-      case 5:
+      case 4:
         return true
       default:
         return true
@@ -356,42 +322,22 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     }
   }
 
-  const addReference = () => {
+  const addReference = (type: "file" | "link") => {
     setFormData(prev => ({
       ...prev,
       references: [
         ...prev.references,
-        { id: Date.now().toString(), name: "" }
+        { id: Date.now().toString(), name: "", type }
       ]
     }))
+    setRefTypePopoverOpen(false)
   }
 
   const removeReference = (id: string) => {
-    if (formData.references.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        references: prev.references.filter(r => r.id !== id)
-      }))
-    }
-  }
-
-  const addExternalLink = () => {
     setFormData(prev => ({
       ...prev,
-      externalLinks: [
-        ...prev.externalLinks,
-        { id: Date.now().toString(), name: "" }
-      ]
+      references: prev.references.filter(r => r.id !== id)
     }))
-  }
-
-  const removeExternalLink = (id: string) => {
-    if (formData.externalLinks.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        externalLinks: prev.externalLinks.filter(l => l.id !== id)
-      }))
-    }
   }
 
   const addNamingColumn = () => {
@@ -428,15 +374,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       ...prev,
       references: prev.references.map(r =>
         r.id === id ? { ...r, name } : r
-      )
-    }))
-  }
-
-  const updateExternalLink = (id: string, name: string) => {
-    setFormData(prev => ({
-      ...prev,
-      externalLinks: prev.externalLinks.map(l =>
-        l.id === id ? { ...l, name } : l
       )
     }))
   }
@@ -678,10 +615,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           <div className="flex items-center gap-6">
             {[
               { num: 1, label: "Brand Information" },
-              { num: 2, label: "Project scope & Objective" },
-              { num: 3, label: "Timeline & Milestone" },
-              { num: 4, label: "Team & Roles" },
-              { num: 5, label: "Resources" }
+              { num: 2, label: "Timeline & Milestone" },
+              { num: 3, label: "Team & Roles" },
+              { num: 4, label: "Resources" }
             ].map((s, i) => (
               <div key={s.num} className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -708,7 +644,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                     {s.label}
                   </span>
                 </div>
-                {i < 4 && (
+                {i < 3 && (
                   <div className={cn(
                     "w-12 h-0.5 rounded-full transition-colors",
                     step > s.num ? "bg-[#5C6ECD]" : "bg-[#e5e5e5] dark:bg-[#333]"
@@ -822,76 +758,13 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
             </div>
           )}
 
-          {/* Step 2: Project Scope & Objective */}
+          {/* Step 2: Timeline & Milestone */}
           {step === 2 && (
             <div>
               {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
                   <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">2</span>
-                  Project scope & Objective
-                </div>
-                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
-                  Define the scope
-                </h1>
-                <p className="text-[#666] dark:text-[#999]">
-                  What will be delivered in this project
-                </p>
-              </div>
-
-              <div className="space-y-6 overflow-visible">
-                {/* Industry */}
-                <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Industry
-                  </label>
-                  <CustomDropdown
-                    id="industry"
-                    value={formData.industry}
-                    options={industries}
-                    placeholder="Select Industry"
-                    onChange={(value) => setFormData(prev => ({ ...prev, industry: value }))}
-                  />
-                </div>
-
-                {/* Deliverable */}
-                <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Deliverable
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.deliverable}
-                    onChange={(e) => setFormData(prev => ({ ...prev, deliverable: e.target.value }))}
-                    placeholder="Enter deliverable"
-                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Description
-                  </label>
-                  <CustomDropdown
-                    id="scopeDescription"
-                    value={formData.scopeDescription}
-                    options={scopeDescriptions}
-                    placeholder="Select Description"
-                    onChange={(value) => setFormData(prev => ({ ...prev, scopeDescription: value }))}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Timeline & Milestone */}
-          {step === 3 && (
-            <div>
-              {/* Step Header */}
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
-                  <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">3</span>
                   Timeline & Milestone
                 </div>
                 <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
@@ -979,80 +852,94 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   </div>
                 </div>
 
-                {/* Deliverables Dates */}
+                {/* Milestones */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Deliverables Dates</h3>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Milestones</h3>
                   <div className="space-y-3">
-                    {formData.deliverableStages.map((stage) => (
-                      <div key={stage.id} className="flex items-center gap-3">
-                        <div className="px-4 py-2 rounded-full bg-[#DBFE52] text-black text-sm font-medium min-w-[80px] text-center">
-                          {stage.stage}
-                        </div>
-                        <input
-                          type="text"
-                          value={stage.description}
-                          onChange={(e) => updateDeliverableStage(stage.id, 'description', e.target.value)}
-                          placeholder="Description"
-                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-[180px] justify-start text-left font-normal h-12 px-4 border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
-                                !stage.date && "text-[#999]"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4 text-[#5C6ECD]" />
-                              {stage.date ? format(new Date(stage.date), "MMM dd, yyyy") : "Select date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={stage.date ? new Date(stage.date) : undefined}
-                              onSelect={(date) => updateDeliverableStage(stage.id, 'date', date ? format(date, "yyyy-MM-dd") : "")}
-                              disabled={(date) => {
-                                if (formData.startDate && date < new Date(formData.startDate)) return true
-                                if (formData.endDate && date > new Date(formData.endDate)) return true
-                                return false
-                              }}
-                              initialFocus
+                    {formData.deliverableStages.map((stage, index) => (
+                      <div key={stage.id} className="group relative border border-[#e5e5e5] dark:border-[#333] p-4 hover:border-[#5C6ECD]/30 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className="w-7 h-7 bg-[#5C6ECD] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1 space-y-3">
+                            <input
+                              type="text"
+                              value={stage.stage}
+                              onChange={(e) => updateDeliverableStage(stage.id, 'stage', e.target.value)}
+                              placeholder="Milestone name"
+                              className="w-full text-sm font-medium text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none bg-transparent border-b border-transparent focus:border-[#5C6ECD] transition-colors pb-1"
                             />
-                          </PopoverContent>
-                        </Popover>
-                        {formData.deliverableStages.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeDeliverableStage(stage.id)}
-                            className="p-2 text-[#999] hover:text-red-500 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="text"
+                                value={stage.description}
+                                onChange={(e) => updateDeliverableStage(stage.id, 'description', e.target.value)}
+                                placeholder="Description (optional)"
+                                className="flex-1 text-sm text-[#666] dark:text-[#999] placeholder:text-[#bbb] dark:placeholder:text-[#555] outline-none bg-transparent"
+                              />
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className={cn(
+                                      "shrink-0 justify-start text-left font-normal h-9 px-3 text-sm border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                                      !stage.date && "text-[#999]"
+                                    )}
+                                  >
+                                    <CalendarIcon className="mr-2 h-3.5 w-3.5 text-[#5C6ECD]" />
+                                    {stage.date ? format(new Date(stage.date), "MMM dd") : "Set date"}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="end">
+                                  <Calendar
+                                    mode="single"
+                                    selected={stage.date ? new Date(stage.date) : undefined}
+                                    onSelect={(date) => updateDeliverableStage(stage.id, 'date', date ? format(date, "yyyy-MM-dd") : "")}
+                                    disabled={(date) => {
+                                      if (formData.startDate && date < new Date(formData.startDate)) return true
+                                      if (formData.endDate && date > new Date(formData.endDate)) return true
+                                      return false
+                                    }}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                          </div>
+                          {formData.deliverableStages.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeDeliverableStage(stage.id)}
+                              className="p-1 text-[#ccc] dark:text-[#555] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
                   <button
                     type="button"
                     onClick={addDeliverableStage}
-                    className="mt-4 w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
+                    className="mt-3 w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
                   >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4" />
+                    Add milestone
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 4: Team & Roles */}
-          {step === 4 && (
+          {/* Step 3: Team & Roles */}
+          {step === 3 && (
             <div>
               {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
-                  <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">4</span>
+                  <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">3</span>
                   Team & Roles
                 </div>
                 <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
@@ -1265,13 +1152,13 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
             </div>
           )}
 
-          {/* Step 5: Resources */}
-          {step === 5 && (
+          {/* Step 4: Resources */}
+          {step === 4 && (
             <div>
               {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
-                  <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">5</span>
+                  <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">4</span>
                   Resources
                 </div>
                 <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
@@ -1283,95 +1170,91 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
               </div>
 
               <div className="space-y-6 overflow-visible">
-                {/* Reference's */}
+                {/* References (combined file + link) */}
                 <div>
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Reference's</h3>
-                  <div className="space-y-3">
-                    {formData.references.map((ref, index) => (
-                      <div key={ref.id} className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-[#5C6ECD] text-white flex items-center justify-center text-sm font-medium shrink-0">
-                          {index + 1}
-                        </div>
-                        <input
-                          type="text"
-                          value={ref.name}
-                          onChange={(e) => updateReference(ref.id, e.target.value)}
-                          placeholder="Deliverable Name"
-                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
-                        <input
-                          ref={(el) => { fileInputRefs.current[ref.id] = el }}
-                          type="file"
-                          onChange={(e) => handleFileUpload(ref.id, e)}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => fileInputRefs.current[ref.id]?.click()}
-                          className="flex items-center gap-2 px-4 py-2.5 border border-[#e5e5e5] dark:border-[#444] text-[#1a1a1a] dark:text-white text-sm font-medium hover:border-[#5C6ECD] transition-colors"
-                        >
-                          <Upload className="w-4 h-4" />
-                          UPLOAD
-                        </button>
-                        {formData.references.length > 1 && (
+                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">References</h3>
+                  {formData.references.length > 0 ? (
+                    <div className="space-y-2 mb-3">
+                      {formData.references.map((ref) => (
+                        <div key={ref.id} className="group flex items-center gap-3 p-3 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                          <div className={cn(
+                            "w-8 h-8 flex items-center justify-center shrink-0 text-white text-xs font-bold",
+                            ref.type === "file" ? "bg-[#5C6ECD]" : "bg-[#10b981]"
+                          )}>
+                            {ref.type === "file" ? <Upload className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                          </div>
+                          <input
+                            type="text"
+                            value={ref.name}
+                            onChange={(e) => updateReference(ref.id, e.target.value)}
+                            placeholder={ref.type === "file" ? "Reference name" : "Paste link URL"}
+                            className="flex-1 text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none bg-transparent"
+                          />
+                          {ref.type === "file" && (
+                            <>
+                              <input
+                                ref={(el) => { fileInputRefs.current[ref.id] = el }}
+                                type="file"
+                                onChange={(e) => handleFileUpload(ref.id, e)}
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => fileInputRefs.current[ref.id]?.click()}
+                                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#e5e5e5] dark:border-[#444] text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
+                              >
+                                <Upload className="w-3 h-3" />
+                                {ref.file ? ref.file.name.slice(0, 15) : "Upload"}
+                              </button>
+                            </>
+                          )}
+                          <span className="text-[10px] uppercase tracking-wider text-[#999] font-medium shrink-0">
+                            {ref.type}
+                          </span>
                           <button
                             type="button"
                             onClick={() => removeReference(ref.id)}
-                            className="p-2 text-[#999] hover:text-red-500 transition-colors"
+                            className="p-1 text-[#ccc] dark:text-[#555] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
                           >
-                            <X className="w-4 h-4" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button
-                      type="button"
-                      onClick={addReference}
-                      className="w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Link to external document */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Link to external document</h3>
-                  <div className="space-y-3">
-                    {formData.externalLinks.map((link, index) => (
-                      <div key={link.id} className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-[#5C6ECD] text-white flex items-center justify-center text-sm font-medium shrink-0">
-                          {index + 1}
                         </div>
-                        <input
-                          type="text"
-                          value={link.name}
-                          onChange={(e) => updateExternalLink(link.id, e.target.value)}
-                          placeholder="Deliverable Name"
-                          className="flex-1 px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
-                        {formData.externalLinks.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeExternalLink(link.id)}
-                            className="p-2 text-[#999] hover:text-red-500 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-4">
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mb-3 py-6 border border-dashed border-[#e5e5e5] dark:border-[#333] text-center">
+                      <p className="text-sm text-[#999]">No references added yet</p>
+                    </div>
+                  )}
+                  <div className="relative inline-block ref-type-popover">
                     <button
                       type="button"
-                      onClick={addExternalLink}
-                      className="w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
+                      onClick={() => setRefTypePopoverOpen(!refTypePopoverOpen)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-dashed border-[#ccc] dark:border-[#444] text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
                     >
-                      <Plus className="w-5 h-5" />
+                      <Plus className="w-4 h-4" />
+                      Add reference
                     </button>
+                    {refTypePopoverOpen && (
+                      <div className="absolute left-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-xl z-50 w-48">
+                        <button
+                          type="button"
+                          onClick={() => addReference("file")}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors"
+                        >
+                          <Upload className="w-4 h-4 text-[#5C6ECD]" />
+                          <span className="text-[#1a1a1a] dark:text-white">Upload file</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addReference("link")}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors border-t border-[#e5e5e5] dark:border-[#444]"
+                        >
+                          <LinkIcon className="w-4 h-4 text-[#10b981]" />
+                          <span className="text-[#1a1a1a] dark:text-white">External link</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
