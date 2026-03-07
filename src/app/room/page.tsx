@@ -92,7 +92,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   const { data: projects } = await supabase
     .from("projects")
     .select(
-      "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,team_roles,references_data,external_links,budget,project_deliverables"
+      "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables"
     )
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
@@ -112,6 +112,28 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     acc[c.project_id].push(c)
     return acc
   }, {})
+
+  // Fetch project members from junction table
+  const { data: projectMembersData } = projectIds.length > 0
+    ? await supabase
+        .from("project_members")
+        .select("project_id, member_id, role, organization_members(name, avatar_url)")
+        .in("project_id", projectIds)
+    : { data: [] }
+
+  const projectTeamMap: Record<string, { id: string; name: string; role: string; avatar?: string }[]> = {}
+  for (const pm of projectMembersData || []) {
+    if (!projectTeamMap[pm.project_id]) projectTeamMap[pm.project_id] = []
+    const member = pm.organization_members as unknown as { name: string; avatar_url: string | null }
+    if (member) {
+      projectTeamMap[pm.project_id].push({
+        id: pm.member_id,
+        name: member.name || "",
+        role: pm.role || "member",
+        avatar: member.avatar_url || undefined,
+      })
+    }
+  }
 
   const fontsRaw = (client.fonts as { label: string; font_name: string; font_url: string | null }[]) || []
   const colorsRaw = (client.colors as { hex: string; font_label: string | null; name: string | null }[]) || []
@@ -166,14 +188,12 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
           | "iteration_approved"
           | "completed",
         workmode: (p.workmode || "productive") as "productive" | "creative",
-        team: ((p.team_roles as Record<string, string>[]) || []).map(
-          (t, i) => ({
-            id: `t${i}`,
-            name: t.name || "",
-            role: t.role || "",
-            avatar: undefined as string | undefined,
-          })
-        ),
+        team: (projectTeamMap[p.id] || []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          role: t.role,
+          avatar: t.avatar,
+        })),
         additionalMembers: 0,
         references: ((p.references_data as Record<string, string>[]) || []).map(
           (r, i) => ({

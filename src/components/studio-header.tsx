@@ -1048,7 +1048,7 @@ export function StudioHeader({
             })
           }
 
-          const { error } = await supabase.from("projects").insert({
+          const { data: newProject, error } = await supabase.from("projects").insert({
             client_id: clientId,
             name: projectName,
             description: data.description || null,
@@ -1076,19 +1076,38 @@ export function StudioHeader({
                 status: "pending",
                 dueDate: s.date || null,
               })),
-            team_roles: data.teamRoles
-              .filter((r) => r.name.trim())
-              .map((r) => ({ name: r.name.trim(), role: r.role })),
             references_data: referencesJson,
             external_links: data.references
               .filter((r) => r.type === "link" && r.name.trim())
               .map((r) => ({ name: r.name.trim() })),
             naming_columns: data.namingColumns.map((c) => c.value),
-          })
+          }).select("id").single()
 
-          if (error) {
+          if (error || !newProject) {
             console.error("Failed to create project:", error)
             return
+          }
+
+          // Insert project members into the junction table
+          const projectMembers: { project_id: string; member_id: string; role: string }[] = []
+
+          // Add manager
+          if (data.accountManager) {
+            const manager = teamMembers.find(m => m.name === data.accountManager)
+            if (manager) {
+              projectMembers.push({ project_id: newProject.id, member_id: manager.id, role: "manager" })
+            }
+          }
+
+          // Add team members
+          for (const memberId of data.teamMemberIds) {
+            if (!projectMembers.some(pm => pm.member_id === memberId)) {
+              projectMembers.push({ project_id: newProject.id, member_id: memberId, role: "member" })
+            }
+          }
+
+          if (projectMembers.length > 0) {
+            await supabase.from("project_members").insert(projectMembers)
           }
 
           setNewBriefDialogOpen(false)

@@ -585,11 +585,12 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
   const handleAddTeamMember = async () => {
     if (!selectedProject || !newTeamMember.name.trim()) return
     const orgMember = orgMembers.find((m) => m.name === newTeamMember.name)
+    if (!orgMember) return
     const member: TeamMember = {
-      id: `t${Date.now()}`,
+      id: orgMember.id,
       name: newTeamMember.name.trim(),
       role: newTeamMember.role,
-      avatar: orgMember?.avatar || undefined,
+      avatar: orgMember.avatar || undefined,
     }
     const updatedTeam = [...selectedProject.team, member]
     const updatedProject = { ...selectedProject, team: updatedTeam }
@@ -598,9 +599,12 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
     setNewTeamMember({ name: "", role: "Designer" })
     setMemberSearchQuery("")
     setAddTeamMemberOpen(false)
-    // Persist to team_roles JSONB
-    const teamRolesJson = updatedTeam.map((t) => ({ name: t.name, role: t.role }))
-    await supabase.from("projects").update({ team_roles: teamRolesJson }).eq("id", selectedProject.id)
+    // Persist to project_members table
+    await supabase.from("project_members").upsert({
+      project_id: selectedProject.id,
+      member_id: orgMember.id,
+      role: "member",
+    }, { onConflict: "project_id,member_id" })
   }
 
   const handleUpdateClient = async (data: Record<string, unknown>) => {

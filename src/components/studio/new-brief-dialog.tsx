@@ -31,13 +31,6 @@ interface DeliverableStage {
   date: string
 }
 
-interface TeamRole {
-  id: string
-  name: string
-  role: string
-  avatar?: string
-}
-
 interface Reference {
   id: string
   name: string
@@ -60,12 +53,12 @@ interface BriefFormData {
   startDate: string
   endDate: string
   deliverableStages: DeliverableStage[]
-  // Step 3: Team & Roles
+  // Step 3: Team & Settings
   accountManager: string
+  teamMemberIds: string[]
   autoDeleteIteration: string
   needQCTool: boolean
   workmode: "productive" | "creative"
-  teamRoles: TeamRole[]
   // Step 4: Resources
   references: Reference[]
   namingColumns: NamingColumn[]
@@ -102,17 +95,6 @@ const deleteIterationOptions = [
   "60 Days",
   "90 Days",
   "Never"
-]
-
-const roleOptions = [
-  "Client Servicing",
-  "Designer",
-  "Developer",
-  "Project Manager",
-  "QC Analyst",
-  "Content Writer",
-  "Marketing",
-  "Other"
 ]
 
 const namingOptions = [
@@ -168,13 +150,10 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       { id: "2", stage: "Stage 2", description: "", date: "" },
     ],
     accountManager: "",
+    teamMemberIds: [],
     autoDeleteIteration: "30 Days",
     needQCTool: false,
     workmode: "productive",
-    teamRoles: [
-      { id: "1", name: "", role: "Client Servicing" },
-      { id: "2", name: "", role: "Client Servicing" },
-    ],
     references: [],
     namingColumns: [
       { id: "1", value: "Brand Name" },
@@ -303,24 +282,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     }
   }
 
-  const addTeamRole = () => {
-    setFormData(prev => ({
-      ...prev,
-      teamRoles: [
-        ...prev.teamRoles,
-        { id: Date.now().toString(), name: "", role: "Client Servicing" }
-      ]
-    }))
-  }
-
-  const removeTeamRole = (id: string) => {
-    if (formData.teamRoles.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        teamRoles: prev.teamRoles.filter(r => r.id !== id)
-      }))
-    }
-  }
 
   const addReference = (type: "file" | "link") => {
     setFormData(prev => ({
@@ -356,15 +317,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       ...prev,
       deliverableStages: prev.deliverableStages.map(s =>
         s.id === id ? { ...s, [field]: value } : s
-      )
-    }))
-  }
-
-  const updateTeamRole = (id: string, field: keyof TeamRole, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      teamRoles: prev.teamRoles.map(r =>
-        r.id === id ? { ...r, [field]: value } : r
       )
     }))
   }
@@ -616,7 +568,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
             {[
               { num: 1, label: "Brand Information" },
               { num: 2, label: "Timeline & Milestone" },
-              { num: 3, label: "Team & Roles" },
+              { num: 3, label: "Team & Settings" },
               { num: 4, label: "Resources" }
             ].map((s, i) => (
               <div key={s.num} className="flex items-center gap-3">
@@ -933,20 +885,20 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
             </div>
           )}
 
-          {/* Step 3: Team & Roles */}
+          {/* Step 3: Team & Settings */}
           {step === 3 && (
             <div>
               {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
                   <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">3</span>
-                  Team & Roles
+                  Team & Settings
                 </div>
                 <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
                   Assign the team
                 </h1>
                 <p className="text-[#666] dark:text-[#999]">
-                  Select team members and their roles
+                  Select team members for this project
                 </p>
               </div>
 
@@ -954,7 +906,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                 {/* Account Manager */}
                 <div>
                   <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Account manager <span className="text-[#5C6ECD] font-normal">*</span>
+                    Project Manager <span className="text-[#5C6ECD] font-normal">*</span>
                   </label>
                   <RichDropdown
                     id="accountManager"
@@ -969,37 +921,58 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   {errors.accountManager && <p className="text-xs text-red-500 mt-1">{errors.accountManager}</p>}
                 </div>
 
-                {/* Auto delete iteration */}
-                <div className="flex items-center justify-between pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <label className="text-sm font-semibold text-[#1a1a1a] dark:text-white">
-                    Auto delete iteration after
-                  </label>
-                  <div className="w-32">
-                    <CustomDropdown
-                      id="autoDeleteIteration"
-                      value={formData.autoDeleteIteration}
-                      options={deleteIterationOptions}
-                      placeholder="Select"
-                      onChange={(value) => setFormData(prev => ({ ...prev, autoDeleteIteration: value }))}
-                    />
-                  </div>
-                </div>
-
-                {/* QC Tool */}
+                {/* Team Members */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white">QC Tool</h3>
-                    <Info className="w-4 h-4 text-[#666]" />
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.needQCTool}
-                      onChange={(e) => setFormData(prev => ({ ...prev, needQCTool: e.target.checked }))}
-                      className="w-4 h-4 border-black dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
-                    />
-                    <span className="text-sm text-[#1a1a1a] dark:text-white">Need QC Tool</span>
-                  </label>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Team Members</h3>
+                  {/* Selected members */}
+                  {formData.teamMemberIds.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {formData.teamMemberIds.map((memberId) => {
+                        const member = teamMembersData.find(m => m.id === memberId)
+                        if (!member) return null
+                        return (
+                          <div key={memberId} className="group flex items-center gap-3 p-3 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                            {member.avatar ? (
+                              <img src={member.avatar} alt="" className="w-8 h-8 object-cover rounded shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded shrink-0">
+                                <span className="text-white text-xs font-bold">{member.name.substring(0, 2).toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{member.name}</p>
+                              <p className="text-xs text-[#666] truncate">{member.email}</p>
+                            </div>
+                            <span className="text-[10px] uppercase tracking-wider text-[#999] font-medium shrink-0">Designer</span>
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, teamMemberIds: prev.teamMemberIds.filter(id => id !== memberId) }))}
+                              className="p-1 text-[#ccc] dark:text-[#555] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {/* Add member dropdown */}
+                  <RichDropdown
+                    id="addTeamMember"
+                    value=""
+                    members={teamMembersData.filter(m =>
+                      !formData.teamMemberIds.includes(m.id) &&
+                      m.name !== formData.accountManager
+                    )}
+                    placeholder="+ Add team member"
+                    showRole={true}
+                    onChange={(value) => {
+                      const member = teamMembersData.find(m => m.name === value)
+                      if (member && !formData.teamMemberIds.includes(member.id)) {
+                        setFormData(prev => ({ ...prev, teamMemberIds: [...prev.teamMemberIds, member.id] }))
+                      }
+                    }}
+                  />
                 </div>
 
                 {/* Workmode */}
@@ -1052,11 +1025,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                           : "border-[#e5e5e5] dark:border-[#444] hover:border-[#A259FF]/50"
                       )}
                     >
-                      {/* Gradient overlay for unselected state on hover */}
                       {formData.workmode !== "creative" && (
                         <div className="absolute inset-0 bg-gradient-to-br from-[#A259FF]/0 via-[#FF7262]/0 to-[#DBFE52]/0 group-hover:from-[#A259FF]/5 group-hover:via-[#FF7262]/5 group-hover:to-[#DBFE52]/5 transition-all" />
                       )}
-                      {/* Inner content background for selected state */}
                       {formData.workmode === "creative" && (
                         <div className="absolute inset-[2px] bg-white dark:bg-[#0a0a0a]" />
                       )}
@@ -1093,60 +1064,32 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   </div>
                 </div>
 
-                {/* Roles */}
+                {/* Settings Row */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Roles</h3>
-                  <div className="space-y-3">
-                    {formData.teamRoles.map((role) => {
-                      const selectedMember = teamMembersData.find(m => m.name === role.name)
-                      return (
-                        <div key={role.id} className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-[#e5e5e5] dark:bg-[#333] flex items-center justify-center overflow-hidden shrink-0">
-                            {selectedMember?.avatar ? (
-                              <img src={selectedMember.avatar} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-[#666] text-xs">IMG</span>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <RichDropdown
-                              id={`teamMember-${role.id}`}
-                              value={role.name}
-                              members={teamMembersData.filter(m => m.name === role.name || !formData.teamRoles.some(r => r.name === m.name))}
-                              placeholder="Select Team Member"
-                              showRole={true}
-                              onChange={(value) => updateTeamRole(role.id, 'name', value)}
-                            />
-                          </div>
-                          <div className="w-44 shrink-0">
-                            <CustomDropdown
-                              id={`role-${role.id}`}
-                              value={role.role}
-                              options={roleOptions}
-                              placeholder="Select Role"
-                              onChange={(value) => updateTeamRole(role.id, 'role', value)}
-                            />
-                          </div>
-                          {formData.teamRoles.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeTeamRole(role.id)}
-                              className="p-2 text-[#999] hover:text-red-500 transition-colors shrink-0"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-sm font-semibold text-[#1a1a1a] dark:text-white">
+                      Auto delete iteration after
+                    </label>
+                    <div className="w-32">
+                      <CustomDropdown
+                        id="autoDeleteIteration"
+                        value={formData.autoDeleteIteration}
+                        options={deleteIterationOptions}
+                        placeholder="Select"
+                        onChange={(value) => setFormData(prev => ({ ...prev, autoDeleteIteration: value }))}
+                      />
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={addTeamRole}
-                    className="mt-4 w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.needQCTool}
+                      onChange={(e) => setFormData(prev => ({ ...prev, needQCTool: e.target.checked }))}
+                      className="w-4 h-4 border-black dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
+                    />
+                    <span className="text-sm text-[#1a1a1a] dark:text-white">Need QC Tool</span>
+                    <Info className="w-4 h-4 text-[#666]" />
+                  </label>
                 </div>
               </div>
             </div>

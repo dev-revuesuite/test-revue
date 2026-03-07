@@ -75,7 +75,7 @@ export default async function ProductiveZonePage() {
     ? await supabase
         .from("projects")
         .select(
-          "id,name,project_type,client_id,status,brief_status,start_date,end_date,created_at,team_roles,workmode"
+          "id,name,project_type,client_id,status,brief_status,start_date,end_date,created_at,workmode"
         )
         .in("client_id", clientIds)
         .eq("workmode", "productive")
@@ -106,6 +106,23 @@ export default async function ProductiveZonePage() {
     creativesCountMap[c.project_id] = (creativesCountMap[c.project_id] || 0) + 1
   }
 
+  // Fetch project members
+  const { data: projectMembersData } = projectIds.length > 0
+    ? await supabase
+        .from("project_members")
+        .select("project_id, member_id, role, organization_members(name, avatar_url)")
+        .in("project_id", projectIds)
+    : { data: [] }
+
+  const projectTeamMap: Record<string, { name: string; avatar?: string }[]> = {}
+  for (const pm of projectMembersData || []) {
+    if (!projectTeamMap[pm.project_id]) projectTeamMap[pm.project_id] = []
+    const member = pm.organization_members as unknown as { name: string; avatar_url: string | null }
+    if (member) {
+      projectTeamMap[pm.project_id].push({ name: member.name || "", avatar: member.avatar_url || undefined })
+    }
+  }
+
   const today = new Date()
   const zoneProjects: ZoneProject[] = (projects || []).map((p) => {
     const endDate = p.end_date ? new Date(p.end_date + "T00:00:00") : null
@@ -125,10 +142,7 @@ export default async function ProductiveZonePage() {
       endDate: p.end_date,
       daysLeft,
       createdAt: p.created_at,
-      team: ((p.team_roles as Record<string, string>[]) || []).map((t) => ({
-        name: t.name || "",
-        avatar: undefined,
-      })),
+      team: projectTeamMap[p.id] || [],
       creativesCount: creativesCountMap[p.id] || 0,
     }
   })
