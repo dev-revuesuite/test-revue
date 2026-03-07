@@ -958,7 +958,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                                 clearNestedError('socialUrls', link.id)
                               }}
                               placeholder="username"
-                              className="flex-1 py-3 pr-4 bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none"
+                              className="flex-1 py-3 pr-4 bg-transparent border-none text-[#1a1a1a] dark:text-white placeholder:text-[#999] !outline-none"
                             />
                           </div>
                           {errors.socialUrls?.[link.id] && <p className="text-xs text-red-500 mt-1">{errors.socialUrls[link.id]}</p>}
@@ -1105,7 +1105,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                             clearNestedError('contactPhones', contact.id)
                           }}
                           placeholder="Enter phone number"
-                          className="flex-1 px-4 py-3 bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none"
+                          className="flex-1 px-4 py-3 bg-transparent border-none text-[#1a1a1a] dark:text-white placeholder:text-[#999] !outline-none"
                         />
                         <button
                           type="button"
