@@ -170,7 +170,7 @@ interface NewBriefDialogProps {
   open: boolean
   onClose: () => void
   onComplete: (data: BriefFormData) => void
-  clientDirectory?: { id: string; name: string }[]
+  clientDirectory?: { id: string; name: string; logoUrl?: string }[]
   teamMembers?: { id: string; name: string; email: string; avatar: string; role: string }[]
 }
 
@@ -570,14 +570,20 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
         >
           {selectedMember ? (
             <>
-              <img
-                src={selectedMember.avatar}
-                alt=""
-                className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover"
-              />
+              {selectedMember.avatar ? (
+                <img
+                  src={selectedMember.avatar}
+                  alt=""
+                  className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover rounded"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded shrink-0">
+                  <span className="text-white text-xs font-bold">{selectedMember.name.substring(0, 2).toUpperCase()}</span>
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{selectedMember.name}</p>
-                <p className="text-xs text-[#666] truncate">{selectedMember.email}</p>
+                {selectedMember.email && <p className="text-xs text-[#666] truncate">{selectedMember.email}</p>}
               </div>
             </>
           ) : (
@@ -623,11 +629,17 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       value === member.name && "bg-[#5C6ECD]/10"
                     )}
                   >
-                    <img
-                      src={member.avatar}
-                      alt=""
-                      className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover"
-                    />
+                    {member.avatar ? (
+                      <img
+                        src={member.avatar}
+                        alt=""
+                        className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded shrink-0">
+                        <span className="text-white text-xs font-bold">{member.name.substring(0, 2).toUpperCase()}</span>
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className={cn(
                         "text-sm truncate",
@@ -783,7 +795,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   <RichDropdown
                     id="clientName"
                     value={formData.clientName}
-                    members={clientDirectory.map(c => ({ id: c.id, name: c.name, email: "" }))}
+                    members={clientDirectory.map(c => ({ id: c.id, name: c.name, email: "", avatar: c.logoUrl }))}
                     placeholder="Select Client"
                     onChange={(value) => {
                       setFormData(prev => ({ ...prev, clientName: value }))
@@ -1213,7 +1225,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                             <RichDropdown
                               id={`teamMember-${role.id}`}
                               value={role.name}
-                              members={teamMembersData}
+                              members={teamMembersData.filter(m => m.name === role.name || !formData.teamRoles.some(r => r.name === m.name))}
                               placeholder="Select Team Member"
                               showRole={true}
                               onChange={(value) => updateTeamRole(role.id, 'name', value)}

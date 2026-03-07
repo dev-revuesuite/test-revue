@@ -92,6 +92,7 @@ export default async function StudioPage() {
     clients?.map((client) => ({
       id: client.id,
       name: client.name,
+      logoUrl: client.logo_url || undefined,
     })) ?? []
 
   // Fetch organization members for manager/team dropdowns in brief dialog

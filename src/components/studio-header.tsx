@@ -117,7 +117,7 @@ interface StudioHeaderProps {
   }
   organizationId: string | null
   organizationLogoUrl?: string | null
-  clientDirectory: { id: string; name: string }[]
+  clientDirectory: { id: string; name: string; logoUrl?: string }[]
   teamMembers?: OrgMember[]
 }
 

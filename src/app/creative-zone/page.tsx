@@ -41,12 +41,12 @@ export default async function CreativeZonePage() {
   const { data: allClients } = organization
     ? await supabase
         .from("clients")
-        .select("id,name")
+        .select("id,name,logo_url")
         .eq("organization_id", organization.id)
     : { data: [] }
 
   const clientDirectory =
-    allClients?.map((c) => ({ id: c.id, name: c.name })) ?? []
+    allClients?.map((c) => ({ id: c.id, name: c.name, logoUrl: c.logo_url || undefined })) ?? []
 
   const { data: orgMembersRaw } = organization
     ? await supabase
