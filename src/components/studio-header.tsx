@@ -181,6 +181,13 @@ export function StudioHeader({
     setIsDark(isDarkMode)
   }, [])
 
+  // Listen for custom event to open Add Client dialog
+  React.useEffect(() => {
+    const handler = () => setNewClientDialogOpen(true)
+    window.addEventListener("revue:open-add-client", handler)
+    return () => window.removeEventListener("revue:open-add-client", handler)
+  }, [])
+
   const toggleTheme = () => {
     const newIsDark = !isDark
     setIsDark(newIsDark)

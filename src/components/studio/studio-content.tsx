@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
-import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight } from "lucide-react"
+import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X } from "lucide-react"
 import { ClientCard } from "./client-card"
 
 interface StudioContentProps {
@@ -12,6 +12,7 @@ interface StudioContentProps {
     avatar: string
   }
   clients: StudioClient[]
+  onAddClient?: () => void
 }
 
 interface StudioClient {
@@ -114,13 +115,20 @@ const formatDate = (value?: string | null) => {
   }
 }
 
-export function StudioContent({ user, clients }: StudioContentProps) {
+export function StudioContent({ user, clients, onAddClient }: StudioContentProps) {
   const [isLoading, setIsLoading] = useState(true)
+  const [showWelcome, setShowWelcome] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1000)
     return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    if (!isLoading && clients.length === 0) {
+      setShowWelcome(true)
+    }
+  }, [isLoading, clients.length])
 
   return (
     <main className="flex-1 overflow-auto bg-background">
@@ -197,6 +205,50 @@ export function StudioContent({ user, clients }: StudioContentProps) {
           </div>
         </div>
       </div>
+
+      {/* Welcome Modal - No Clients */}
+      {showWelcome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 text-center animate-in fade-in zoom-in-95 duration-300">
+            <button
+              onClick={() => setShowWelcome(false)}
+              className="absolute top-4 right-4 p-1 text-[#999] hover:text-[#1a1a1a] dark:hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-16 h-16 rounded-2xl bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-5">
+              <Users className="w-8 h-8 text-[#5C6ECD]" />
+            </div>
+
+            <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-white mb-2">
+              Welcome to Revue!
+            </h2>
+            <p className="text-sm text-[#666] dark:text-[#999] mb-6 leading-relaxed">
+              Get started by adding your first client. You&apos;ll be able to manage their projects, share creatives, and collect feedback — all in one place.
+            </p>
+
+            <button
+              onClick={() => {
+                setShowWelcome(false)
+                onAddClient?.()
+                window.dispatchEvent(new CustomEvent("revue:open-add-client"))
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white font-medium rounded-xl shadow-lg shadow-[#5C6ECD]/25 transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Add Your First Client
+            </button>
+
+            <button
+              onClick={() => setShowWelcome(false)}
+              className="mt-3 text-sm text-[#999] hover:text-[#666] dark:hover:text-[#ccc] transition-colors"
+            >
+              I&apos;ll do this later
+            </button>
+          </div>
+        </div>
+      )}
 
     </main>
   )

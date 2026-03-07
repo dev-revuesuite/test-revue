@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useState, useRef, useEffect } from "react"
-import { ChevronDown, Check, Plus, Upload, X, Image as ImageIcon, Pencil, Trash2, ArrowRight } from "lucide-react"
+import { ChevronDown, Check, Plus, Upload, X, Image as ImageIcon, Pencil, Trash2, ArrowRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Types
@@ -145,13 +145,14 @@ const platformPrefixes: Record<string, string> = {
 interface NewClientOnboardingProps {
   open: boolean
   onClose: () => void
-  onComplete: (data: ClientFormData) => void
+  onComplete: (data: ClientFormData) => void | Promise<void>
   editMode?: boolean
   initialData?: Partial<ClientFormData>
 }
 
 export function NewClientOnboarding({ open, onClose, onComplete, editMode = false, initialData }: NewClientOnboardingProps) {
   const [step, setStep] = useState(1)
+  const [isCreating, setIsCreating] = useState(false)
   const totalSteps = 3
   const logoInputRef = useRef<HTMLInputElement>(null)
   const brandImageInputRef = useRef<HTMLInputElement>(null)
@@ -405,7 +406,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     return newErrors
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const stepErrors = validateStep(step)
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors)
@@ -415,7 +416,12 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     if (step < totalSteps) {
       setStep(step + 1)
     } else {
-      onComplete(formData)
+      setIsCreating(true)
+      try {
+        await onComplete(formData)
+      } finally {
+        setIsCreating(false)
+      }
     }
   }
 
@@ -1535,19 +1541,30 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
           <button
             type="button"
             onClick={handleNext}
-            disabled={!canContinue()}
+            disabled={!canContinue() || isCreating}
             className={cn(
               "group flex items-center gap-2 px-8 py-2.5 font-medium transition-all",
-              canContinue()
+              isCreating
+                ? "bg-[#5C6ECD] text-white cursor-wait"
+                : canContinue()
                 ? "bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white shadow-lg shadow-[#5C6ECD]/25"
                 : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
             )}
           >
-            {step === totalSteps ? (editMode ? "Save Changes" : "Add Client") : "Continue"}
-            <ArrowRight className={cn(
-              "w-4 h-4 transition-transform duration-200",
-              canContinue() && "group-hover:translate-x-1"
-            )} />
+            {isCreating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {editMode ? "Saving..." : "Creating..."}
+              </>
+            ) : (
+              <>
+                {step === totalSteps ? (editMode ? "Save Changes" : "Add Client") : "Continue"}
+                <ArrowRight className={cn(
+                  "w-4 h-4 transition-transform duration-200",
+                  canContinue() && "group-hover:translate-x-1"
+                )} />
+              </>
+            )}
           </button>
         </div>
       </footer>
