@@ -1133,7 +1133,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                 <button
                   type="button"
                   onClick={addContact}
-                  className="flex items-center gap-2 text-sm font-medium text-[#5C6ECD] hover:text-[#4A5BC7] transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-[#5C6ECD] border border-dashed border-[#5C6ECD]/30 rounded-lg hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Add another contact
