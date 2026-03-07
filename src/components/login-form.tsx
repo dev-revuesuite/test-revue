@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
-import { Send } from "lucide-react"
 import Image from "next/image"
 
 export function LoginForm({
@@ -17,97 +16,18 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter()
   const [email, setEmail] = useState("")
-  const [otp, setOtp] = useState(["", "", "", "", "", ""])
+  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [resendCooldown, setResendCooldown] = useState(0)
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [resendCooldown])
-
-  const handleSendOtp = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!email) {
       setError("Please enter your email address")
       return
     }
-    setError(null)
-    setLoading(true)
-
-    const supabase = createClient()
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-      },
-    })
-
-    if (error) {
-      const message = error.message.toLowerCase()
-      if (
-        message.includes("signups") ||
-        message.includes("sign up") ||
-        message.includes("signup") ||
-        message.includes("user not found")
-      ) {
-        sessionStorage.setItem("signupEmail", email)
-        router.push(`/signup?email=${encodeURIComponent(email)}`)
-        setLoading(false)
-        return
-      }
-
-      setError(error.message)
-      setLoading(false)
-      return
-    }
-
-    setOtpSent(true)
-    setResendCooldown(60)
-    setLoading(false)
-  }
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) {
-      const digits = value.replace(/\D/g, "").slice(0, 6).split("")
-      const newOtp = [...otp]
-      digits.forEach((digit, i) => {
-        if (index + i < 6) {
-          newOtp[index + i] = digit
-        }
-      })
-      setOtp(newOtp)
-      const nextIndex = Math.min(index + digits.length, 5)
-      otpRefs.current[nextIndex]?.focus()
-      return
-    }
-
-    if (!/^\d*$/.test(value)) return
-
-    const newOtp = [...otp]
-    newOtp[index] = value
-    setOtp(newOtp)
-
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus()
-    }
-  }
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus()
-    }
-  }
-
-  const handleOtpLogin = async () => {
-    const otpString = otp.join("")
-    if (otpString.length !== 6) {
-      setError("Please enter the complete 6-digit code")
+    if (!password) {
+      setError("Please enter your password")
       return
     }
 
@@ -116,10 +36,9 @@ export function LoginForm({
 
     const supabase = createClient()
 
-    const { error } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      token: otpString,
-      type: "email",
+      password,
     })
 
     if (error) {
@@ -173,13 +92,6 @@ export function LoginForm({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (otpSent) {
-      handleOtpLogin()
-    }
-  }
-
   return (
     <div className={cn("flex flex-col gap-8", className)} {...props}>
       {/* Logo */}
@@ -206,7 +118,7 @@ export function LoginForm({
       <div className="flex flex-col items-center gap-2 text-center">
         <h1 className="text-3xl font-bold">Login</h1>
         <p className="text-muted-foreground text-base">
-          Enter your email below to login to your account.
+          Enter your email and password to login to your account.
         </p>
       </div>
 
@@ -216,103 +128,40 @@ export function LoginForm({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        {/* Email field */}
-        <div className="flex flex-col gap-2">
-          {otpSent ? (
-            <div className="flex items-center gap-3">
-              <Label htmlFor="email" className="w-24 shrink-0 text-base">Email</Label>
-              <div className="relative flex-1">
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="xyz@gmail.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pr-12 h-12 text-base"
-                  disabled
-                />
-                <button
-                  type="button"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={handleSendOtp}
-                  disabled={loading || resendCooldown > 0}
-                >
-                  <Send className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <Label htmlFor="email" className="w-24 shrink-0 text-base">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="xyz@gmail.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 text-base"
-                required
-              />
-            </div>
-          )}
+      <form onSubmit={handleLogin} className="flex flex-col gap-5">
+        <div className="flex items-center gap-3">
+          <Label htmlFor="email" className="w-24 shrink-0 text-base">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="xyz@gmail.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-12 text-base"
+            required
+          />
         </div>
 
-        {/* OTP fields - only when OTP is sent */}
-        {otpSent && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <Label className="w-24 shrink-0 text-base">Verification code</Label>
-              <div className="flex gap-2 flex-1 justify-between">
-                {otp.map((digit, index) => (
-                  <Input
-                    key={index}
-                    ref={(el) => {
-                      otpRefs.current[index] = el
-                    }}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                    className="w-11 h-11 text-center text-lg p-0 flex-shrink-0"
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end pr-1">
-              <button
-                type="button"
-                onClick={handleSendOtp}
-                disabled={resendCooldown > 0 || loading}
-                className="text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
-              >
-                {resendCooldown > 0 ? `Resend (${resendCooldown})` : "Resend"}
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <Label htmlFor="password" className="w-24 shrink-0 text-base">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-12 text-base"
+            required
+          />
+        </div>
 
-        {/* Main action button */}
-        {!otpSent ? (
-          <Button
-            type="button"
-            onClick={handleSendOtp}
-            disabled={loading}
-            className="w-full h-12 text-base bg-[#DBFE52] hover:bg-[#c9eb40] text-black font-medium border border-gray-400"
-          >
-            {loading ? "Sending..." : "Login"}
-          </Button>
-        ) : (
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full h-12 text-base bg-[#DBFE52] hover:bg-[#c9eb40] text-black font-medium border border-gray-400"
-          >
-            {loading ? "Verifying..." : "Login"}
-          </Button>
-        )}
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full h-12 text-base bg-[#DBFE52] hover:bg-[#c9eb40] text-black font-medium border border-gray-400"
+        >
+          {loading ? "Logging in..." : "Login"}
+        </Button>
 
         {/* Separator */}
         <div className="relative py-2">

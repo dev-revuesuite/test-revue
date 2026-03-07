@@ -1,12 +1,7 @@
 import { SignupForm } from "@/components/signup-form"
 import { OnboardingLottie } from "@/components/onboarding/onboarding-lottie"
 
-export default async function SignupPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ email?: string }>
-}) {
-  const params = await searchParams
+export default function SignupPage() {
   return (
     <div className="flex min-h-svh">
       <div className="hidden lg:flex w-1/2 min-h-svh items-center justify-center bg-zinc-900 p-8">
@@ -16,7 +11,7 @@ export default async function SignupPage({
       </div>
       <div className="flex w-full lg:w-1/2 items-center justify-center p-6 md:p-10 min-h-svh">
         <div className="w-full max-w-md">
-          <SignupForm initialEmail={params?.email} />
+          <SignupForm />
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -12,31 +12,31 @@ import Image from "next/image"
 
 export function SignupForm({
   className,
-  initialEmail = "",
   ...props
-}: React.ComponentProps<"div"> & { initialEmail?: string }) {
+}: React.ComponentProps<"div">) {
   const router = useRouter()
   const [name, setName] = useState("")
-  const [email, setEmail] = useState(initialEmail)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (!initialEmail) {
-      const storedEmail = sessionStorage.getItem("signupEmail")
-      if (storedEmail) {
-        setEmail(storedEmail)
-      }
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) {
+      setError("Please enter your name")
+      return
     }
-  }, [initialEmail])
-
-  const handleSendOtp = async () => {
     if (!email) {
       setError("Please enter your email address")
       return
     }
-    if (!name.trim()) {
-      setError("Please enter your name")
+    if (!password) {
+      setError("Please enter a password")
+      return
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
       return
     }
 
@@ -45,10 +45,10 @@ export function SignupForm({
 
     const supabase = createClient()
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const { data, error } = await supabase.auth.signUp({
       email,
+      password,
       options: {
-        shouldCreateUser: true,
         data: {
           full_name: name,
         },
@@ -61,9 +61,21 @@ export function SignupForm({
       return
     }
 
-    sessionStorage.setItem("verifyEmail", email)
-    sessionStorage.setItem("signupName", name)
-    router.push("/verify-otp")
+    const userId = data.user?.id
+    if (userId) {
+      await supabase.from("profiles").upsert(
+        {
+          id: userId,
+          email: data.user?.email || email,
+          full_name: name,
+          onboarded: false,
+        },
+        { onConflict: "id" }
+      )
+    }
+
+    router.push("/onboarding")
+    router.refresh()
   }
 
   const handleGoogleSignup = async () => {
@@ -121,7 +133,7 @@ export function SignupForm({
         </div>
       )}
 
-      <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-5">
+      <form onSubmit={handleSignup} className="flex flex-col gap-5">
         <div className="flex items-center gap-3">
           <Label htmlFor="name" className="w-24 shrink-0 text-base">
             Full name
@@ -152,13 +164,27 @@ export function SignupForm({
           />
         </div>
 
+        <div className="flex items-center gap-3">
+          <Label htmlFor="password" className="w-24 shrink-0 text-base">
+            Password
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Min. 6 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-12 text-base"
+            required
+          />
+        </div>
+
         <Button
-          type="button"
-          onClick={handleSendOtp}
+          type="submit"
           disabled={loading}
           className="w-full h-12 text-base bg-[#DBFE52] hover:bg-[#c9eb40] text-black font-medium border border-gray-400"
         >
-          {loading ? "Sending..." : "Send verification code"}
+          {loading ? "Creating account..." : "Sign up"}
         </Button>
 
         {/* Separator */}

@@ -36,8 +36,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protected routes
-  const protectedRoutes = ['/studio']
-  const authRoutes = ['/login', '/signup', '/verify-otp']
+  const protectedRoutes = ['/studio', '/creative-zone', '/productive-zone']
+  const authRoutes = ['/login', '/signup']
 
   const isProtectedRoute = protectedRoutes.some(route =>
     request.nextUrl.pathname.startsWith(route)

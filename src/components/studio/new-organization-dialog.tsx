@@ -212,19 +212,9 @@ export function NewOrganizationDialog({ open, onClose, onComplete }: NewOrganiza
         {/* Header - Same as NewBriefDialog */}
         <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
           <div className="flex items-center justify-between">
-            {/* Logo - Figma style */}
+            {/* Revue Logo */}
             <div className="flex items-center gap-3">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <rect width="10" height="10" rx="2" fill="#F24E1E"/>
-                <rect x="11" width="10" height="10" rx="2" fill="#FF7262"/>
-                <rect x="22" width="10" height="10" rx="2" fill="#A259FF"/>
-                <rect y="11" width="10" height="10" rx="2" fill="#1ABCFE"/>
-                <rect x="11" y="11" width="10" height="10" rx="2" fill="#0ACF83"/>
-                <rect x="22" y="11" width="10" height="10" rx="2" fill="#5C6ECD"/>
-                <rect y="22" width="10" height="10" rx="2" fill="#F24E1E"/>
-                <rect x="11" y="22" width="10" height="10" rx="2" fill="#FF7262"/>
-                <rect x="22" y="22" width="10" height="10" rx="2" fill="#A259FF"/>
-              </svg>
+              <img src="/Logo/Artboard 5@2x.png" alt="Revue" width={32} height={32} />
               <span className="text-lg font-semibold text-[#1a1a1a] dark:text-white">Revue</span>
             </div>
 
