@@ -624,7 +624,8 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     options,
     placeholder,
     onChange,
-    disabled = false
+    disabled = false,
+    borderless = false
   }: {
     id: string
     value: string
@@ -632,6 +633,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     placeholder: string
     onChange: (value: string) => void
     disabled?: boolean
+    borderless?: boolean
   }) => (
     <div className="relative dropdown-container" style={{ zIndex: dropdownOpen === id ? 9999 : 30 }}>
       <button
@@ -639,12 +641,16 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
         onClick={() => !disabled && setDropdownOpen(dropdownOpen === id ? null : id)}
         disabled={disabled}
         className={cn(
-          "w-full flex items-center justify-between px-4 py-3 border text-left transition-colors",
-          disabled
+          "w-full flex items-center justify-between px-4 py-3 text-left transition-colors",
+          borderless
+            ? "border-none bg-transparent"
+            : "border",
+          !borderless && (disabled
             ? "bg-[#f5f5f5] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#444] cursor-not-allowed"
             : dropdownOpen === id
             ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-[#1a1a1a]"
-            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]/50"
+            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]/50"),
+          borderless && disabled && "cursor-not-allowed opacity-50"
         )}
       >
         <span className={value ? "text-[#1a1a1a] dark:text-white" : "text-[#999]"}>
@@ -880,7 +886,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                             type="button"
                             onClick={() => setSocialPopoverOpen(socialPopoverOpen === link.id ? null : link.id)}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2.5 border transition-colors min-w-[140px]",
+                              "flex items-center gap-2 px-3 py-2.5 border rounded-lg transition-colors min-w-[140px]",
                               socialPopoverOpen === link.id
                                 ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-transparent"
                                 : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:border-[#5C6ECD]/50"
@@ -936,7 +942,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                         </div>
                         <div className="flex-1">
                           <div className={cn(
-                            "flex items-center border bg-white dark:bg-transparent transition-colors overflow-hidden",
+                            "flex items-center border rounded-lg bg-white dark:bg-transparent transition-colors overflow-hidden",
                             errors.socialUrls?.[link.id]
                               ? "border-red-500 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
                               : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
@@ -1072,7 +1078,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                         Phone Number
                       </label>
                       <div className={cn(
-                        "flex items-center border bg-white dark:bg-transparent transition-colors overflow-hidden",
+                        "flex items-center border rounded-lg bg-white dark:bg-transparent transition-colors overflow-hidden",
                         errors.contactPhones?.[contact.id]
                           ? "border-red-500 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
                           : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
@@ -1083,6 +1089,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                             value={countryCodes.find(c => c.code === contact.countryCode)?.flag + " " + contact.countryCode || contact.countryCode}
                             options={countryCodes.map(c => `${c.flag} ${c.code}`)}
                             placeholder="Code"
+                            borderless
                             onChange={(value) => {
                               const code = value.split(" ").pop() || "+91"
                               updateContact(contact.id, 'countryCode', code)
