@@ -24,10 +24,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 
 // Types
-interface DeliverableStage {
+interface DeliverableItem {
   id: string
-  stage: string
-  description: string
+  name: string
   date: string
 }
 
@@ -52,7 +51,7 @@ interface BriefFormData {
   // Step 2: Timeline & Milestone
   startDate: string
   endDate: string
-  deliverableStages: DeliverableStage[]
+  deliverables: DeliverableItem[]
   // Step 3: Team & Settings
   accountManager: string
   teamMemberIds: string[]
@@ -145,10 +144,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     projectType: "UI Designing",
     startDate: "",
     endDate: "",
-    deliverableStages: [
-      { id: "1", stage: "Stage 1", description: "", date: "" },
-      { id: "2", stage: "Stage 2", description: "", date: "" },
-    ],
+    deliverables: [],
     accountManager: "",
     teamMemberIds: [],
     autoDeleteIteration: "30 Days",
@@ -262,24 +258,21 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   }
 
   // Add functions
-  const addDeliverableStage = () => {
-    const newIndex = formData.deliverableStages.length + 1
+  const addDeliverable = () => {
     setFormData(prev => ({
       ...prev,
-      deliverableStages: [
-        ...prev.deliverableStages,
-        { id: Date.now().toString(), stage: `Stage ${newIndex}`, description: "", date: "" }
+      deliverables: [
+        ...prev.deliverables,
+        { id: Date.now().toString(), name: "", date: "" }
       ]
     }))
   }
 
-  const removeDeliverableStage = (id: string) => {
-    if (formData.deliverableStages.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        deliverableStages: prev.deliverableStages.filter(s => s.id !== id)
-      }))
-    }
+  const removeDeliverable = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      deliverables: prev.deliverables.filter(d => d.id !== id)
+    }))
   }
 
 
@@ -312,11 +305,11 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   }
 
   // Update functions
-  const updateDeliverableStage = (id: string, field: keyof DeliverableStage, value: string) => {
+  const updateDeliverable = (id: string, field: keyof DeliverableItem, value: string) => {
     setFormData(prev => ({
       ...prev,
-      deliverableStages: prev.deliverableStages.map(s =>
-        s.id === id ? { ...s, [field]: value } : s
+      deliverables: prev.deliverables.map(d =>
+        d.id === id ? { ...d, [field]: value } : d
       )
     }))
   }
@@ -804,81 +797,81 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   </div>
                 </div>
 
-                {/* Milestones */}
+                {/* Deliverables */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Milestones</h3>
-                  <div className="space-y-3">
-                    {formData.deliverableStages.map((stage, index) => (
-                      <div key={stage.id} className="group relative border border-[#e5e5e5] dark:border-[#333] p-4 hover:border-[#5C6ECD]/30 transition-colors">
-                        <div className="flex items-start gap-4">
-                          <div className="w-7 h-7 bg-[#5C6ECD] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 space-y-3">
-                            <input
-                              type="text"
-                              value={stage.stage}
-                              onChange={(e) => updateDeliverableStage(stage.id, 'stage', e.target.value)}
-                              placeholder="Milestone name"
-                              className="w-full text-sm font-medium text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none bg-transparent border-b border-transparent focus:border-[#5C6ECD] transition-colors pb-1"
-                            />
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="text"
-                                value={stage.description}
-                                onChange={(e) => updateDeliverableStage(stage.id, 'description', e.target.value)}
-                                placeholder="Description (optional)"
-                                className="flex-1 text-sm text-[#666] dark:text-[#999] placeholder:text-[#bbb] dark:placeholder:text-[#555] outline-none bg-transparent"
-                              />
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    className={cn(
-                                      "shrink-0 justify-start text-left font-normal h-9 px-3 text-sm border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
-                                      !stage.date && "text-[#999]"
-                                    )}
-                                  >
-                                    <CalendarIcon className="mr-2 h-3.5 w-3.5 text-[#5C6ECD]" />
-                                    {stage.date ? format(new Date(stage.date), "MMM dd") : "Set date"}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="end">
-                                  <Calendar
-                                    mode="single"
-                                    selected={stage.date ? new Date(stage.date) : undefined}
-                                    onSelect={(date) => updateDeliverableStage(stage.id, 'date', date ? format(date, "yyyy-MM-dd") : "")}
-                                    disabled={(date) => {
-                                      if (formData.startDate && date < new Date(formData.startDate)) return true
-                                      if (formData.endDate && date > new Date(formData.endDate)) return true
-                                      return false
-                                    }}
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                          </div>
-                          {formData.deliverableStages.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeDeliverableStage(stage.id)}
-                              className="p-1 text-[#ccc] dark:text-[#555] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white">Deliverables</h3>
+                    {formData.deliverables.length > 0 && (
+                      <span className="text-xs text-[#999]">{formData.deliverables.length} item{formData.deliverables.length !== 1 ? "s" : ""}</span>
+                    )}
                   </div>
+                  {formData.deliverables.length > 0 ? (
+                    <div className="space-y-2 mb-3">
+                      {formData.deliverables.map((item, index) => (
+                        <div key={item.id} className="group flex items-center gap-3 px-3 py-2.5 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                          <div className="w-5 h-5 rounded-full border-2 border-[#ccc] dark:border-[#555] shrink-0 flex items-center justify-center">
+                            <span className="text-[9px] font-bold text-[#999]">{index + 1}</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => updateDeliverable(item.id, 'name', e.target.value)}
+                            placeholder="Deliverable name"
+                            className="flex-1 text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none bg-transparent"
+                            autoFocus={!item.name}
+                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full transition-colors",
+                                  item.date
+                                    ? "bg-[#5C6ECD]/10 text-[#5C6ECD]"
+                                    : "text-[#999] hover:bg-[#f5f5f5] dark:hover:bg-[#222]"
+                                )}
+                              >
+                                <CalendarIcon className="w-3 h-3" />
+                                {item.date ? format(new Date(item.date), "MMM dd") : "Due date"}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                              <Calendar
+                                mode="single"
+                                selected={item.date ? new Date(item.date) : undefined}
+                                onSelect={(date) => updateDeliverable(item.id, 'date', date ? format(date, "yyyy-MM-dd") : "")}
+                                disabled={(date) => {
+                                  if (formData.startDate && date < new Date(formData.startDate)) return true
+                                  if (formData.endDate && date > new Date(formData.endDate)) return true
+                                  return false
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <button
+                            type="button"
+                            onClick={() => removeDeliverable(item.id)}
+                            className="p-1 text-[#ccc] dark:text-[#555] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mb-3 py-8 border border-dashed border-[#e5e5e5] dark:border-[#333] text-center">
+                      <p className="text-sm text-[#999] mb-1">No deliverables added yet</p>
+                      <p className="text-xs text-[#bbb] dark:text-[#555]">Add items that need to be delivered for this project</p>
+                    </div>
+                  )}
                   <button
                     type="button"
-                    onClick={addDeliverableStage}
-                    className="mt-3 w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
+                    onClick={addDeliverable}
+                    className="w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
                   >
                     <Plus className="w-4 h-4" />
-                    Add milestone
+                    Add deliverable
                   </button>
                 </div>
               </div>

@@ -1061,20 +1061,20 @@ export function StudioHeader({
             need_qc_tool: data.needQCTool,
             workmode: data.workmode,
             other_description: data.otherDescription || null,
-            deliverable_stages: data.deliverableStages
-              .filter((s) => s.description.trim() || s.date)
-              .map((s) => ({
-                stage: s.stage,
-                description: s.description.trim(),
-                date: s.date || null,
+            deliverable_stages: data.deliverables
+              .filter((d) => d.name.trim())
+              .map((d) => ({
+                stage: d.name.trim(),
+                description: "",
+                date: d.date || null,
               })),
-            project_deliverables: data.deliverableStages
-              .filter((s) => s.description.trim())
-              .map((s) => ({
+            project_deliverables: data.deliverables
+              .filter((d) => d.name.trim())
+              .map((d) => ({
                 id: `d${Math.random().toString(36).slice(2)}`,
-                name: s.description.trim(),
+                name: d.name.trim(),
                 status: "pending",
-                dueDate: s.date || null,
+                dueDate: d.date || null,
               })),
             references_data: referencesJson,
             external_links: data.references
