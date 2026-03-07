@@ -217,12 +217,13 @@ export function StudioContent({ user, clients, onAddClient }: StudioContentProps
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-16 h-16 rounded-2xl bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-5">
-              <Users className="w-8 h-8 text-[#5C6ECD]" />
+            <div className="flex justify-center mb-5">
+              <img src="/Logo/Artboard 8@2x.png" alt="Revue" width={140} height={43} className="dark:hidden" />
+              <img src="/Logo/Artboard 8 copy@2x.png" alt="Revue" width={140} height={43} className="hidden dark:block" />
             </div>
 
             <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-white mb-2">
-              Welcome to Revue!
+              Welcome!
             </h2>
             <p className="text-sm text-[#666] dark:text-[#999] mb-6 leading-relaxed">
               Get started by adding your first client. You&apos;ll be able to manage their projects, share creatives, and collect feedback — all in one place.
