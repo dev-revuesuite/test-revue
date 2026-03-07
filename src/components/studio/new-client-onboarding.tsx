@@ -1083,7 +1083,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                           ? "border-red-500 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
                           : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
                       )}>
-                        <div className="w-[120px] shrink-0 border-r border-[#e5e5e5] dark:border-[#444]">
+                        <div className="w-[120px] shrink-0">
                           <CustomDropdown
                             id={`countryCode-${contact.id}`}
                             value={countryCodes.find(c => c.code === contact.countryCode)?.flag + " " + contact.countryCode || contact.countryCode}
@@ -1111,10 +1111,10 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                           type="button"
                           onClick={() => updateContact(contact.id, 'whatsapp', !contact.whatsapp)}
                           className={cn(
-                            "flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-full border text-xs font-medium transition-all shrink-0",
+                            "flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-full text-xs font-medium transition-all shrink-0",
                             contact.whatsapp
-                              ? "bg-[#25D366]/10 border-[#25D366]/40 text-[#25D366]"
-                              : "bg-transparent border-[#e5e5e5] dark:border-[#555] text-[#999] hover:border-[#25D366]/40 hover:text-[#25D366]"
+                              ? "bg-[#25D366]/10 text-[#25D366]"
+                              : "bg-[#f5f5f5] dark:bg-[#333] text-[#999] hover:bg-[#25D366]/10 hover:text-[#25D366]"
                           )}
                           title="Toggle WhatsApp availability"
                         >
