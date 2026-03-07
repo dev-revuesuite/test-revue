@@ -187,54 +187,82 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
   const [socialPopoverOpen, setSocialPopoverOpen] = useState<string | null>(null)
   const fontUploadRef = useRef<HTMLInputElement>(null)
-  const officeAddressRef = useRef<HTMLInputElement>(null)
-  const contactAddressRef = useRef<HTMLInputElement>(null)
+  const [officeSuggestions, setOfficeSuggestions] = useState<{ placeId: string; text: string }[]>([])
+  const [contactSuggestions, setContactSuggestions] = useState<{ placeId: string; text: string }[]>([])
+  const [showOfficeSuggestions, setShowOfficeSuggestions] = useState(false)
+  const [showContactSuggestions, setShowContactSuggestions] = useState(false)
+  const officeWrapperRef = useRef<HTMLDivElement>(null)
+  const contactWrapperRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Google Places Autocomplete setup
+  // Load Google Maps script
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY
     if (!apiKey) return
+    if (document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) return
 
-    // Load Google Places script if not already loaded
-    if (!document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
-      const script = document.createElement('script')
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-      script.async = true
-      script.defer = true
-      script.onload = () => initAutocomplete()
-      document.head.appendChild(script)
-    } else if (window.google?.maps?.places) {
-      initAutocomplete()
-    }
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=places`
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+  }, [])
 
-    function initAutocomplete() {
-      if (!window.google?.maps?.places) return
-
-      if (officeAddressRef.current) {
-        const officeAuto = new window.google.maps.places.Autocomplete(officeAddressRef.current, {
-          types: ['address'],
-        })
-        officeAuto.addListener('place_changed', () => {
-          const place = officeAuto.getPlace()
-          if (place?.formatted_address) {
-            setFormData(prev => ({ ...prev, officeAddress: place.formatted_address! }))
-          }
-        })
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (officeWrapperRef.current && !officeWrapperRef.current.contains(e.target as Node)) {
+        setShowOfficeSuggestions(false)
       }
-
-      if (contactAddressRef.current) {
-        const contactAuto = new window.google.maps.places.Autocomplete(contactAddressRef.current, {
-          types: ['address'],
-        })
-        contactAuto.addListener('place_changed', () => {
-          const place = contactAuto.getPlace()
-          if (place?.formatted_address) {
-            setFormData(prev => ({ ...prev, contactAddress: place.formatted_address! }))
-          }
-        })
+      if (contactWrapperRef.current && !contactWrapperRef.current.contains(e.target as Node)) {
+        setShowContactSuggestions(false)
       }
     }
-  }, [open, step])
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const fetchSuggestions = (
+    input: string,
+    setSuggestions: typeof setOfficeSuggestions,
+    setShow: typeof setShowOfficeSuggestions
+  ) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!input || input.length < 3) {
+      setSuggestions([])
+      setShow(false)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const google = window.google as any
+        const { Place } = await google.maps.importLibrary("places")
+        const request = {
+          textQuery: input,
+          fields: ['displayName', 'formattedAddress', 'id'],
+          maxResultCount: 5,
+        }
+        const { places } = await Place.searchByText(request)
+        if (places && places.length > 0) {
+          setSuggestions(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            places.map((p: any) => ({
+              placeId: p.id || '',
+              text: p.formattedAddress || p.displayName || '',
+            }))
+          )
+          setShow(true)
+        } else {
+          setSuggestions([])
+          setShow(false)
+        }
+      } catch {
+        setSuggestions([])
+        setShow(false)
+      }
+    }, 300)
+  }
 
   // Close dropdown/popover when clicking outside
   useEffect(() => {
@@ -793,14 +821,35 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                 {/* Office Location */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Office Location</h3>
-                  <input
-                    ref={officeAddressRef}
-                    type="text"
-                    value={formData.officeAddress}
-                    onChange={(e) => setFormData(prev => ({ ...prev, officeAddress: e.target.value }))}
-                    placeholder="Start typing address..."
-                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                  />
+                  <div ref={officeWrapperRef} className="relative">
+                    <input
+                      type="text"
+                      value={formData.officeAddress}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, officeAddress: e.target.value }))
+                        fetchSuggestions(e.target.value, setOfficeSuggestions, setShowOfficeSuggestions)
+                      }}
+                      onFocus={() => { if (officeSuggestions.length > 0) setShowOfficeSuggestions(true) }}
+                      placeholder="Start typing address..."
+                      className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                    />
+                    {showOfficeSuggestions && officeSuggestions.length > 0 && (
+                      <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-lg max-h-48 overflow-auto">
+                        {officeSuggestions.map((s) => (
+                          <li
+                            key={s.placeId}
+                            className="px-4 py-2.5 text-sm text-[#1a1a1a] dark:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#333] cursor-pointer"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, officeAddress: s.text }))
+                              setShowOfficeSuggestions(false)
+                            }}
+                          >
+                            {s.text}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
 
                 {/* Social Media Links */}
@@ -1069,14 +1118,35 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                       <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                         Contact Address
                       </label>
-                      <input
-                        ref={contactAddressRef}
-                        type="text"
-                        value={formData.contactAddress || ""}
-                        onChange={(e) => setFormData(prev => ({ ...prev, contactAddress: e.target.value }))}
-                        placeholder="Start typing address..."
-                        className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                      />
+                      <div ref={contactWrapperRef} className="relative">
+                        <input
+                          type="text"
+                          value={formData.contactAddress || ""}
+                          onChange={(e) => {
+                            setFormData(prev => ({ ...prev, contactAddress: e.target.value }))
+                            fetchSuggestions(e.target.value, setContactSuggestions, setShowContactSuggestions)
+                          }}
+                          onFocus={() => { if (contactSuggestions.length > 0) setShowContactSuggestions(true) }}
+                          placeholder="Start typing address..."
+                          className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                        />
+                        {showContactSuggestions && contactSuggestions.length > 0 && (
+                          <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-lg max-h-48 overflow-auto">
+                            {contactSuggestions.map((s) => (
+                              <li
+                                key={s.placeId}
+                                className="px-4 py-2.5 text-sm text-[#1a1a1a] dark:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#333] cursor-pointer"
+                                onClick={() => {
+                                  setFormData(prev => ({ ...prev, contactAddress: s.text }))
+                                  setShowContactSuggestions(false)
+                                }}
+                              >
+                                {s.text}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                       <p className="text-xs text-[#999] mt-2">Enter full address including city, state and country</p>
                     </div>
                   )}
