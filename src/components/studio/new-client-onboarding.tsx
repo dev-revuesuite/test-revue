@@ -942,7 +942,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                         </div>
                         <div className="flex-1">
                           <div className={cn(
-                            "flex items-center border rounded-lg bg-white dark:bg-transparent transition-colors overflow-hidden",
+                            "flex items-center border rounded-lg bg-white dark:bg-transparent transition-colors",
                             errors.socialUrls?.[link.id]
                               ? "border-red-500 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
                               : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
@@ -1078,7 +1078,7 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                         Phone Number
                       </label>
                       <div className={cn(
-                        "flex items-center border rounded-lg bg-white dark:bg-transparent transition-colors overflow-hidden",
+                        "flex items-center border rounded-lg bg-white dark:bg-transparent transition-colors",
                         errors.contactPhones?.[contact.id]
                           ? "border-red-500 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
                           : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
