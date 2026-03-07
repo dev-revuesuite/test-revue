@@ -301,7 +301,8 @@ export function StudioHeader({
       <div className="flex items-center h-full">
         {/* Logo - aligned with sidebar width */}
         <div className="relative flex items-center justify-center w-16 h-full -ml-5">
-          <img src="/Logo/Artboard 5@2x.png" alt="Revue" width={28} height={28} />
+          <img src="/Logo/Artboard 6@2x.png" alt="Revue" width={28} height={28} className="dark:hidden" />
+          <img src="/Logo/Artboard 5@2x.png" alt="Revue" width={28} height={28} className="hidden dark:block" />
           <div className="absolute right-0 top-1/2 h-6 w-px -translate-y-1/2 bg-[#e6e6e6] dark:bg-[#333]" />
         </div>
         {/* Organisation Logo */}

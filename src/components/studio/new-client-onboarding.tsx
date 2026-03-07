@@ -128,6 +128,18 @@ const defaultSocialLinks: SocialLink[] = [
 
 const socialPlatforms = ["Instagram", "Facebook", "LinkedIn", "Twitter", "YouTube", "TikTok", "Pinterest", "Behance", "Dribbble"]
 
+const platformPrefixes: Record<string, string> = {
+  Instagram: "instagram.com/",
+  Facebook: "facebook.com/",
+  LinkedIn: "linkedin.com/in/",
+  Twitter: "x.com/",
+  YouTube: "youtube.com/@",
+  TikTok: "tiktok.com/@",
+  Pinterest: "pinterest.com/",
+  Behance: "behance.net/",
+  Dribbble: "dribbble.com/",
+}
+
 interface NewClientOnboardingProps {
   open: boolean
   onClose: () => void
@@ -333,11 +345,11 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
       if (formData.websiteUrl.trim() && !urlRegex.test(formData.websiteUrl.trim())) {
         newErrors.websiteUrl = "Please enter a valid URL"
       }
-      // Validate social link URLs (only non-empty ones)
+      // Validate social usernames (no spaces, no full URLs)
       const socialErrors: Record<string, string> = {}
       formData.socialLinks.forEach(link => {
-        if (link.url.trim() && !urlRegex.test(link.url.trim())) {
-          socialErrors[link.id] = "Invalid URL"
+        if (link.url.trim() && /\s/.test(link.url.trim())) {
+          socialErrors[link.id] = "Username should not contain spaces"
         }
       })
       if (Object.keys(socialErrors).length > 0) newErrors.socialUrls = socialErrors
@@ -920,21 +932,26 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                           )}
                         </div>
                         <div className="flex-1">
-                          <input
-                            type="url"
-                            value={link.url}
-                            onChange={(e) => {
-                              updateSocialLink(link.id, 'url', e.target.value)
-                              clearNestedError('socialUrls', link.id)
-                            }}
-                            placeholder={`Enter ${link.platform} URL`}
-                            className={cn(
-                              "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
-                              errors.socialUrls?.[link.id]
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
-                            )}
-                          />
+                          <div className={cn(
+                            "flex items-center border bg-white dark:bg-transparent transition-colors overflow-hidden",
+                            errors.socialUrls?.[link.id]
+                              ? "border-red-500 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20"
+                              : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
+                          )}>
+                            <span className="pl-4 pr-1 py-3 text-sm text-[#999] dark:text-[#666] whitespace-nowrap select-none">
+                              {platformPrefixes[link.platform] || `${link.platform.toLowerCase()}.com/`}
+                            </span>
+                            <input
+                              type="text"
+                              value={link.url}
+                              onChange={(e) => {
+                                updateSocialLink(link.id, 'url', e.target.value)
+                                clearNestedError('socialUrls', link.id)
+                              }}
+                              placeholder="username"
+                              className="flex-1 py-3 pr-4 bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none"
+                            />
+                          </div>
                           {errors.socialUrls?.[link.id] && <p className="text-xs text-red-500 mt-1">{errors.socialUrls[link.id]}</p>}
                         </div>
                         {formData.socialLinks.length > 1 && (
