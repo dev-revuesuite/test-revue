@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import {
   Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare,
-  CheckCircle, ArrowLeft, Plus,
+  Check, CheckCircle, ArrowLeft, Plus,
   Briefcase, Palette, Type, Image as ImageIcon,
   ExternalLink, Search,
   Sparkles, Zap, FolderOpen,
@@ -318,7 +318,7 @@ function AssetsDrawer({ open, onOpenChange, client }: { open: boolean; onOpenCha
 }
 
 // Team Members Modal
-function TeamMembersModal({ open, onOpenChange, team, projectName, onAddClick }: { open: boolean; onOpenChange: (open: boolean) => void; team: TeamMember[]; projectName: string; onAddClick: () => void }) {
+function TeamMembersModal({ open, onOpenChange, team, projectName, orgMembers, onToggleMember }: { open: boolean; onOpenChange: (open: boolean) => void; team: TeamMember[]; projectName: string; orgMembers: { id: string; name: string; email: string; avatar?: string }[]; onToggleMember: (member: { id: string; name: string; email: string; avatar?: string }) => void }) {
   const roleColors: Record<string, string> = {
     "Project Manager": "bg-[#5C6ECD]",
     "Lead Designer": "bg-[#5C6ECD]",
@@ -328,32 +328,68 @@ function TeamMembersModal({ open, onOpenChange, team, projectName, onAddClick }:
     "Reviewer": "bg-slate-600",
   }
 
+  const assignedIds = new Set(team.map(t => t.id))
+  const assigned = orgMembers.filter(m => assignedIds.has(m.id))
+  const available = orgMembers.filter(m => !assignedIds.has(m.id))
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-[#5C6ECD]" /> Team Members</DialogTitle>
-          <DialogDescription>{projectName} - {team.length} members</DialogDescription>
+          <DialogDescription>{projectName} — Click to add or remove members</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2 mt-4">
-          {team.map((member) => (
-            <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors group">
-              <Avatar className="w-10 h-10">
-                <AvatarImage src={member.avatar} alt={member.name} />
-                <AvatarFallback className="bg-[#5C6ECD] text-white">{member.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-foreground">{member.name}</p>
-                <div className="flex items-center gap-2">
-                  <span className={cn("w-2 h-2 rounded-full", roleColors[member.role] || "bg-gray-500")} />
-                  <span className="text-sm text-muted-foreground">{member.role}</span>
-                </div>
+        <div className="mt-4 space-y-4">
+          {assigned.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Assigned ({assigned.length})</p>
+              <div className="grid grid-cols-2 gap-2">
+                {assigned.map((member) => (
+                  <button
+                    key={member.id}
+                    onClick={() => onToggleMember(member)}
+                    className="relative flex items-center gap-3 p-3 rounded-lg border-2 border-[#5C6ECD] bg-[#5C6ECD]/5 text-left transition-all hover:bg-[#5C6ECD]/10"
+                  >
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-[#5C6ECD] rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                    <Avatar className="w-9 h-9">
+                      <AvatarImage src={member.avatar} alt={member.name} />
+                      <AvatarFallback className="bg-[#5C6ECD] text-white text-xs">{member.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 pr-4">
+                      <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"><Pencil className="w-4 h-4" /></Button>
             </div>
-          ))}
+          )}
+          {available.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Available ({available.length})</p>
+              <div className="grid grid-cols-2 gap-2">
+                {available.map((member) => (
+                  <button
+                    key={member.id}
+                    onClick={() => onToggleMember(member)}
+                    className="flex items-center gap-3 p-3 rounded-lg border-2 border-border text-left transition-all hover:border-[#5C6ECD]/40 hover:bg-muted/50"
+                  >
+                    <Avatar className="w-9 h-9">
+                      <AvatarImage src={member.avatar} alt={member.name} />
+                      <AvatarFallback className="bg-muted text-muted-foreground text-xs">{member.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <Button onClick={onAddClick} className="w-full mt-4 gap-2 bg-[#5C6ECD] hover:bg-[#4a5bb8]"><UserPlus className="w-4 h-4" /> Add Team Member</Button>
       </DialogContent>
     </Dialog>
   )
@@ -1121,7 +1157,23 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       </div>
 
       <AssetsDrawer open={assetsDrawerOpen} onOpenChange={setAssetsDrawerOpen} client={client} />
-      {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} onAddClick={() => { setTeamModalOpen(false); setAddTeamMemberOpen(true) }} />}
+      {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} orgMembers={orgMembers} onToggleMember={async (member) => {
+        const isAssigned = selectedProject.team.some(t => t.id === member.id)
+        if (isAssigned) {
+          // Remove
+          const updatedTeam = selectedProject.team.filter(t => t.id !== member.id)
+          setSelectedProject({ ...selectedProject, team: updatedTeam })
+          setEditData({ ...selectedProject, team: updatedTeam })
+          await supabase.from("project_members").delete().eq("project_id", selectedProject.id).eq("member_id", member.id)
+        } else {
+          // Add
+          const newMember: TeamMember = { id: member.id, name: member.name, role: "member", avatar: member.avatar }
+          const updatedTeam = [...selectedProject.team, newMember]
+          setSelectedProject({ ...selectedProject, team: updatedTeam })
+          setEditData({ ...selectedProject, team: updatedTeam })
+          await supabase.from("project_members").upsert({ project_id: selectedProject.id, member_id: member.id, role: "member" }, { onConflict: "project_id,member_id" })
+        }
+      }} />}
 
       {/* Add Deliverable Modal */}
       <Dialog open={addDeliverableOpen} onOpenChange={setAddDeliverableOpen}>

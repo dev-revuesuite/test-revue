@@ -1027,24 +1027,26 @@ export function StudioHeader({
           // Upload reference files to storage
           const referencesJson = []
           for (const ref of data.references.filter(r => r.type === "file")) {
-            if (!ref.name.trim() && !ref.file) continue
-            let fileUrl: string | null = null
-            if (ref.file) {
-              const ext = ref.file.name.split(".").pop()
-              const path = `${organizationId}/${clientId}/refs/${Date.now()}-${ref.file.name}`
-              const { error: refErr } = await supabase.storage
-                .from("client-assets")
-                .upload(path, ref.file)
-              if (!refErr) {
-                const { data: refUrl } = supabase.storage
+            if (!ref.name.trim() && (!ref.files || ref.files.length === 0)) continue
+            const fileUrls: string[] = []
+            if (ref.files) {
+              for (const file of ref.files) {
+                const path = `${organizationId}/${clientId}/refs/${Date.now()}-${file.name}`
+                const { error: refErr } = await supabase.storage
                   .from("client-assets")
-                  .getPublicUrl(path)
-                fileUrl = refUrl.publicUrl
+                  .upload(path, file)
+                if (!refErr) {
+                  const { data: refUrl } = supabase.storage
+                    .from("client-assets")
+                    .getPublicUrl(path)
+                  fileUrls.push(refUrl.publicUrl)
+                }
               }
             }
             referencesJson.push({
               name: ref.name.trim(),
-              file_url: fileUrl,
+              file_url: fileUrls[0] || null,
+              file_urls: fileUrls,
             })
           }
 

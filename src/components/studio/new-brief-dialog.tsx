@@ -34,7 +34,7 @@ interface Reference {
   id: string
   name: string
   type: "file" | "link"
-  file?: File
+  files?: File[]
 }
 
 interface NamingColumn {
@@ -88,12 +88,9 @@ interface TeamMember {
 }
 
 const deleteIterationOptions = [
-  "7 Days",
-  "14 Days",
+  "15 Days",
   "30 Days",
   "60 Days",
-  "90 Days",
-  "Never"
 ]
 
 const namingOptions = [
@@ -175,6 +172,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
 
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
   const [refTypePopoverOpen, setRefTypePopoverOpen] = useState(false)
+  const [addDeliverableOpen, setAddDeliverableOpen] = useState(false)
+  const [newDeliverableName, setNewDeliverableName] = useState("")
+  const [newDeliverableDate, setNewDeliverableDate] = useState("")
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -294,16 +294,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     }))
   }
 
-  const addNamingColumn = () => {
-    setFormData(prev => ({
-      ...prev,
-      namingColumns: [
-        ...prev.namingColumns,
-        { id: Date.now().toString(), value: "Brand Name" }
-      ]
-    }))
-  }
-
   // Update functions
   const updateDeliverable = (id: string, field: keyof DeliverableItem, value: string) => {
     setFormData(prev => ({
@@ -333,12 +323,13 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   }
 
   const handleFileUpload = (refId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files)
       setFormData(prev => ({
         ...prev,
         references: prev.references.map(r =>
-          r.id === refId ? { ...r, file, name: r.name || file.name } : r
+          r.id === refId ? { ...r, files: [...(r.files || []), ...fileArray], name: r.name || fileArray.map(f => f.name).join(", ") } : r
         )
       }))
     }
@@ -812,43 +803,13 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                           <div className="w-5 h-5 rounded-full border-2 border-[#ccc] dark:border-[#555] shrink-0 flex items-center justify-center">
                             <span className="text-[9px] font-bold text-[#999]">{index + 1}</span>
                           </div>
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => updateDeliverable(item.id, 'name', e.target.value)}
-                            placeholder="Deliverable name"
-                            className="flex-1 text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none bg-transparent"
-                            autoFocus={!item.name}
-                          />
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className={cn(
-                                  "shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full transition-colors",
-                                  item.date
-                                    ? "bg-[#5C6ECD]/10 text-[#5C6ECD]"
-                                    : "text-[#999] hover:bg-[#f5f5f5] dark:hover:bg-[#222]"
-                                )}
-                              >
-                                <CalendarIcon className="w-3 h-3" />
-                                {item.date ? format(new Date(item.date), "MMM dd") : "Due date"}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="end">
-                              <Calendar
-                                mode="single"
-                                selected={item.date ? new Date(item.date) : undefined}
-                                onSelect={(date) => updateDeliverable(item.id, 'date', date ? format(date, "yyyy-MM-dd") : "")}
-                                disabled={(date) => {
-                                  if (formData.startDate && date < new Date(formData.startDate)) return true
-                                  if (formData.endDate && date > new Date(formData.endDate)) return true
-                                  return false
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          <span className="flex-1 text-sm text-[#1a1a1a] dark:text-white truncate">{item.name}</span>
+                          {item.date && (
+                            <span className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD]">
+                              <CalendarIcon className="w-3 h-3" />
+                              {format(new Date(item.date), "MMM dd")}
+                            </span>
+                          )}
                           <button
                             type="button"
                             onClick={() => removeDeliverable(item.id)}
@@ -865,14 +826,91 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       <p className="text-xs text-[#bbb] dark:text-[#555]">Add items that need to be delivered for this project</p>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={addDeliverable}
-                    className="w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add deliverable
-                  </button>
+                  <Popover open={addDeliverableOpen} onOpenChange={setAddDeliverableOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add deliverable
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-4" align="start">
+                      <h4 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">New Deliverable</h4>
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={newDeliverableName}
+                          onChange={(e) => setNewDeliverableName(e.target.value)}
+                          placeholder="Deliverable name"
+                          className="w-full px-3 py-2 text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] transition-colors"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newDeliverableName.trim()) {
+                              setFormData(prev => ({
+                                ...prev,
+                                deliverables: [...prev.deliverables, { id: Date.now().toString(), name: newDeliverableName.trim(), date: newDeliverableDate }]
+                              }))
+                              setNewDeliverableName("")
+                              setNewDeliverableDate("")
+                              setAddDeliverableOpen(false)
+                            }
+                          }}
+                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className={cn(
+                                "w-full flex items-center gap-2 px-3 py-2 text-sm border transition-colors",
+                                newDeliverableDate
+                                  ? "border-[#5C6ECD] text-[#5C6ECD]"
+                                  : "border-[#e5e5e5] dark:border-[#444] text-[#999]"
+                              )}
+                            >
+                              <CalendarIcon className="w-4 h-4" />
+                              {newDeliverableDate ? format(new Date(newDeliverableDate), "MMM dd, yyyy") : "Due date (optional)"}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={newDeliverableDate ? new Date(newDeliverableDate) : undefined}
+                              onSelect={(date) => setNewDeliverableDate(date ? format(date, "yyyy-MM-dd") : "")}
+                              disabled={(date) => {
+                                if (formData.startDate && date < new Date(formData.startDate)) return true
+                                if (formData.endDate && date > new Date(formData.endDate)) return true
+                                return false
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <button
+                          type="button"
+                          disabled={!newDeliverableName.trim()}
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              deliverables: [...prev.deliverables, { id: Date.now().toString(), name: newDeliverableName.trim(), date: newDeliverableDate }]
+                            }))
+                            setNewDeliverableName("")
+                            setNewDeliverableDate("")
+                            setAddDeliverableOpen(false)
+                          }}
+                          className={cn(
+                            "w-full py-2 text-sm font-medium transition-colors",
+                            newDeliverableName.trim()
+                              ? "bg-[#5C6ECD] text-white hover:bg-[#4A5BC7]"
+                              : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
+                          )}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </div>
@@ -896,7 +934,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
               </div>
 
               <div className="space-y-6 overflow-visible">
-                {/* Account Manager */}
+                {/* Project Manager */}
                 <div>
                   <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                     Project Manager <span className="text-[#5C6ECD] font-normal">*</span>
@@ -914,65 +952,100 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   {errors.accountManager && <p className="text-xs text-red-500 mt-1">{errors.accountManager}</p>}
                 </div>
 
-                {/* Team Members */}
+                {/* Team Members as Cards */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Team Members</h3>
-                  {/* Selected members */}
-                  {formData.teamMemberIds.length > 0 && (
-                    <div className="space-y-2 mb-3">
-                      {formData.teamMemberIds.map((memberId) => {
-                        const member = teamMembersData.find(m => m.id === memberId)
-                        if (!member) return null
+                  <div className="grid grid-cols-2 gap-2">
+                    {teamMembersData
+                      .filter(m => m.name !== formData.accountManager)
+                      .map((member) => {
+                        const isSelected = formData.teamMemberIds.includes(member.id)
                         return (
-                          <div key={memberId} className="group flex items-center gap-3 p-3 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                teamMemberIds: isSelected
+                                  ? prev.teamMemberIds.filter(id => id !== member.id)
+                                  : [...prev.teamMemberIds, member.id]
+                              }))
+                            }}
+                            className={cn(
+                              "relative flex items-center gap-3 p-3 border-2 text-left transition-all",
+                              isSelected
+                                ? "border-[#5C6ECD] bg-[#5C6ECD]/5"
+                                : "border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/40"
+                            )}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 w-5 h-5 bg-[#5C6ECD] flex items-center justify-center rounded-full">
+                                <Check className="w-3 h-3 text-white" />
+                              </div>
+                            )}
                             {member.avatar ? (
-                              <img src={member.avatar} alt="" className="w-8 h-8 object-cover rounded shrink-0" />
+                              <img src={member.avatar} alt="" className="w-9 h-9 object-cover rounded-full shrink-0" />
                             ) : (
-                              <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded shrink-0">
+                              <div className="w-9 h-9 bg-[#5C6ECD] flex items-center justify-center rounded-full shrink-0">
                                 <span className="text-white text-xs font-bold">{member.name.substring(0, 2).toUpperCase()}</span>
                               </div>
                             )}
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 pr-4">
                               <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{member.name}</p>
-                              <p className="text-xs text-[#666] truncate">{member.email}</p>
+                              <p className="text-[11px] text-[#999] truncate">{member.email}</p>
                             </div>
-                            <span className="text-[10px] uppercase tracking-wider text-[#999] font-medium shrink-0">Designer</span>
-                            <button
-                              type="button"
-                              onClick={() => setFormData(prev => ({ ...prev, teamMemberIds: prev.teamMemberIds.filter(id => id !== memberId) }))}
-                              className="p-1 text-[#ccc] dark:text-[#555] hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          </button>
                         )
                       })}
+                  </div>
+                </div>
+
+                {/* Settings */}
+                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <label className="text-sm font-semibold text-[#1a1a1a] dark:text-white">
+                        Auto delete iteration
+                      </label>
+                      <p className="text-xs text-[#999] mt-0.5">Automatically remove old iterations after</p>
                     </div>
-                  )}
-                  {/* Add member dropdown */}
-                  <RichDropdown
-                    id="addTeamMember"
-                    value=""
-                    members={teamMembersData.filter(m =>
-                      !formData.teamMemberIds.includes(m.id) &&
-                      m.name !== formData.accountManager
-                    )}
-                    placeholder="+ Add team member"
-                    showRole={true}
-                    onChange={(value) => {
-                      const member = teamMembersData.find(m => m.name === value)
-                      if (member && !formData.teamMemberIds.includes(member.id)) {
-                        setFormData(prev => ({ ...prev, teamMemberIds: [...prev.teamMemberIds, member.id] }))
-                      }
-                    }}
-                  />
+                    <div className="flex gap-2">
+                      {deleteIterationOptions.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, autoDeleteIteration: opt }))}
+                          className={cn(
+                            "px-3 py-1.5 text-xs font-medium transition-colors",
+                            formData.autoDeleteIteration === opt
+                              ? "bg-[#5C6ECD] text-white"
+                              : "bg-[#f5f5f5] dark:bg-[#222] text-[#666] dark:text-[#999] hover:bg-[#5C6ECD]/10"
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-3 cursor-pointer p-3 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.needQCTool}
+                      onChange={(e) => setFormData(prev => ({ ...prev, needQCTool: e.target.checked }))}
+                      className="w-4 h-4 border-black dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-[#1a1a1a] dark:text-white">Enable QC Tool</span>
+                      <p className="text-xs text-[#999] mt-0.5">Quality check tool for reviewing deliverables</p>
+                    </div>
+                  </label>
                 </div>
 
                 {/* Workmode */}
                 <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Workmode</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Productive Mode Card */}
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, workmode: "productive" }))}
@@ -995,19 +1068,12 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                             ? "bg-[#5C6ECD]"
                             : "bg-[#e5e5e5] dark:bg-[#333] group-hover:bg-[#5C6ECD]/20"
                         )}>
-                          <Zap className={cn(
-                            "w-5 h-5 transition-colors",
-                            formData.workmode === "productive" ? "text-white" : "text-[#666] group-hover:text-[#5C6ECD]"
-                          )} />
+                          <Zap className={cn("w-5 h-5 transition-colors", formData.workmode === "productive" ? "text-white" : "text-[#666] group-hover:text-[#5C6ECD]")} />
                         </div>
-                        <h4 className="text-base font-semibold text-[#1a1a1a] dark:text-white">Productive Mode</h4>
+                        <h4 className="text-base font-semibold text-[#1a1a1a] dark:text-white">Productive</h4>
                       </div>
-                      <p className="text-xs text-[#666] dark:text-[#999] leading-relaxed">
-                        Focus on efficiency and structured workflows. Ideal for deadline-driven projects.
-                      </p>
+                      <p className="text-xs text-[#666] dark:text-[#999] leading-relaxed">Structured workflows for deadline-driven projects.</p>
                     </button>
-
-                    {/* Creative Mode Card */}
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, workmode: "creative" }))}
@@ -1037,52 +1103,19 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                               ? "bg-gradient-to-br from-[#A259FF] to-[#FF7262]"
                               : "bg-[#e5e5e5] dark:bg-[#333] group-hover:bg-gradient-to-br group-hover:from-[#A259FF]/20 group-hover:to-[#FF7262]/20"
                           )}>
-                            <Sparkles className={cn(
-                              "w-5 h-5 transition-colors",
-                              formData.workmode === "creative" ? "text-white" : "text-[#666] group-hover:text-[#A259FF]"
-                            )} />
+                            <Sparkles className={cn("w-5 h-5 transition-colors", formData.workmode === "creative" ? "text-white" : "text-[#666] group-hover:text-[#A259FF]")} />
                           </div>
                           <h4 className={cn(
                             "text-base font-semibold",
                             formData.workmode === "creative"
                               ? "bg-gradient-to-r from-[#A259FF] to-[#FF7262] bg-clip-text text-transparent"
                               : "text-[#1a1a1a] dark:text-white"
-                          )}>Creative Mode</h4>
+                          )}>Creative</h4>
                         </div>
-                        <p className="text-xs text-[#666] dark:text-[#999] leading-relaxed">
-                          Flexible exploration with room for experimentation. Perfect for innovative projects.
-                        </p>
+                        <p className="text-xs text-[#666] dark:text-[#999] leading-relaxed">Flexible exploration for innovative projects.</p>
                       </div>
                     </button>
                   </div>
-                </div>
-
-                {/* Settings Row */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="text-sm font-semibold text-[#1a1a1a] dark:text-white">
-                      Auto delete iteration after
-                    </label>
-                    <div className="w-32">
-                      <CustomDropdown
-                        id="autoDeleteIteration"
-                        value={formData.autoDeleteIteration}
-                        options={deleteIterationOptions}
-                        placeholder="Select"
-                        onChange={(value) => setFormData(prev => ({ ...prev, autoDeleteIteration: value }))}
-                      />
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.needQCTool}
-                      onChange={(e) => setFormData(prev => ({ ...prev, needQCTool: e.target.checked }))}
-                      className="w-4 h-4 border-black dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
-                    />
-                    <span className="text-sm text-[#1a1a1a] dark:text-white">Need QC Tool</span>
-                    <Info className="w-4 h-4 text-[#666]" />
-                  </label>
                 </div>
               </div>
             </div>
@@ -1119,31 +1152,12 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                           )}>
                             {ref.type === "file" ? <Upload className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
                           </div>
-                          <input
-                            type="text"
-                            value={ref.name}
-                            onChange={(e) => updateReference(ref.id, e.target.value)}
-                            placeholder={ref.type === "file" ? "Reference name" : "Paste link URL"}
-                            className="flex-1 text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none bg-transparent"
-                          />
-                          {ref.type === "file" && (
-                            <>
-                              <input
-                                ref={(el) => { fileInputRefs.current[ref.id] = el }}
-                                type="file"
-                                onChange={(e) => handleFileUpload(ref.id, e)}
-                                className="hidden"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => fileInputRefs.current[ref.id]?.click()}
-                                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#e5e5e5] dark:border-[#444] text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
-                              >
-                                <Upload className="w-3 h-3" />
-                                {ref.file ? ref.file.name.slice(0, 15) : "Upload"}
-                              </button>
-                            </>
-                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-[#1a1a1a] dark:text-white truncate">{ref.name || (ref.type === "file" ? "Untitled" : "Untitled link")}</p>
+                            {ref.type === "file" && ref.files && ref.files.length > 0 && (
+                              <p className="text-[11px] text-[#999] truncate">{ref.files.length} file{ref.files.length !== 1 ? "s" : ""}: {ref.files.map(f => f.name).join(", ")}</p>
+                            )}
+                          </div>
                           <span className="text-[10px] uppercase tracking-wider text-[#999] font-medium shrink-0">
                             {ref.type}
                           </span>
@@ -1162,36 +1176,77 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       <p className="text-sm text-[#999]">No references added yet</p>
                     </div>
                   )}
-                  <div className="relative inline-block ref-type-popover">
-                    <button
-                      type="button"
-                      onClick={() => setRefTypePopoverOpen(!refTypePopoverOpen)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-dashed border-[#ccc] dark:border-[#444] text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add reference
-                    </button>
-                    {refTypePopoverOpen && (
-                      <div className="absolute left-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-xl z-50 w-48">
+                  <Popover open={refTypePopoverOpen} onOpenChange={setRefTypePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-dashed border-[#ccc] dark:border-[#444] text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add reference
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-4" align="start">
+                      <h4 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Add Reference</h4>
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => addReference("file")}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors"
+                          onClick={() => {
+                            const id = Date.now().toString()
+                            setFormData(prev => ({ ...prev, references: [...prev.references, { id, name: "", type: "file" }] }))
+                            setRefTypePopoverOpen(false)
+                            // trigger file picker
+                            setTimeout(() => fileInputRefs.current[id]?.click(), 100)
+                          }}
+                          className="flex flex-col items-center gap-2 p-4 border-2 border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all"
                         >
-                          <Upload className="w-4 h-4 text-[#5C6ECD]" />
-                          <span className="text-[#1a1a1a] dark:text-white">Upload file</span>
+                          <div className="w-10 h-10 bg-[#5C6ECD]/10 flex items-center justify-center rounded-full">
+                            <Upload className="w-5 h-5 text-[#5C6ECD]" />
+                          </div>
+                          <span className="text-sm font-medium text-[#1a1a1a] dark:text-white">Upload files</span>
+                          <span className="text-[11px] text-[#999]">Multiple files</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => addReference("link")}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors border-t border-[#e5e5e5] dark:border-[#444]"
+                          className="flex flex-col items-center gap-2 p-4 border-2 border-[#e5e5e5] dark:border-[#333] hover:border-[#10b981] hover:bg-[#10b981]/5 transition-all"
                         >
-                          <LinkIcon className="w-4 h-4 text-[#10b981]" />
-                          <span className="text-[#1a1a1a] dark:text-white">External link</span>
+                          <div className="w-10 h-10 bg-[#10b981]/10 flex items-center justify-center rounded-full">
+                            <LinkIcon className="w-5 h-5 text-[#10b981]" />
+                          </div>
+                          <span className="text-sm font-medium text-[#1a1a1a] dark:text-white">External link</span>
+                          <span className="text-[11px] text-[#999]">URL reference</span>
                         </button>
                       </div>
-                    )}
-                  </div>
+                    </PopoverContent>
+                  </Popover>
+                  {/* Hidden file inputs for references */}
+                  {formData.references.filter(r => r.type === "file").map((ref) => (
+                    <input
+                      key={ref.id}
+                      ref={(el) => { fileInputRefs.current[ref.id] = el }}
+                      type="file"
+                      multiple
+                      onChange={(e) => handleFileUpload(ref.id, e)}
+                      className="hidden"
+                    />
+                  ))}
+                  {/* Hidden file inputs for link-type references that also want inline name editing */}
+                  {formData.references.filter(r => r.type === "link" && !r.name).length > 0 && (
+                    <div className="mt-2">
+                      {formData.references.filter(r => r.type === "link" && !r.name).map((ref) => (
+                        <input
+                          key={ref.id}
+                          type="text"
+                          autoFocus
+                          placeholder="Paste link URL..."
+                          onBlur={(e) => updateReference(ref.id, e.target.value)}
+                          onChange={(e) => updateReference(ref.id, e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] transition-colors"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Naming Convention */}
@@ -1216,15 +1271,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                         )}
                       </React.Fragment>
                     ))}
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button
-                      type="button"
-                      onClick={addNamingColumn}
-                      className="w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
                   </div>
                 </div>
 
