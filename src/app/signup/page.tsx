@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { SignupForm } from "@/components/signup-form"
 import { OnboardingLottie } from "@/components/onboarding/onboarding-lottie"
 
@@ -11,7 +12,9 @@ export default function SignupPage() {
       </div>
       <div className="flex w-full lg:w-1/2 items-center justify-center p-6 md:p-10 min-h-svh">
         <div className="w-full max-w-md">
-          <SignupForm />
+          <Suspense>
+            <SignupForm />
+          </Suspense>
         </div>
       </div>
     </div>

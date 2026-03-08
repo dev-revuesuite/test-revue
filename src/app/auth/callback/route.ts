@@ -29,6 +29,16 @@ export async function GET(request: Request) {
             p_user_id: user.id,
             p_email: user.email,
           })
+
+          // Also link as client user if applicable
+          try {
+            await supabase.rpc('link_user_to_client', {
+              p_user_id: user.id,
+              p_email: user.email,
+            })
+          } catch {
+            // RPC may not exist, ignore
+          }
         }
 
         // Check onboarding status
@@ -53,7 +63,7 @@ export async function GET(request: Request) {
         if (membership) {
           const role = membership.role
           if (role === 'client') {
-            return NextResponse.redirect(`${origin}/productive-zone`)
+            return NextResponse.redirect(`${origin}/client-portal`)
           }
           // admin/owner/designer goes to studio (default)
         }

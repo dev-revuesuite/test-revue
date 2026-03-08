@@ -164,7 +164,7 @@ function ModeBadge({ mode }: { mode?: "productive" | "creative" }) {
 
 // Project Card Component
 function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Project; isSelected: boolean; onClick: () => void; clientLogo?: string }) {
-  const status = statusConfig[project.status]
+  const status = statusConfig[project.status] || statusConfig.brief_received
   const StatusIcon = status.icon
 
   return (

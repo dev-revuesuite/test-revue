@@ -86,7 +86,7 @@ export function LoginForm({
         .single()
 
       if (membership?.role === "client") {
-        router.push("/productive-zone")
+        router.push("/client-portal")
         router.refresh()
         return
       }

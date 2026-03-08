@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,11 +15,21 @@ export function SignupForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Pre-fill from invitation token
+  useEffect(() => {
+    const token = searchParams.get("token")
+    const inviteEmail = searchParams.get("email")
+    const inviteName = searchParams.get("name")
+    if (inviteEmail) setEmail(inviteEmail)
+    if (inviteName) setName(inviteName)
+  }, [searchParams])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,11 +83,32 @@ export function SignupForm({
         { onConflict: "id" }
       )
 
+      const userEmail = data.user?.email || email
+
       // Auto-link to organization if email was pre-added as a team member
       await supabase.rpc("link_user_to_org_member", {
         p_user_id: userId,
-        p_email: data.user?.email || email,
+        p_email: userEmail,
       })
+
+      // Also link as client user if applicable
+      try {
+        await supabase.rpc("link_user_to_client", {
+          p_user_id: userId,
+          p_email: userEmail,
+        })
+      } catch {
+        // RPC may not exist, ignore
+      }
+
+      // Mark invitation as accepted if token provided
+      const token = searchParams.get("token")
+      if (token) {
+        await supabase
+          .from("invitations")
+          .update({ status: "accepted" })
+          .eq("token", token)
+      }
     }
 
     router.push("/onboarding")

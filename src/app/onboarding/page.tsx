@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { OnboardingLottie } from "@/components/onboarding/onboarding-lottie"
 import { OnboardingForm } from "@/components/onboarding/onboarding-form"
 
 export default async function OnboardingPage() {
@@ -13,18 +12,70 @@ export default async function OnboardingPage() {
     redirect("/login")
   }
 
+  // Check if already onboarded
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("onboarded, full_name")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.onboarded) {
+    redirect("/studio")
+  }
+
+  // Detect role from organization_members (pre-linked via invitation)
+  const { data: membership } = await supabase
+    .from("organization_members")
+    .select("role, name")
+    .eq("user_id", user.id)
+    .limit(1)
+    .single()
+
+  let detectedRole: "admin" | "designer" | "client" | null = null
+  let userName = profile?.full_name || user.user_metadata?.full_name || ""
+
+  if (membership) {
+    if (membership.role === "owner") detectedRole = "admin"
+    else if (membership.role === "client") detectedRole = "client"
+    else detectedRole = "designer"
+    if (membership.name && !userName) userName = membership.name
+  }
+
+  // Check if user has an invitation pending
+  if (!detectedRole && user.email) {
+    const { data: invitation } = await supabase
+      .from("invitations")
+      .select("role, name")
+      .eq("email", user.email)
+      .eq("status", "pending")
+      .limit(1)
+      .single()
+
+    if (invitation) {
+      detectedRole = invitation.role as "designer" | "client"
+      if (invitation.name && !userName) userName = invitation.name
+    }
+  }
+
+  // Check if user owns an organization
+  if (!detectedRole) {
+    const { data: ownedOrg } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("created_by", user.id)
+      .limit(1)
+      .single()
+
+    if (ownedOrg) {
+      detectedRole = "admin"
+    }
+  }
+
   return (
-    <div className="flex min-h-svh">
-      <div className="hidden lg:flex w-1/2 min-h-svh items-center justify-center bg-zinc-900 p-8">
-        <div className="w-full max-w-3xl">
-          <OnboardingLottie />
-        </div>
-      </div>
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-6 md:p-10 min-h-svh">
-        <div className="w-full max-w-md">
-          <OnboardingForm userEmail={user.email ?? ""} />
-        </div>
-      </div>
-    </div>
+    <OnboardingForm
+      userEmail={user.email ?? ""}
+      detectedRole={detectedRole}
+      userName={userName}
+    />
   )
 }
