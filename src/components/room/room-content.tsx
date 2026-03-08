@@ -826,9 +826,11 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       {/* Fixed Top Bar */}
       <div className="h-16 border-b border-[#5C6ECD]/20 bg-gradient-to-r from-[#5C6ECD]/5 via-[#8B5CF6]/5 to-[#5C6ECD]/5 flex items-center justify-between px-5 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="w-9 h-9 rounded-full border border-[#5C6ECD]/20 bg-white/80 flex items-center justify-center hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
-            <ArrowLeft className="w-4 h-4 text-[#5C6ECD]" />
-          </button>
+          {userRole !== "client" && (
+            <button onClick={() => router.back()} className="w-9 h-9 rounded-full border border-[#5C6ECD]/20 bg-white/80 flex items-center justify-center hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
+              <ArrowLeft className="w-4 h-4 text-[#5C6ECD]" />
+            </button>
+          )}
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl overflow-hidden bg-white shadow-sm border border-[#5C6ECD]/10 flex items-center justify-center p-1.5">
               {client.logoUrl ? <img src={client.logoUrl} alt="Logo" className="w-full h-full object-contain" /> : <span className="font-bold text-[#5C6ECD]">{client.logo}</span>}

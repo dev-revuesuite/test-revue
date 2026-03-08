@@ -19,7 +19,7 @@ export default async function CreativeZonePage() {
   const { role: userRole, clientId } = await getUserRole(supabase, user.id)
 
   if (userRole === "client") {
-    redirect(clientId ? `/room?client=${clientId}` : "/productive-zone")
+    redirect("/client-portal")
   }
 
   const { data: profile } = await supabase

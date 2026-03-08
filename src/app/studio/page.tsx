@@ -26,15 +26,11 @@ export default async function StudioPage() {
     redirect("/onboarding")
   }
 
-  // Determine user role and redirect clients to their room
+  // Determine user role and redirect clients to their portal
   const { role: userRole, clientId } = await getUserRole(supabase, user.id)
 
   if (userRole === "client") {
-    if (clientId) {
-      redirect(`/room?client=${clientId}`)
-    } else {
-      redirect("/productive-zone")
-    }
+    redirect("/client-portal")
   }
 
   const userData = {

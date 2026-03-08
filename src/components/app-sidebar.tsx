@@ -18,7 +18,7 @@ const allNavItems = [
   },
   {
     title: "Projects",
-    url: "/productive-zone",
+    url: "/client-portal",
     icon: FolderOpen,
     roles: ["client"] as UserRole[],
   },
@@ -73,15 +73,7 @@ export function AppSidebar({ user, userRole = "admin", clientId }: AppSidebarPro
   const [isPending, startTransition] = React.useTransition()
   const [pendingUrl, setPendingUrl] = React.useState<string | null>(null)
 
-  const navItems = allNavItems
-    .filter((item) => item.roles.includes(userRole))
-    .map((item) => {
-      // Point client "Projects" to their room page
-      if (item.title === "Projects" && userRole === "client" && clientId) {
-        return { ...item, url: `/room?client=${clientId}` }
-      }
-      return item
-    })
+  const navItems = allNavItems.filter((item) => item.roles.includes(userRole))
 
   React.useEffect(() => {
     setMounted(true)
@@ -117,8 +109,9 @@ export function AppSidebar({ user, userRole = "admin", clientId }: AppSidebarPro
       {/* Navigation Items - Top */}
       <nav className="flex flex-col items-center gap-2 py-4 px-2">
         {navItems.map((item) => {
-          const isActive = item.url.startsWith("/room")
-            ? pathname === "/room"
+          // For client "Projects" tab, also highlight when on /room page
+          const isActive = item.title === "Projects" && userRole === "client"
+            ? pathname === "/client-portal" || pathname === "/room"
             : pathname === item.url || pathname.startsWith(item.url + "/")
           const isNavigating = pendingUrl === item.url
 
