@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioContent } from "@/components/studio/studio-content"
+import { getUserRole } from "@/lib/get-user-role"
 
 export default async function StudioPage() {
   const supabase = await createClient()
@@ -25,6 +26,17 @@ export default async function StudioPage() {
     redirect("/onboarding")
   }
 
+  // Determine user role and redirect clients to their room
+  const { role: userRole, clientId } = await getUserRole(supabase, user.id)
+
+  if (userRole === "client") {
+    if (clientId) {
+      redirect(`/room?client=${clientId}`)
+    } else {
+      redirect("/productive-zone")
+    }
+  }
+
   const userData = {
     name:
       profile?.full_name ||
@@ -35,17 +47,32 @@ export default async function StudioPage() {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  const { data: orgs } = await supabase
+  // Find org: owned by user first
+  const { data: ownedOrgs } = await supabase
     .from("organizations")
     .select("id,name,logo_url,clients(count)")
     .eq("created_by", user.id)
 
-  let organization =
-    orgs?.reduce((best, current) => {
+  let organization: { id: string; name: string; logo_url: string | null; clients?: { count: number }[] } | null =
+    ownedOrgs?.reduce((best, current) => {
       const currentCount = current.clients?.[0]?.count ?? 0
       const bestCount = best?.clients?.[0]?.count ?? -1
       return currentCount > bestCount ? current : best
-    }, null as typeof orgs extends (infer T)[] ? T | null : null) ?? null
+    }, null as (typeof ownedOrgs extends (infer T)[] ? T | null : null)) ?? null
+
+  // If no owned org, check orgs where user is a linked member
+  if (!organization) {
+    const { data: memberOrg } = await supabase
+      .from("organization_members")
+      .select("organizations(id,name,logo_url)")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single()
+
+    if (memberOrg?.organizations) {
+      organization = memberOrg.organizations as unknown as { id: string; name: string; logo_url: string | null }
+    }
+  }
 
   if (!organization) {
     const { data: createdOrg } = await supabase
@@ -121,10 +148,11 @@ export default async function StudioPage() {
         organizationLogoUrl={organization?.logo_url ?? null}
         clientDirectory={clientDirectory}
         teamMembers={teamMembers}
+        userRole={userRole}
       />
       <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} />
-        <StudioContent user={userData} clients={clientsData} />
+        <AppSidebar user={userData} userRole={userRole} />
+        <StudioContent user={userData} clients={clientsData} userRole={userRole} />
       </div>
     </div>
   )

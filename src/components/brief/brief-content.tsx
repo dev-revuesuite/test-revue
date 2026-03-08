@@ -170,7 +170,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
   }
 
   const handleCreativeClick = (creative: Creative) => {
-    router.push(`/communication?briefId=${projectData?.id}&iterationId=${creative.id}`)
+    router.push(`/revue?projectId=${projectData?.id}&creativeId=${creative.id}`)
   }
 
   const getDeliverableStats = (deliverables: Deliverable[]) => {

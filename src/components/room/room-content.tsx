@@ -113,6 +113,9 @@ interface ClientRoom {
   secondaryFont: string
   tertiaryFont: string
   colors: string[]
+  colorDetails: { hex: string; name: string }[]
+  fonts: { label: string; fontName: string; fontUrl: string | null }[]
+  brandImages: string[]
   projects: Project[]
 }
 
@@ -188,11 +191,7 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
           <p className="text-xs text-muted-foreground truncate">{project.type}</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-3">
-        <div>
-          <p className="text-[10px] text-muted-foreground">Budget</p>
-          <p className="text-xs font-semibold text-foreground">₹{project.budget || "N/A"}</p>
-        </div>
+      <div className="mb-3">
         <div>
           <p className="text-[10px] text-muted-foreground">Deadline</p>
           <p className="text-xs font-semibold text-foreground">{project.deadline}</p>
@@ -268,48 +267,96 @@ function FilterTags({ selectedFilter, onFilterChange, projectCounts }: { selecte
 // Assets Drawer Component
 function AssetsDrawer({ open, onOpenChange, client }: { open: boolean; onOpenChange: (open: boolean) => void; client: ClientRoom }) {
   const [copiedColor, setCopiedColor] = useState<string | null>(null)
-  const copyColor = (color: string) => { navigator.clipboard.writeText(color); setCopiedColor(color); setTimeout(() => setCopiedColor(null), 2000) }
+  const copyColor = (hex: string) => {
+    const val = hex.startsWith("#") ? hex : `#${hex}`
+    navigator.clipboard.writeText(val)
+    setCopiedColor(hex)
+    setTimeout(() => setCopiedColor(null), 2000)
+  }
+
+  const ensureHash = (hex: string) => hex.startsWith("#") ? hex : `#${hex}`
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[400px] sm:max-w-[400px] p-0">
         <SheetHeader className="p-6 pb-4 border-b">
           <SheetTitle className="flex items-center gap-2"><Palette className="w-5 h-5 text-[#5C6ECD]" /> Brand Assets</SheetTitle>
-          <SheetDescription>Manage your brand colors, fonts, and assets</SheetDescription>
+          <SheetDescription>Brand colors, fonts, and assets for {client.name}</SheetDescription>
         </SheetHeader>
         <ScrollArea className="h-[calc(100vh-120px)]">
           <div className="p-6 space-y-6">
+            {/* Logo */}
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-[#5C6ECD]" /> Logo</h3>
-              <div className="p-4 rounded-xl border border-border bg-muted/30 flex items-center justify-center">
+              <div className="p-6 rounded-xl border border-border bg-muted/30 flex items-center justify-center">
                 {client.logoUrl ? <img src={client.logoUrl} alt="Logo" className="h-16 object-contain" /> : <div className="w-20 h-20 rounded-xl bg-black flex items-center justify-center"><span className="text-white font-bold text-xl">{client.logo}</span></div>}
               </div>
-              <Button variant="outline" size="sm" className="w-full mt-3 gap-2"><Download className="w-4 h-4" /> Download Logo Pack</Button>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Palette className="w-4 h-4 text-[#5C6ECD]" /> Color Palette</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {client.colors.map((color, index) => (
-                  <button key={index} onClick={() => copyColor(color)} className="group relative aspect-square rounded-xl border border-border overflow-hidden hover:scale-105 transition-transform">
-                    <div className="w-full h-full" style={{ backgroundColor: color }} />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30"><Copy className="w-4 h-4 text-white" /></div>
-                    {copiedColor === color && <div className="absolute inset-0 flex items-center justify-center bg-black/60"><span className="text-white text-xs font-medium">Copied!</span></div>}
-                    <div className="absolute bottom-1 left-1 right-1"><span className="text-[9px] font-mono bg-black/50 text-white px-1 py-0.5 rounded">{color}</span></div>
-                  </button>
-                ))}
+
+            {/* Color Palette */}
+            {client.colorDetails.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Palette className="w-4 h-4 text-[#5C6ECD]" /> Color Palette</h3>
+                <div className="space-y-2">
+                  {client.colorDetails.map((color, index) => (
+                    <button
+                      key={index}
+                      onClick={() => copyColor(color.hex)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-border hover:border-[#5C6ECD]/30 transition-colors group"
+                    >
+                      <div className="w-10 h-10 rounded-lg shrink-0 border border-border shadow-sm" style={{ backgroundColor: ensureHash(color.hex) }} />
+                      <div className="flex-1 text-left min-w-0">
+                        {color.name && <p className="text-sm font-medium text-foreground truncate">{color.name}</p>}
+                        <p className="text-xs font-mono text-muted-foreground">{ensureHash(color.hex).toUpperCase()}</p>
+                      </div>
+                      <div className="shrink-0">
+                        {copiedColor === color.hex ? (
+                          <span className="text-xs text-emerald-600 font-medium">Copied!</span>
+                        ) : (
+                          <Copy className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Type className="w-4 h-4 text-[#5C6ECD]" /> Typography</h3>
-              <div className="space-y-2">
-                {[{ label: "Primary", value: client.primaryFont }, { label: "Secondary", value: client.secondaryFont }, { label: "Tertiary", value: client.tertiaryFont }].map((font) => (
-                  <div key={font.label} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                    <div><span className="text-xs text-muted-foreground">{font.label}</span><p className="font-semibold text-foreground">{font.value}</p></div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8"><Download className="w-4 h-4" /></Button>
-                  </div>
-                ))}
+            )}
+
+            {/* Typography */}
+            {client.fonts.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><Type className="w-4 h-4 text-[#5C6ECD]" /> Typography</h3>
+                <div className="space-y-2">
+                  {client.fonts.map((font, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+                      <div>
+                        <span className="text-xs text-muted-foreground">{font.label}</span>
+                        <p className="font-semibold text-foreground">{font.fontName}</p>
+                      </div>
+                      {font.fontUrl && (
+                        <a href={font.fontUrl} target="_blank" rel="noopener noreferrer">
+                          <Button variant="ghost" size="icon" className="h-8 w-8"><Download className="w-4 h-4" /></Button>
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Brand Images */}
+            {client.brandImages.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-[#5C6ECD]" /> Brand Images</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {client.brandImages.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg border border-border overflow-hidden hover:border-[#5C6ECD]/30 transition-colors group">
+                      <img src={url} alt={`Brand ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </SheetContent>
@@ -408,9 +455,10 @@ interface RoomContentProps {
   orgMembers?: OrgMember[]
   clientEditData?: Record<string, unknown>
   organizationId?: string | null
+  userRole?: "admin" | "designer" | "client"
 }
 
-export function RoomContent({ clientData, orgMembers = [], clientEditData, organizationId }: RoomContentProps) {
+export function RoomContent({ clientData, orgMembers = [], clientEditData, organizationId, userRole = "admin" }: RoomContentProps) {
   const router = useRouter()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
     clientData.projects.length > 0 ? clientData.projects[0] : null
@@ -431,7 +479,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
 
   // Creative modal state
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
-  const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], file: null as File | null, filePreview: "" })
+  const [newCreative, setNewCreative] = useState({ name: "", type: "image" as Creative["type"], file: null as File | null, filePreview: "" })
   const creativeFileInputRef = useRef<HTMLInputElement>(null)
 
   // Reference preview state
@@ -450,11 +498,21 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
 
   // Sync selectedProject when clientData.projects changes (e.g. after router.refresh())
   useEffect(() => {
-    if (clientData.projects.length > 0 && !selectedProject) {
-      setSelectedProject(clientData.projects[0])
-      setEditData(clientData.projects[0])
+    if (clientData.projects.length > 0) {
+      if (!selectedProject) {
+        setSelectedProject(clientData.projects[0])
+        setEditData(clientData.projects[0])
+      } else {
+        // Update the selected project with fresh server data (e.g. after router.refresh())
+        const fresh = clientData.projects.find(p => p.id === selectedProject.id)
+        if (fresh) {
+          setSelectedProject(fresh)
+          setEditData(fresh)
+        }
+      }
     }
-  }, [clientData.projects, selectedProject])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientData.projects])
 
   const projectCounts = client.projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; acc.all = (acc.all || 0) + 1; return acc }, {} as Record<string, number>)
   const filteredProjects = client.projects.filter(p => {
@@ -505,7 +563,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
   }
 
   const handleCreativeClick = (creative: Creative) => {
-    if (selectedProject) router.push(`/communication?projectId=${selectedProject.id}&creativeId=${creative.id}`)
+    if (selectedProject) router.push(`/revue?projectId=${selectedProject.id}&creativeId=${creative.id}`)
   }
 
   // Deliverable handlers
@@ -610,11 +668,14 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
     }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
-    setNewCreative({ name: "", type: "design", file: null, filePreview: "" })
+    setNewCreative({ name: "", type: "image", file: null, filePreview: "" })
     setAddCreativeOpen(false)
 
     const newStatus = await recalculateBriefStatus(selectedProject.id, updatedCreatives)
     setSelectedProject((prev) => prev ? { ...prev, status: newStatus } : prev)
+
+    // Refresh server data so creatives persist across page reloads
+    router.refresh()
   }
 
   // Team member handler
@@ -783,10 +844,12 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
             <Layers className="w-4 h-4 text-[#5C6ECD]" />
             <span className="text-sm font-medium text-foreground">Brand Assets</span>
           </button>
-          <button onClick={() => setEditClientOpen(true)} className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
-            <Settings className="w-4 h-4 text-[#5C6ECD] group-hover:rotate-90 transition-transform duration-300" />
-            <span className="text-sm font-medium text-foreground">Edit Client</span>
-          </button>
+          {userRole === "admin" && (
+            <button onClick={() => setEditClientOpen(true)} className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
+              <Settings className="w-4 h-4 text-[#5C6ECD] group-hover:rotate-90 transition-transform duration-300" />
+              <span className="text-sm font-medium text-foreground">Edit Client</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -814,13 +877,15 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                   </div>
                   <p className="text-sm font-medium text-foreground mb-1">No projects yet</p>
                   <p className="text-xs text-muted-foreground mb-4">Create your first project to get started</p>
-                  <button
-                    onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Project
-                  </button>
+                  {userRole === "admin" && (
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-lg transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Project
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -834,17 +899,21 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
               <div className="w-20 h-20 rounded-2xl bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-5">
                 <Briefcase className="w-10 h-10 text-[#5C6ECD]" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">Add your first project</h3>
+              <h3 className="text-xl font-bold text-foreground mb-2">{userRole === "admin" ? "Add your first project" : "No projects yet"}</h3>
               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                Create a project to start managing briefs, deliverables, and creatives for {client.name}.
+                {userRole === "admin"
+                  ? `Create a project to start managing briefs, deliverables, and creatives for ${client.name}.`
+                  : `No projects have been created for ${client.name} yet.`}
               </p>
-              <button
-                onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
-                className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-xl shadow-lg shadow-[#5C6ECD]/25 transition-all"
-              >
-                <Plus className="w-5 h-5" />
-                Create Project
-              </button>
+              {userRole === "admin" && (
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
+                  className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-xl shadow-lg shadow-[#5C6ECD]/25 transition-all"
+                >
+                  <Plus className="w-5 h-5" />
+                  Create Project
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -880,9 +949,9 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                     <Button variant="outline" onClick={handleCancel} size="sm"><X className="w-4 h-4 mr-2" />Cancel</Button>
                     <Button onClick={handleSave} size="sm" className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"><FileCheck className="w-4 h-4 mr-2" />Save</Button>
                   </>
-                ) : (
+                ) : userRole === "admin" ? (
                   <Button variant="outline" onClick={() => setIsEditing(true)} size="sm"><Pencil className="w-4 h-4 mr-2" />Edit</Button>
-                )}
+                ) : null}
               </div>
             </div>
 
@@ -912,14 +981,14 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                         <p className="text-xs text-muted-foreground">{getDeliverableStats(data.deliverables).completed}/{getDeliverableStats(data.deliverables).total} completed</p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}><Plus className="w-4 h-4 mr-2" />Add</Button>
+                    {userRole === "admin" && <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}><Plus className="w-4 h-4 mr-2" />Add</Button>}
                   </div>
                   <div className="space-y-2">
                     {data.deliverables.map((deliverable) => (
                       <div
                         key={deliverable.id}
-                        onClick={() => handleToggleDeliverableStatus(deliverable.id)}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer group"
+                        onClick={userRole === "admin" ? () => handleToggleDeliverableStatus(deliverable.id) : undefined}
+                        className={cn("flex items-center justify-between p-3 rounded-lg bg-muted/50 transition-colors group", userRole === "admin" && "hover:bg-muted cursor-pointer")}
                       >
                         <div className="flex items-center gap-3">
                           <div className="relative">
@@ -958,7 +1027,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                       <h3 className="text-base font-semibold text-foreground">Creatives</h3>
                       <span className="text-sm text-muted-foreground">({data.creatives.length})</span>
                     </div>
-                    <Button size="sm" className="bg-[#5C6ECD] hover:bg-[#4a5bb8]" onClick={() => setAddCreativeOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Creative</Button>
+                    {userRole !== "client" && <Button size="sm" variant="outline" onClick={() => setAddCreativeOpen(true)}><Plus className="w-4 h-4 mr-2" />Add</Button>}
                   </div>
 
                   {data.creatives.length > 0 ? (
@@ -986,8 +1055,20 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                           >
                             {/* Thumbnail */}
                             <div className="relative aspect-[4/3] bg-muted overflow-hidden">
-                              <img src={creative.thumbnailUrl} alt={creative.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                              {creative.type === "video" && (
+                              {creative.thumbnailUrl ? (
+                                <img src={creative.thumbnailUrl} alt={creative.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#f8f9ff] via-white to-[#f0f4ff] dark:from-[#111] dark:via-[#0a0a0a] dark:to-[#0d0f1a]">
+                                  <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)", backgroundSize: "20px 20px" }} />
+                                  <div className="relative flex flex-col items-center gap-2">
+                                    <div className="w-12 h-12 rounded-xl bg-[#5C6ECD]/10 flex items-center justify-center">
+                                      <TypeIcon className="w-6 h-6 text-[#5C6ECD]/60" />
+                                    </div>
+                                    <span className="text-xs text-muted-foreground/60 font-medium">No preview</span>
+                                  </div>
+                                </div>
+                              )}
+                              {creative.type === "video" && creative.thumbnailUrl && (
                                 <div className="absolute inset-0 flex items-center justify-center">
                                   <div className="w-14 h-14 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
                                     <Play className="w-6 h-6 text-foreground ml-1" />
@@ -1044,13 +1125,30 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                       })}
                     </div>
                   ) : (
-                    <div className="rounded-xl border-2 border-dashed border-border p-12 text-center bg-card">
-                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                        <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                    <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#f8f9ff] via-white to-[#f0f4ff] dark:from-[#111] dark:via-[#0a0a0a] dark:to-[#0d0f1a] border border-border min-h-[340px] flex items-center justify-center">
+                      {/* Background pattern */}
+                      <div className="absolute inset-0 opacity-[0.04] dark:opacity-[0.06]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)", backgroundSize: "24px 24px" }} />
+                      {/* Floating decorative elements */}
+                      <div className="absolute top-8 left-8 w-20 h-14 rounded-xl bg-[#5C6ECD]/[0.06] border border-[#5C6ECD]/10 rotate-[-8deg]" />
+                      <div className="absolute top-12 right-12 w-16 h-16 rounded-xl bg-[#5C6ECD]/[0.04] border border-[#5C6ECD]/10 rotate-[12deg]" />
+                      <div className="absolute bottom-10 left-16 w-14 h-10 rounded-lg bg-[#5C6ECD]/[0.05] border border-[#5C6ECD]/10 rotate-[6deg]" />
+                      <div className="absolute bottom-8 right-20 w-24 h-16 rounded-xl bg-[#5C6ECD]/[0.04] border border-[#5C6ECD]/10 rotate-[-4deg]" />
+                      {/* Content */}
+                      <div className="relative text-center px-8 py-12">
+                        <div className="w-16 h-16 rounded-2xl bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-5 shadow-sm">
+                          <ImageIcon className="w-8 h-8 text-[#5C6ECD]" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-foreground mb-2">No creatives yet</h3>
+                        <p className="text-muted-foreground mb-6 max-w-xs mx-auto text-sm">
+                          {userRole === "client" ? "No creative assets have been uploaded yet." : "Upload your first creative asset to start collaborating with your team."}
+                        </p>
+                        {userRole !== "client" && (
+                          <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8] shadow-lg shadow-[#5C6ECD]/20" onClick={() => setAddCreativeOpen(true)}>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload Creative
+                          </Button>
+                        )}
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No creatives yet</h3>
-                      <p className="text-muted-foreground mb-6 max-w-sm mx-auto">Upload your first creative to start collaborating.</p>
-                      <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8]" onClick={() => setAddCreativeOpen(true)}><Upload className="w-4 h-4 mr-2" />Add Creative</Button>
                     </div>
                   )}
                 </div>
@@ -1070,13 +1168,15 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                     <Users className="w-4 h-4 text-[#5C6ECD]" />
                     Team ({selectedProject.team.length})
                   </h3>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTeamModalOpen(true)}>
-                    <Plus className="w-3.5 h-3.5" />
-                  </Button>
+                  {userRole === "admin" && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTeamModalOpen(true)}>
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {selectedProject.team.slice(0, 4).map((member) => (
-                    <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => setTeamModalOpen(true)}>
+                    <div key={member.id} className={cn("flex items-center gap-2 p-2 rounded-lg transition-colors", userRole === "admin" && "hover:bg-muted/50 cursor-pointer")} onClick={userRole === "admin" ? () => setTeamModalOpen(true) : undefined}>
                       <Avatar className="w-8 h-8">
                         <AvatarImage src={member.avatar} alt={member.name} />
                         <AvatarFallback className="bg-[#5C6ECD] text-white text-xs">{member.name.charAt(0)}</AvatarFallback>
@@ -1087,7 +1187,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                       </div>
                     </div>
                   ))}
-                  {selectedProject.team.length > 4 && (
+                  {selectedProject.team.length > 4 && userRole === "admin" && (
                     <button onClick={() => setTeamModalOpen(true)} className="w-full text-xs text-[#5C6ECD] hover:underline py-2">
                       View all {selectedProject.team.length} members
                     </button>
@@ -1250,12 +1350,6 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="design">
-                    <div className="flex items-center gap-2">
-                      <Palette className="w-4 h-4" />
-                      Design
-                    </div>
-                  </SelectItem>
                   <SelectItem value="image">
                     <div className="flex items-center gap-2">
                       <FileImage className="w-4 h-4" />

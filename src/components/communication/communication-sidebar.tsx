@@ -42,7 +42,6 @@ interface Tool {
 const tools: Tool[] = [
   { id: "pointer", icon: MousePointer2, label: "Pointer", shortcut: "V" },
   { id: "draw", icon: Pencil, label: "Draw", shortcut: "D" },
-  { id: "shape", icon: Square, label: "Shape", shortcut: "S" },
   { id: "comment", icon: MessageSquare, label: "Comment", shortcut: "C" },
   { id: "compare", icon: GitCompare, label: "Compare", shortcut: "K", isToggle: true },
   { id: "rotate", icon: RotateCw, label: "Rotate", shortcut: "R" },
@@ -94,6 +93,8 @@ interface CommunicationSidebarProps {
   // External control of AI options panel
   showAIOptions?: boolean;
   onShowAIOptionsChange?: (show: boolean) => void;
+  // Role-based
+  canAddFeedback?: boolean;
 }
 
 export function CommunicationSidebar({
@@ -109,6 +110,7 @@ export function CommunicationSidebar({
   viewMode = "comments",
   showAIOptions: externalShowAIOptions,
   onShowAIOptionsChange,
+  canAddFeedback = true,
 }: CommunicationSidebarProps) {
   const [internalShowAIOptions, setInternalShowAIOptions] = useState(false);
 
@@ -122,8 +124,8 @@ export function CommunicationSidebar({
     }
   };
 
-  const showExtension = selectedTool === "draw" || selectedTool === "shape";
-  // Disable draw, shape, comment tools when AI analysis is active OR when in AI view mode
+  const showExtension = selectedTool === "draw";
+  // Disable draw, comment tools when AI analysis is active OR when in AI view mode
   const toolsDisabled = aiAnalysisActive || viewMode === "ai";
 
   const handleAIAnalysis = (type: AIAnalysisType) => {
@@ -164,7 +166,7 @@ export function CommunicationSidebar({
 
           {/* Tool Buttons */}
           <div className="flex flex-col items-center gap-0.5">
-            {tools.map((tool) => {
+            {tools.filter(tool => canAddFeedback || tool.id !== "comment").map((tool) => {
               const isActive = tool.id === "compare" ? compareMode : selectedTool === tool.id;
               const isDisabled = toolsDisabled && tool.id !== "compare" && tool.id !== "rotate";
 
@@ -215,10 +217,9 @@ export function CommunicationSidebar({
           )}
         </div>
 
-        {/* Extension Panel - Color & Shape Selector */}
+        {/* Extension Panel - Color Selector for Draw tool */}
         {showExtension && (
           <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-lg border border-gray-200 dark:border-[#444] p-3 flex flex-col gap-3">
-            {/* Color Picker */}
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Color</span>
               <div className="grid grid-cols-4 gap-1.5">
@@ -238,40 +239,6 @@ export function CommunicationSidebar({
                 ))}
               </div>
             </div>
-
-            {/* Shape Selector - Only show for shape tool */}
-            {selectedTool === "shape" && (
-              <>
-                <div className="border-t border-gray-200 dark:border-[#444]" />
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Shape</span>
-                  <div className="grid grid-cols-2 gap-1">
-                    {shapeOptions.map((option) => (
-                      <Tooltip key={option.type}>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onShapeTypeChange?.(option.type)}
-                            className={cn(
-                              "h-9 w-9",
-                              shapeType === option.type
-                                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]"
-                            )}
-                          >
-                            {option.icon}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">
-                          <p>{option.label}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         )}
 

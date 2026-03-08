@@ -12,6 +12,7 @@ export interface DrawingPath {
   type: "draw" | "shape";
   shapeType?: ShapeType;
   points?: { x: number; y: number }[];
+  pathData?: string; // Full SVG path string for freehand drawings (preserves curves)
   rect?: { x: number; y: number; width: number; height: number };
   ellipse?: { cx: number; cy: number; rx: number; ry: number };
   line?: { x1: number; y1: number; x2: number; y2: number };

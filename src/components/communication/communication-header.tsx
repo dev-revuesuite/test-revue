@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Download,
-  CheckCircle,
   ChevronRight,
   ChevronDown,
   Plus,
@@ -20,7 +19,6 @@ import {
   Contrast,
   HelpCircle,
   LogOut,
-  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -50,15 +48,12 @@ interface CommunicationHeaderProps {
   onIterationChange?: (id: string) => void;
   onNewIteration?: () => void;
   onShare?: () => void;
-  unresolvedCount?: number;
+  clientId?: string;
+  clientName?: string;
+  clientLogo?: string;
+  projectName?: string;
+  creativeName?: string;
 }
-
-// Mock user data - in real app this would come from auth context
-const currentUser = {
-  name: "John Doe",
-  email: "john@example.com",
-  avatar: "",
-};
 
 export function CommunicationHeader({
   iterations: propIterations,
@@ -66,20 +61,33 @@ export function CommunicationHeader({
   onIterationChange,
   onNewIteration,
   onShare,
-  unresolvedCount = 0,
+  clientId = "",
+  clientName = "",
+  clientLogo = "",
+  projectName = "",
+  creativeName: propCreativeName = "Creative",
 }: CommunicationHeaderProps) {
   const router = useRouter();
-  const [creativeName, setCreativeName] = useState("Homepage Banner");
+  const [creativeName, setCreativeName] = useState(propCreativeName);
   const [isEditing, setIsEditing] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [currentUser, setCurrentUser] = useState({ name: "", email: "", avatar: "" });
 
-  // Use prop iterations or fallback
-  const iterations = propIterations || [
-    { id: "5", name: "Iteration 5", version: 5, timestamp: "Today, 2:30 PM" },
-    { id: "4", name: "Iteration 4", version: 4, timestamp: "Today, 11:00 AM" },
-    { id: "3", name: "Iteration 3", version: 3, timestamp: "Yesterday, 4:15 PM" },
-  ];
-  const activeIteration = propActiveId || "5";
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setCurrentUser({
+          name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+          email: user.email || "",
+          avatar: user.user_metadata?.avatar_url || "",
+        });
+      }
+    });
+  }, []);
+
+  const iterations = propIterations || [];
+  const activeIteration = propActiveId || iterations[0]?.id || "";
 
   const currentIteration = iterations.find((i) => i.id === activeIteration);
 
@@ -132,13 +140,6 @@ export function CommunicationHeader({
     }
   };
 
-  // Sample active users
-  const activeUsers = [
-    { id: "1", name: "Mike", color: "bg-orange-400" },
-    { id: "2", name: "Andrea", color: "bg-green-500" },
-    { id: "3", name: "Nina", color: "bg-purple-500" },
-  ];
-
   return (
     <>
       {/* Left Section - Floating */}
@@ -153,21 +154,35 @@ export function CommunicationHeader({
           <ChevronRight className="w-4 h-4 text-gray-400" />
 
           {/* Client Logo + Name */}
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded flex items-center justify-center">
-              <span className="text-white text-xs font-bold">SC</span>
-            </div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Shaadicards</span>
-          </div>
+          {clientName && (
+            <>
+              <div className="flex items-center gap-1.5">
+                {clientLogo ? (
+                  <img src={clientLogo} alt={clientName} className="w-6 h-6 rounded object-cover" />
+                ) : (
+                  <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">{clientName.charAt(0).toUpperCase()}</span>
+                  </div>
+                )}
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{clientName}</span>
+              </div>
 
-          {/* Separator */}
-          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+              <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+            </>
+          )}
 
-          {/* Project Name */}
-          <span className="text-sm text-gray-600 dark:text-gray-300">Marketing Campaign</span>
-
-          {/* Separator */}
-          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+          {/* Project Name - Links to room */}
+          {projectName && (
+            <>
+              <Link
+                href={`/room?client=${clientId}`}
+                className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                {projectName}
+              </Link>
+              <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+            </>
+          )}
 
           {/* Creative Name - Editable */}
           {isEditing ? (
@@ -201,7 +216,7 @@ export function CommunicationHeader({
               <button className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-[#333] transition-colors">
                 <History className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {currentIteration?.name || "Iteration 5"}
+                  {currentIteration?.name || "No Iterations"}
                 </span>
                 <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500" />
               </button>
@@ -241,55 +256,16 @@ export function CommunicationHeader({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* New Iteration Button */}
-          <button
-            onClick={handleNewIteration}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-sm transition-all relative",
-              unresolvedCount > 0
-                ? "bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-                : "bg-[#DBFE52] hover:bg-[#d0f043] text-black"
-            )}
-          >
-            {unresolvedCount > 0 ? (
-              <AlertCircle className="w-4 h-4" />
-            ) : (
+          {/* New Iteration Button - only for users who can upload */}
+          {onNewIteration && (
+            <button
+              onClick={handleNewIteration}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-sm transition-all bg-[#DBFE52] hover:bg-[#d0f043] text-black"
+            >
               <Plus className="w-4 h-4" />
-            )}
-            New Iteration
-            {unresolvedCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                {unresolvedCount}
-              </span>
-            )}
-          </button>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-200 dark:bg-[#444]" />
-
-          {/* Active Users */}
-          <div className="flex items-center -space-x-2">
-            {activeUsers.map((user) => (
-              <Avatar key={user.id} className="h-8 w-8 border-2 border-white dark:border-[#2a2a2a]">
-                <AvatarFallback className={`${user.color} text-white text-xs font-medium`}>
-                  {user.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-          </div>
-
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-200 dark:bg-[#444]" />
-
-          {/* Resolve Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 text-sm font-medium text-gray-600 dark:text-gray-300 gap-1.5 hover:bg-gray-100 dark:hover:bg-[#333]"
-          >
-            <CheckCircle className="w-4 h-4 text-green-500" />
-            Resolve
-          </Button>
+              New Iteration
+            </button>
+          )}
 
           {/* Download Button - Icon only */}
           <Button

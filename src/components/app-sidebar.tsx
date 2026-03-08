@@ -3,40 +3,54 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon } from "lucide-react"
+import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon, FolderOpen } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
-const navItems = [
+type UserRole = "admin" | "designer" | "client"
+
+const allNavItems = [
   {
     title: "Dashboard",
     url: "/studio",
     icon: LayoutGrid,
+    roles: ["admin", "designer"] as UserRole[],
+  },
+  {
+    title: "Projects",
+    url: "/productive-zone",
+    icon: FolderOpen,
+    roles: ["client"] as UserRole[],
   },
   {
     title: "Master Drive",
     url: "/master-drive",
     icon: HardDrive,
+    roles: ["admin", "designer", "client"] as UserRole[],
   },
   {
     title: "Creative Zone",
     url: "/creative-zone",
     icon: Palette,
+    roles: ["admin", "designer"] as UserRole[],
   },
   {
     title: "Productive Zone",
     url: "/productive-zone",
     icon: Briefcase,
+    roles: ["admin", "designer"] as UserRole[],
   },
   {
     title: "Settings",
     url: "/settings",
     icon: Settings,
+    roles: ["admin", "designer", "client"] as UserRole[],
   },
   {
     title: "Help Desk",
     url: "/help-desk",
     icon: HelpCircle,
+    roles: ["admin", "designer", "client"] as UserRole[],
   },
 ]
 
@@ -46,9 +60,11 @@ interface AppSidebarProps {
     email: string
     avatar: string
   }
+  userRole?: UserRole
+  clientId?: string | null
 }
 
-export function AppSidebar({ user }: AppSidebarProps) {
+export function AppSidebar({ user, userRole = "admin", clientId }: AppSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
@@ -56,6 +72,16 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [isExpanded, setIsExpanded] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
   const [pendingUrl, setPendingUrl] = React.useState<string | null>(null)
+
+  const navItems = allNavItems
+    .filter((item) => item.roles.includes(userRole))
+    .map((item) => {
+      // Point client "Projects" to their room page
+      if (item.title === "Projects" && userRole === "client" && clientId) {
+        return { ...item, url: `/room?client=${clientId}` }
+      }
+      return item
+    })
 
   React.useEffect(() => {
     setMounted(true)
@@ -91,7 +117,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
       {/* Navigation Items - Top */}
       <nav className="flex flex-col items-center gap-2 py-4 px-2">
         {navItems.map((item) => {
-          const isActive = pathname === item.url || pathname.startsWith(item.url + "/")
+          const isActive = item.url.startsWith("/room")
+            ? pathname === "/room"
+            : pathname === item.url || pathname.startsWith(item.url + "/")
           const isNavigating = pendingUrl === item.url
 
           return (

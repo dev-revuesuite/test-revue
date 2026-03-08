@@ -72,6 +72,12 @@ export function SignupForm({
         },
         { onConflict: "id" }
       )
+
+      // Auto-link to organization if email was pre-added as a team member
+      await supabase.rpc("link_user_to_org_member", {
+        p_user_id: userId,
+        p_email: data.user?.email || email,
+      })
     }
 
     router.push("/onboarding")

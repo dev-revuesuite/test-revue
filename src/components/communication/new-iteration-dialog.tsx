@@ -1,22 +1,16 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { X, Upload, Image, AlertTriangle, Info, FileImage, Trash2, CloudUpload } from "lucide-react";
+import { X, Upload, Info, FileImage, Trash2, CloudUpload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-interface UnresolvedFeedback {
-  id: string;
-  number: string;
-  content: string;
-}
 
 interface NewIterationDialogProps {
   open: boolean;
   onClose: () => void;
   onUpload: (file: File) => void;
   currentIteration: number;
-  unresolvedFeedbacks: UnresolvedFeedback[];
+  isFirstIteration?: boolean;
 }
 
 export function NewIterationDialog({
@@ -24,14 +18,12 @@ export function NewIterationDialog({
   onClose,
   onUpload,
   currentIteration,
-  unresolvedFeedbacks,
+  isFirstIteration = false,
 }: NewIterationDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const hasUnresolvedFeedbacks = unresolvedFeedbacks.length > 0;
 
   const handleFileSelect = (file: File) => {
     if (file && file.type.startsWith("image/")) {
@@ -66,7 +58,7 @@ export function NewIterationDialog({
   };
 
   const handleUpload = () => {
-    if (selectedFile && !hasUnresolvedFeedbacks) {
+    if (selectedFile) {
       onUpload(selectedFile);
       handleClose();
     }
@@ -96,65 +88,39 @@ export function NewIterationDialog({
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                New Iteration
+                {isFirstIteration ? "Upload Your Design" : "New Iteration"}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                Upload to create Version {currentIteration + 1}
+                {isFirstIteration
+                  ? "Upload the first design to get started"
+                  : `Upload to create Version ${currentIteration + 1}`
+                }
               </p>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2.5 hover:bg-gray-100 dark:hover:bg-[#2a2a2a] rounded-xl transition-colors"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
+          {!isFirstIteration && (
+            <button
+              onClick={handleClose}
+              className="p-2.5 hover:bg-gray-100 dark:hover:bg-[#2a2a2a] rounded-xl transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
         </div>
 
         {/* Content */}
         <div className="p-6">
-          {/* Warning for unresolved feedbacks */}
-          {hasUnresolvedFeedbacks && (
-            <div className="mb-6 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200/60 dark:border-amber-700/40 overflow-hidden">
-              <div className="px-4 py-3 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200/60 dark:border-amber-700/40">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                    {unresolvedFeedbacks.length} Unresolved Feedback{unresolvedFeedbacks.length > 1 ? "s" : ""}
-                  </span>
-                </div>
-              </div>
-              <div className="p-4 space-y-2 max-h-[140px] overflow-y-auto">
-                {unresolvedFeedbacks.map((feedback) => (
-                  <div
-                    key={feedback.id}
-                    className="flex items-start gap-3 p-2.5 bg-white/60 dark:bg-black/20 rounded-lg"
-                  >
-                    <span className="shrink-0 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-md">
-                      {feedback.number}
-                    </span>
-                    <span className="text-sm text-amber-900 dark:text-amber-100 leading-snug line-clamp-2">
-                      {feedback.content}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Upload Area */}
           <div
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onClick={() => !hasUnresolvedFeedbacks && fileInputRef.current?.click()}
+            onClick={() => fileInputRef.current?.click()}
             className={cn(
-              "relative rounded-xl border-2 border-dashed transition-all",
-              hasUnresolvedFeedbacks
-                ? "border-gray-200 dark:border-[#333] bg-gray-50/50 dark:bg-[#1a1a1a] cursor-not-allowed"
-                : isDragging
+              "relative rounded-xl border-2 border-dashed transition-all cursor-pointer",
+              isDragging
                 ? "border-[#5C6ECD] bg-[#5C6ECD]/5 scale-[1.01]"
-                : "border-gray-200 dark:border-[#3a3a3a] hover:border-[#5C6ECD] hover:bg-gray-50 dark:hover:bg-[#252525] cursor-pointer",
+                : "border-gray-200 dark:border-[#3a3a3a] hover:border-[#5C6ECD] hover:bg-gray-50 dark:hover:bg-[#252525]",
               preview ? "p-4" : "py-12 px-6"
             )}
           >
@@ -164,7 +130,6 @@ export function NewIterationDialog({
               accept="image/*"
               onChange={handleInputChange}
               className="hidden"
-              disabled={hasUnresolvedFeedbacks}
             />
 
             {preview ? (
@@ -200,75 +165,62 @@ export function NewIterationDialog({
                 </div>
               </div>
             ) : (
-              <div className={cn(
-                "flex flex-col items-center text-center",
-                hasUnresolvedFeedbacks && "opacity-40"
-              )}>
-                <div className={cn(
-                  "w-16 h-16 mb-4 rounded-2xl flex items-center justify-center",
-                  hasUnresolvedFeedbacks
-                    ? "bg-gray-100 dark:bg-[#2a2a2a]"
-                    : "bg-gradient-to-br from-[#5C6ECD]/10 to-[#5C6ECD]/5"
-                )}>
-                  <CloudUpload className={cn(
-                    "w-8 h-8",
-                    hasUnresolvedFeedbacks ? "text-gray-300 dark:text-gray-600" : "text-[#5C6ECD]"
-                  )} />
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 mb-4 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#5C6ECD]/10 to-[#5C6ECD]/5">
+                  <CloudUpload className="w-8 h-8 text-[#5C6ECD]" />
                 </div>
                 <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
-                  {hasUnresolvedFeedbacks ? "Upload Disabled" : "Drop your image here"}
+                  Drop your image here
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  {hasUnresolvedFeedbacks
-                    ? "Resolve all feedbacks first"
-                    : "or click to browse files"
-                  }
+                  or click to browse files
                 </p>
-                {!hasUnresolvedFeedbacks && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-[#2a2a2a] rounded">PNG</span>
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-[#2a2a2a] rounded">JPG</span>
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-[#2a2a2a] rounded">WebP</span>
-                    <span className="text-gray-300 dark:text-gray-600">•</span>
-                    <span>Max 25MB</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="px-2 py-1 bg-gray-100 dark:bg-[#2a2a2a] rounded">PNG</span>
+                  <span className="px-2 py-1 bg-gray-100 dark:bg-[#2a2a2a] rounded">JPG</span>
+                  <span className="px-2 py-1 bg-gray-100 dark:bg-[#2a2a2a] rounded">WebP</span>
+                  <span className="text-gray-300 dark:text-gray-600">•</span>
+                  <span>Max 25MB</span>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Info Banner - More compact */}
-          {!hasUnresolvedFeedbacks && (
-            <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-blue-50/70 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
-              <Info className="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0" />
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                This creates Iteration {currentIteration + 1}. Previous feedbacks stay with v{currentIteration}.
-              </p>
-            </div>
-          )}
+          {/* Info Banner */}
+          <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-blue-50/70 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
+            <Info className="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0" />
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              {isFirstIteration
+                ? "Upload your design to start collecting feedback and collaborating with your team."
+                : `This creates Iteration ${currentIteration + 1}. Previous feedbacks stay with v${currentIteration}.`
+              }
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-[#2a2a2a] bg-gray-50/50 dark:bg-[#1a1a1a]">
-          <Button
-            variant="ghost"
-            onClick={handleClose}
-            className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-          >
-            Cancel
-          </Button>
+          {!isFirstIteration && (
+            <Button
+              variant="ghost"
+              onClick={handleClose}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              Cancel
+            </Button>
+          )}
           <Button
             onClick={handleUpload}
-            disabled={!selectedFile || hasUnresolvedFeedbacks}
+            disabled={!selectedFile}
             className={cn(
               "gap-2 font-medium",
-              !selectedFile || hasUnresolvedFeedbacks
+              !selectedFile
                 ? "bg-gray-200 dark:bg-[#333] text-gray-400 dark:text-gray-500 cursor-not-allowed"
                 : "bg-[#DBFE52] hover:bg-[#d0f043] text-black shadow-sm"
             )}
           >
             <Upload className="w-4 h-4" />
-            Create Iteration {currentIteration + 1}
+            {isFirstIteration ? "Upload & Get Started" : `Create Iteration ${currentIteration + 1}`}
           </Button>
         </div>
       </div>

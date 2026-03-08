@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { CommunicationHeader } from "./communication-header";
 import { CommunicationSidebar } from "./communication-sidebar";
 import { CommentsPanel, Feedback, ReplyItem, AIAnalysisType, AISuggestion } from "./comments-panel";
@@ -8,17 +10,7 @@ import { ZoomControls } from "./zoom-controls";
 import { CanvasArea } from "./canvas-area";
 import { ShareDialog } from "./share-dialog";
 import { NewIterationDialog } from "./new-iteration-dialog";
-import { ShapeType } from "@/lib/fabric";
-
-// Drawing path type for annotations
-interface DrawingPath {
-  id: string;
-  type: "draw" | "shape";
-  points?: { x: number; y: number }[];
-  rect?: { x: number; y: number; width: number; height: number };
-  color: string;
-  strokeWidth: number;
-}
+import { ShapeType, DrawingPath } from "@/lib/fabric";
 
 // Define iteration type with image, feedbacks, drawings, and AI suggestions
 interface Iteration {
@@ -32,161 +24,73 @@ interface Iteration {
   aiSuggestions: AISuggestion[];
 }
 
-// Initial iterations data with their own feedbacks and drawings
-const initialIterations: Iteration[] = [
-  {
-    id: "5",
-    version: 5,
-    name: "Iteration 5",
-    timestamp: "Today, 2:30 PM",
-    imageUrl: "/assets/login.png",
-    drawings: [],
-    feedbacks: [
-      {
-        id: "5.1",
-        number: "5.1",
-        user: { name: "Mike Johnson", avatar: "M", color: "bg-orange-500" },
-        content: "Can we make the hands more prominent? They seem to blend into the background a bit.",
-        timestamp: "2 hours ago",
-        resolved: false,
-        source: "client",
-        x: 25,
-        y: 15,
-        replies: [
-          {
-            id: "5.1-1",
-            user: { name: "Andrea Smith", avatar: "A", color: "bg-green-500" },
-            content: "I agree! Maybe add a subtle shadow or outline?",
-            timestamp: "1 hour ago",
-          },
-        ],
-      },
-      {
-        id: "5.2",
-        number: "5.2",
-        user: { name: "Andrea Smith", avatar: "A", color: "bg-green-500" },
-        content: "Love the color palette! The pink background really pops.",
-        timestamp: "3 hours ago",
-        resolved: true,
-        source: "team",
-        x: 70,
-        y: 45,
-        replies: [],
-      },
-      {
-        id: "5.3",
-        number: "5.3",
-        user: { name: "Nina Patel", avatar: "N", color: "bg-purple-500" },
-        content: "The user labels need better positioning.",
-        timestamp: "5 hours ago",
-        resolved: false,
-        source: "client",
-        x: 40,
-        y: 75,
-        replies: [],
-      },
-    ],
-    aiSuggestions: [],
-  },
-  {
-    id: "4",
-    version: 4,
-    name: "Iteration 4",
-    timestamp: "Today, 11:00 AM",
-    imageUrl: "/assets/login.png",
-    drawings: [],
-    feedbacks: [
-      {
-        id: "4.1",
-        number: "4.1",
-        user: { name: "Mike Johnson", avatar: "M", color: "bg-orange-500" },
-        content: "Colors look washed out in this version.",
-        timestamp: "6 hours ago",
-        resolved: true,
-        source: "client",
-        x: 50,
-        y: 30,
-        replies: [],
-      },
-      {
-        id: "4.2",
-        number: "4.2",
-        user: { name: "Nina Patel", avatar: "N", color: "bg-purple-500" },
-        content: "Font size needs to be larger.",
-        timestamp: "5 hours ago",
-        resolved: true,
-        source: "team",
-        x: 60,
-        y: 60,
-        replies: [],
-      },
-    ],
-    aiSuggestions: [],
-  },
-  {
-    id: "3",
-    version: 3,
-    name: "Iteration 3",
-    timestamp: "Yesterday, 4:15 PM",
-    imageUrl: "/assets/login.png",
-    drawings: [],
-    feedbacks: [
-      {
-        id: "3.1",
-        number: "3.1",
-        user: { name: "Andrea Smith", avatar: "A", color: "bg-green-500" },
-        content: "Initial layout looks good!",
-        timestamp: "Yesterday",
-        resolved: true,
-        source: "team",
-        x: 45,
-        y: 50,
-        replies: [],
-      },
-    ],
-    aiSuggestions: [],
-  },
-  {
-    id: "2",
-    version: 2,
-    name: "Iteration 2",
-    timestamp: "Dec 15, 2024",
-    imageUrl: "/assets/login.png",
-    drawings: [],
-    feedbacks: [],
-    aiSuggestions: [],
-  },
-  {
-    id: "1",
-    version: 1,
-    name: "Iteration 1",
-    timestamp: "Dec 14, 2024",
-    imageUrl: "/assets/login.png",
-    drawings: [],
-    feedbacks: [],
-    aiSuggestions: [],
-  },
-];
+// Props for the Revue canvas
+interface RevueCanvasProps {
+  creativeId?: string;
+  projectId?: string;
+  creativeName?: string;
+  projectName?: string;
+  clientId?: string;
+  clientName?: string;
+  clientLogo?: string;
+  initialIterations?: Iteration[];
+  currentUser?: { name: string; avatar: string; color: string };
+  userRole?: "owner" | "designer" | "client";
+  workmode?: "creative" | "productive";
+}
 
-// Current user
-const currentUser = {
+// Default current user
+const defaultUser = {
   name: "You",
   avatar: "Y",
   color: "bg-blue-500",
 };
 
 export function CommunicationCanvas() {
+  return <RevueCanvas />;
+}
+
+export function RevueCanvas({
+  creativeId,
+  projectId,
+  creativeName,
+  projectName,
+  clientId,
+  clientName,
+  clientLogo,
+  initialIterations: propIterations,
+  currentUser: propCurrentUser,
+  userRole = "client",
+  workmode = "productive",
+}: RevueCanvasProps = {}) {
+  const supabase = createClient();
+  const currentUser = propCurrentUser || defaultUser;
+  const startIterations = propIterations || [];
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
+  // Role-based permissions
+  const canUploadIterations = userRole === "owner" || userRole === "designer";
+  const canAddFeedback = userRole === "owner" || userRole === "client" || userRole === "designer";
+  const canUseSidebar = true; // everyone can view
+
   const [zoom, setZoom] = useState(100);
   const [selectedTool, setSelectedTool] = useState("pointer");
   const [showComments, setShowComments] = useState(true);
-  const [iterations, setIterations] = useState<Iteration[]>(initialIterations);
-  const [activeIterationId, setActiveIterationId] = useState("5");
+  const [iterations, setIterations] = useState<Iteration[]>(startIterations);
+  const iterationsRef = useRef<Iteration[]>(startIterations);
+  // Keep ref in sync with state
+  iterationsRef.current = iterations;
+  // Track IDs added locally to skip realtime duplicates
+  const localFeedbackIdsRef = useRef<Set<string>>(new Set());
+  const localReplyIdsRef = useRef<Set<string>>(new Set());
+  const localDrawingIdsRef = useRef<Set<string>>(new Set());
+  const [activeIterationId, setActiveIterationId] = useState(startIterations[0]?.id || "1");
   const [highlightedFeedback, setHighlightedFeedback] = useState<string | null>(null);
   const [openFeedbackId, setOpenFeedbackId] = useState<string | null>(null);
 
   // Dialog states
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [showNewIterationDialog, setShowNewIterationDialog] = useState(false);
+  const [showNewIterationDialog, setShowNewIterationDialog] = useState(startIterations.length === 0 && canUploadIterations);
 
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
@@ -205,23 +109,196 @@ export function CommunicationCanvas() {
   // Highlight state for sidebar selection (drawing associated with selected feedback)
   const [highlightDrawingId, setHighlightDrawingId] = useState<string | null>(null);
 
-  // Hide resolved feedbacks state
-  const [hideResolved, setHideResolved] = useState(false);
-
   // AI Analysis state
   const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
   const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
   const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
 
+  // Profile cache for resolving user names from realtime events
+  const profileCacheRef = useRef<Record<string, { name: string; avatar: string; color: string }>>({});
+  // Cache the current auth user ID to identify "You" in realtime events
+  const authUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (authUser) authUserIdRef.current = authUser.id;
+    });
+  }, [supabase]);
+
+  // Fetch a user profile and cache it (checks profiles + organization_members like server does)
+  const resolveUser = useCallback(async (userId: string): Promise<{ name: string; avatar: string; color: string }> => {
+    // If this is the current user, return the currentUser prop (shows "You")
+    if (authUserIdRef.current && userId === authUserIdRef.current) {
+      return currentUser;
+    }
+    if (profileCacheRef.current[userId]) return profileCacheRef.current[userId];
+
+    const [{ data: profileData }, { data: memberData }] = await Promise.all([
+      supabase.from("profiles").select("full_name, avatar_url").eq("id", userId).single(),
+      supabase.from("organization_members").select("name, avatar_url").eq("user_id", userId).single(),
+    ]);
+
+    const name = memberData?.name || profileData?.full_name || "User";
+    const colors = ["bg-orange-500", "bg-green-500", "bg-purple-500", "bg-pink-500", "bg-cyan-500", "bg-red-500", "bg-amber-500"];
+    const colorIdx = Object.keys(profileCacheRef.current).length % colors.length;
+    const profile = {
+      name,
+      avatar: name.charAt(0),
+      color: colors[colorIdx],
+    };
+    profileCacheRef.current[userId] = profile;
+    return profile;
+  }, [supabase, currentUser]);
+
+  // Realtime subscriptions for feedbacks, replies, and drawings
+  useEffect(() => {
+    if (!creativeId) return;
+
+    const channel = supabase
+      .channel(`revue-${creativeId}`)
+      // Listen for new feedbacks
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "feedbacks" },
+        async (payload) => {
+          const row = payload.new as {
+            id: string; iteration_id: string; number: string; content: string;
+            x: number; y: number; resolved: boolean; source: string;
+            drawing_id: string | null; user_id: string; created_at: string;
+          };
+          // Skip if we added this locally (optimistic update already applied)
+          if (localFeedbackIdsRef.current.has(row.number + row.content)) return;
+          // Only process feedbacks for our iterations (use ref for fresh data)
+          const currentIterations = iterationsRef.current;
+          const iterationIds = currentIterations.map(i => i.id);
+          if (!iterationIds.includes(row.iteration_id)) return;
+          // Skip if already in state
+          const existing = currentIterations.find(i => i.id === row.iteration_id)?.feedbacks.find(f => f.id === row.id);
+          if (existing) return;
+
+          const user = await resolveUser(row.user_id);
+          const newFeedback: Feedback = {
+            id: row.id,
+            number: row.number,
+            user,
+            content: row.content,
+            timestamp: "Just now",
+            resolved: row.resolved,
+            source: row.source as "client" | "team",
+            x: row.x || 0,
+            y: row.y || 0,
+            replies: [],
+            drawingId: row.drawing_id || undefined,
+          };
+
+          setIterations(prev => prev.map(iter =>
+            iter.id === row.iteration_id
+              ? { ...iter, feedbacks: [newFeedback, ...iter.feedbacks] }
+              : iter
+          ));
+        }
+      )
+      // Listen for new replies
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "feedback_replies" },
+        async (payload) => {
+          const row = payload.new as {
+            id: string; feedback_id: string; user_id: string; content: string; created_at: string;
+          };
+          // Skip if we added this locally
+          if (localReplyIdsRef.current.has(row.feedback_id + row.content)) return;
+          // Use ref for fresh data
+          const currentIterations = iterationsRef.current;
+          const parentIteration = currentIterations.find(i =>
+            i.feedbacks.some(f => f.id === row.feedback_id)
+          );
+          if (!parentIteration) return;
+          // Skip if already in state
+          const existingReply = parentIteration.feedbacks
+            .find(f => f.id === row.feedback_id)?.replies
+            .find(r => r.id === row.id);
+          if (existingReply) return;
+
+          const user = await resolveUser(row.user_id);
+          const newReply: ReplyItem = {
+            id: row.id,
+            user,
+            content: row.content,
+            timestamp: "Just now",
+          };
+
+          setIterations(prev => prev.map(iter => ({
+            ...iter,
+            feedbacks: iter.feedbacks.map(f =>
+              f.id === row.feedback_id
+                ? { ...f, replies: [...f.replies, newReply] }
+                : f
+            ),
+          })));
+        }
+      )
+      // Listen for new drawings
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "drawings" },
+        (payload) => {
+          const row = payload.new as {
+            id: string; iteration_id: string; type: string;
+            data: {
+              points?: { x: number; y: number }[];
+              pathData?: string;
+              rect?: { x: number; y: number; width: number; height: number };
+              ellipse?: { cx: number; cy: number; rx: number; ry: number };
+              line?: { x1: number; y1: number; x2: number; y2: number };
+              shapeType?: string;
+            };
+            color: string; stroke_width: number; created_by: string; created_at: string;
+          };
+          // Skip if we added this locally
+          if (localDrawingIdsRef.current.has(row.id)) return;
+          const currentIterations = iterationsRef.current;
+          const iterationIds = currentIterations.map(i => i.id);
+          if (!iterationIds.includes(row.iteration_id)) return;
+          const existing = currentIterations.find(i => i.id === row.iteration_id)?.drawings.find(d => d.id === row.id);
+          if (existing) return;
+
+          const newDrawing: DrawingPath = {
+            id: row.id,
+            type: row.type as "draw" | "shape",
+            points: row.data?.points,
+            pathData: row.data?.pathData,
+            rect: row.data?.rect,
+            ellipse: row.data?.ellipse,
+            line: row.data?.line,
+            shapeType: row.data?.shapeType as DrawingPath["shapeType"],
+            color: row.color,
+            strokeWidth: row.stroke_width,
+          };
+
+          setIterations(prev => prev.map(iter =>
+            iter.id === row.iteration_id
+              ? { ...iter, drawings: [...iter.drawings, newDrawing] }
+              : iter
+          ));
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // Only re-subscribe when creativeId changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creativeId]);
+
   // Get current iteration
   const currentIteration = iterations.find(i => i.id === activeIterationId) || iterations[0];
   const currentFeedbacks = currentIteration?.feedbacks || [];
   const currentDrawings = currentIteration?.drawings || [];
   const currentAiSuggestions = currentIteration?.aiSuggestions || [];
-
-  // Get unresolved feedbacks for current iteration
-  const unresolvedFeedbacks = currentFeedbacks.filter(f => !f.resolved);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
@@ -233,11 +310,12 @@ export function CommunicationCanvas() {
 
   // Get the next feedback number for the current iteration
   const getNextFeedbackNumber = useCallback(() => {
+    if (!currentIteration) return 1;
     const iterationFeedbacks = currentFeedbacks.filter(f =>
       f.number.startsWith(`${currentIteration.version}.`)
     );
     return iterationFeedbacks.length + 1;
-  }, [currentFeedbacks, currentIteration.version]);
+  }, [currentFeedbacks, currentIteration]);
 
   // Handle tool selection
   const handleSelectTool = (tool: string) => {
@@ -245,7 +323,7 @@ export function CommunicationCanvas() {
       setCompareMode(!compareMode);
       if (!compareMode && iterations.length > 1) {
         // Default to previous iteration
-        const prevIteration = iterations.find(i => i.version === currentIteration.version - 1);
+        const prevIteration = iterations.find(i => i.version === (currentIteration?.version || 0) - 1);
         setCompareIterationId(prevIteration?.id || iterations[1]?.id || null);
       }
       setSelectedTool("pointer");
@@ -256,6 +334,9 @@ export function CommunicationCanvas() {
     }
   };
 
+  // Determine feedback source based on role
+  const feedbackSource = userRole === "client" ? "client" : "team";
+
   // Add new feedback from canvas
   const handleAddFeedback = (feedback: {
     id: string;
@@ -265,6 +346,8 @@ export function CommunicationCanvas() {
     y: number;
     drawing?: DrawingPath;
   }) => {
+    if (!canAddFeedback) return;
+
     const newFeedback: Feedback = {
       id: feedback.id,
       number: feedback.number,
@@ -272,11 +355,11 @@ export function CommunicationCanvas() {
       content: feedback.content,
       timestamp: "Just now",
       resolved: false,
-      source: "client",
+      source: feedbackSource,
       x: feedback.x,
       y: feedback.y,
       replies: [],
-      drawingId: feedback.drawing?.id, // Store associated drawing ID
+      drawingId: feedback.drawing?.id,
     };
 
     setIterations(prev => prev.map(iteration =>
@@ -284,6 +367,31 @@ export function CommunicationCanvas() {
         ? { ...iteration, feedbacks: [newFeedback, ...iteration.feedbacks] }
         : iteration
     ));
+
+    // Track locally to prevent realtime duplicate
+    const localKey = feedback.number + feedback.content;
+    localFeedbackIdsRef.current.add(localKey);
+
+    // Persist to DB
+    if (creativeId) {
+      supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+        if (authUser) {
+          supabase.from("feedbacks").insert({
+            iteration_id: activeIterationId,
+            number: feedback.number,
+            content: feedback.content,
+            x: feedback.x,
+            y: feedback.y,
+            resolved: false,
+            source: feedbackSource,
+            drawing_id: feedback.drawing?.id || null,
+            user_id: authUser.id,
+          }).then(({ error }) => {
+            if (error) console.error("Failed to save feedback:", error);
+          });
+        }
+      });
+    }
   };
 
   // Update drawings for current iteration
@@ -293,20 +401,40 @@ export function CommunicationCanvas() {
         ? { ...iteration, drawings: newDrawings }
         : iteration
     ));
-  };
 
-  // Toggle resolved status
-  const handleToggleResolved = (id: string) => {
-    setIterations(prev => prev.map(iteration =>
-      iteration.id === activeIterationId
-        ? {
-            ...iteration,
-            feedbacks: iteration.feedbacks.map(f =>
-              f.id === id ? { ...f, resolved: !f.resolved } : f
-            )
+    // Persist new drawings to DB
+    if (creativeId) {
+      const existingIds = (iterationsRef.current.find(i => i.id === activeIterationId)?.drawings || []).map(d => d.id);
+      const added = newDrawings.filter(d => !existingIds.includes(d.id));
+      if (added.length > 0) {
+        // Track locally to prevent realtime duplicate
+        for (const d of added) localDrawingIdsRef.current.add(d.id);
+        supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+          if (authUser) {
+            for (const d of added) {
+              supabase.from("drawings").upsert({
+                id: d.id,
+                iteration_id: activeIterationId,
+                type: d.type,
+                data: {
+                  points: d.points,
+                  pathData: d.pathData,
+                  rect: d.rect,
+                  ellipse: d.ellipse,
+                  line: d.line,
+                  shapeType: d.shapeType,
+                },
+                color: d.color,
+                stroke_width: d.strokeWidth,
+                created_by: authUser.id,
+              }).then(({ error }) => {
+                if (error) console.error("Failed to save drawing:", error);
+              });
+            }
           }
-        : iteration
-    ));
+        });
+      }
+    }
   };
 
   // Add reply to feedback
@@ -323,6 +451,24 @@ export function CommunicationCanvas() {
           }
         : iteration
     ));
+
+    // Track locally to prevent realtime duplicate
+    localReplyIdsRef.current.add(feedbackId + reply.content);
+
+    // Persist reply to DB
+    if (creativeId) {
+      supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+        if (authUser) {
+          supabase.from("feedback_replies").insert({
+            feedback_id: feedbackId,
+            user_id: authUser.id,
+            content: reply.content,
+          }).then(({ error }) => {
+            if (error) console.error("Failed to save reply:", error);
+          });
+        }
+      });
+    }
   };
 
   // Handle feedback click from panel
@@ -378,12 +524,49 @@ export function CommunicationCanvas() {
   };
 
   // Handle new iteration upload
-  const handleNewIterationUpload = (file: File) => {
+  const handleNewIterationUpload = async (file: File) => {
     const newVersion = iterations.length + 1;
-    const imageUrl = URL.createObjectURL(file);
+    let imageUrl = URL.createObjectURL(file);
+    let newId = crypto.randomUUID();
+
+    // Upload to Supabase Storage and create iteration record if connected to DB
+    if (creativeId) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        // Upload image to storage
+        const filePath = `iterations/${creativeId}/${newId}/${file.name}`;
+        const { data: uploadData } = await supabase.storage
+          .from("revue-assets")
+          .upload(filePath, file);
+
+        if (uploadData) {
+          const { data: urlData } = supabase.storage
+            .from("revue-assets")
+            .getPublicUrl(filePath);
+          imageUrl = urlData.publicUrl;
+        }
+
+        // Create iteration record
+        const { data: iterData } = await supabase.from("iterations").insert({
+          id: newId,
+          creative_id: creativeId,
+          version: newVersion,
+          name: `Iteration ${newVersion}`,
+          image_url: imageUrl,
+          created_by: authUser.id,
+        }).select("id").single();
+
+        if (iterData) {
+          newId = iterData.id;
+        }
+
+        // Update creative's iteration count
+        await supabase.from("creatives").update({ iteration: newVersion }).eq("id", creativeId);
+      }
+    }
 
     const newIteration: Iteration = {
-      id: String(newVersion),
+      id: newId,
       version: newVersion,
       name: `Iteration ${newVersion}`,
       timestamp: "Just now",
@@ -465,43 +648,37 @@ export function CommunicationCanvas() {
     return suggestions[type] || [];
   };
 
-  // Convert feedbacks to marker format for canvas (filter by hideResolved)
-  const markers = currentFeedbacks
-    .filter(f => !hideResolved || !f.resolved)
-    .map(f => ({
-      id: f.id,
-      x: f.x || 0,
-      y: f.y || 0,
-      number: f.number,
-      content: f.content,
-      resolved: f.resolved,
-      user: {
-        name: f.user.name,
-        avatar: f.user.avatar,
-        color: f.user.color.replace('bg-', '#').replace('-500', ''),
-      },
-      timestamp: f.timestamp,
-      replies: f.replies.map(r => ({
-        id: r.id,
-        user: {
-          name: r.user.name,
-          avatar: r.user.avatar,
-          color: r.user.color.replace('bg-', '#').replace('-500', ''),
-        },
-        content: r.content,
-        timestamp: r.timestamp,
-      })),
-      drawingId: f.drawingId, // Pass associated drawing ID
-    }));
+  // In productive mode, client should only see client feedbacks on canvas
+  const visibleFeedbacks = (workmode === "productive" && userRole === "client")
+    ? currentFeedbacks.filter(f => f.source === "client")
+    : currentFeedbacks;
 
-  // Filter drawings to hide resolved feedback drawings
-  const visibleDrawings = hideResolved
-    ? currentDrawings.filter(d => {
-        // Keep drawings that are NOT associated with resolved feedbacks
-        const associatedFeedback = currentFeedbacks.find(f => f.drawingId === d.id);
-        return !associatedFeedback?.resolved;
-      })
-    : currentDrawings;
+  // Convert feedbacks to marker format for canvas
+  const markers = visibleFeedbacks.map(f => ({
+    id: f.id,
+    x: f.x || 0,
+    y: f.y || 0,
+    number: f.number,
+    content: f.content,
+    resolved: f.resolved,
+    user: {
+      name: f.user.name,
+      avatar: f.user.avatar,
+      color: f.user.color.replace('bg-', '#').replace('-500', ''),
+    },
+    timestamp: f.timestamp,
+    replies: f.replies.map(r => ({
+      id: r.id,
+      user: {
+        name: r.user.name,
+        avatar: r.user.avatar,
+        color: r.user.color.replace('bg-', '#').replace('-500', ''),
+      },
+      content: r.content,
+      timestamp: r.timestamp,
+    })),
+    drawingId: f.drawingId,
+  }));
 
   // Get compare iteration
   const compareIteration = compareIterationId
@@ -514,22 +691,21 @@ export function CommunicationCanvas() {
       <CanvasArea
         zoom={zoom}
         selectedTool={selectedTool}
-        onAddFeedback={handleAddFeedback}
-        currentIteration={currentIteration.version}
+        onAddFeedback={canAddFeedback ? handleAddFeedback : undefined}
+        currentIteration={currentIteration?.version || 0}
         feedbackCount={getNextFeedbackNumber() - 1}
         markers={markers}
         highlightedMarker={highlightedFeedback}
         onMarkerClick={handleMarkerClick}
-        onToggleResolved={handleToggleResolved}
         onAddReply={handleCanvasReply}
-        imageUrl={currentIteration.imageUrl}
+        imageUrl={currentIteration?.imageUrl || ""}
         rotation={rotation}
         compareMode={compareMode}
         compareImageUrl={compareIteration?.imageUrl}
         compareIterations={iterations.filter(i => i.id !== activeIterationId)}
         selectedCompareId={compareIterationId}
         onCompareIterationChange={setCompareIterationId}
-        drawings={visibleDrawings}
+        drawings={currentDrawings}
         onDrawingsChange={handleDrawingsChange}
         onZoomChange={setZoom}
         onToolChange={setSelectedTool}
@@ -561,9 +737,13 @@ export function CommunicationCanvas() {
           }))}
           activeIterationId={activeIterationId}
           onIterationChange={handleIterationChange}
-          onNewIteration={() => setShowNewIterationDialog(true)}
+          onNewIteration={canUploadIterations ? () => setShowNewIterationDialog(true) : undefined}
           onShare={() => setShowShareDialog(true)}
-          unresolvedCount={unresolvedFeedbacks.length}
+          clientId={clientId}
+          clientName={clientName}
+          clientLogo={clientLogo}
+          projectName={projectName}
+          creativeName={creativeName}
         />
       )}
 
@@ -582,22 +762,23 @@ export function CommunicationCanvas() {
           viewMode={viewMode}
           showAIOptions={showAIAnalysisOptions}
           onShowAIOptionsChange={setShowAIAnalysisOptions}
+          canAddFeedback={canAddFeedback}
         />
       )}
 
       {/* Floating Feedback Panel - Right side (hidden in fullscreen) */}
       {showComments && !compareMode && !isFullscreen && (
         <CommentsPanel
-          feedbacks={currentFeedbacks}
-          onToggleResolved={handleToggleResolved}
+          feedbacks={visibleFeedbacks}
           onAddReply={handleAddReply}
           onFeedbackClick={handleFeedbackClick}
           openFeedbackId={openFeedbackId}
-          hideResolved={hideResolved}
-          onHideResolvedChange={setHideResolved}
           viewMode={viewMode}
           aiSuggestions={currentAiSuggestions}
           onIgnoreAISuggestion={handleIgnoreAISuggestion}
+          userRole={userRole}
+          workmode={workmode}
+          currentUser={currentUser}
         />
       )}
 
@@ -615,7 +796,7 @@ export function CommunicationCanvas() {
       <ShareDialog
         open={showShareDialog}
         onClose={() => setShowShareDialog(false)}
-        creativeName="Homepage Banner"
+        creativeName={creativeName || "Creative"}
       />
 
       {/* New Iteration Dialog */}
@@ -623,12 +804,8 @@ export function CommunicationCanvas() {
         open={showNewIterationDialog}
         onClose={() => setShowNewIterationDialog(false)}
         onUpload={handleNewIterationUpload}
-        currentIteration={currentIteration.version}
-        unresolvedFeedbacks={unresolvedFeedbacks.map(f => ({
-          id: f.id,
-          number: f.number,
-          content: f.content,
-        }))}
+        currentIteration={currentIteration?.version || 0}
+        isFirstIteration={iterations.length === 0}
       />
     </div>
   );

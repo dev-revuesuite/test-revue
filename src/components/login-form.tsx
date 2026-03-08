@@ -55,7 +55,16 @@ export function LoginForm({
     }
 
     const userId = userData.user?.id
+    const userEmail = userData.user?.email
     if (userId) {
+      // Auto-link to organization if email was pre-added as a team member
+      if (userEmail) {
+        await supabase.rpc("link_user_to_org_member", {
+          p_user_id: userId,
+          p_email: userEmail,
+        })
+      }
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("onboarded")
@@ -64,6 +73,20 @@ export function LoginForm({
 
       if (!profile || !profile.onboarded) {
         router.push("/onboarding")
+        router.refresh()
+        return
+      }
+
+      // Role-based routing
+      const { data: membership } = await supabase
+        .from("organization_members")
+        .select("role")
+        .eq("user_id", userId)
+        .limit(1)
+        .single()
+
+      if (membership?.role === "client") {
+        router.push("/productive-zone")
         router.refresh()
         return
       }

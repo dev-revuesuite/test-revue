@@ -3,15 +3,11 @@
 import { useState, useEffect } from "react";
 import {
   Send,
-  CheckCircle2,
-  Circle,
   MessageSquare,
   ChevronDown,
   ChevronUp,
   Reply,
   MapPin,
-  EyeOff,
-  Eye,
   Sparkles,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,7 +39,7 @@ export interface Feedback {
   source: "client" | "team";
   x?: number;
   y?: number;
-  drawingId?: string; // ID of associated drawing/shape
+  drawingId?: string;
 }
 
 // AI Analysis types
@@ -66,79 +62,19 @@ export interface AISuggestion {
 
 interface CommentsPanelProps {
   feedbacks?: Feedback[];
-  onToggleResolved?: (id: string) => void;
   onAddReply?: (feedbackId: string, reply: ReplyItem) => void;
   onFeedbackClick?: (feedbackId: string) => void;
   openFeedbackId?: string | null;
-  hideResolved?: boolean;
-  onHideResolvedChange?: (hide: boolean) => void;
-  // View Mode props
   viewMode?: "view" | "comments" | "ai";
   aiSuggestions?: AISuggestion[];
   onIgnoreAISuggestion?: (id: string) => void;
+  userRole?: "owner" | "designer" | "client";
+  workmode?: "creative" | "productive";
+  currentUser?: { name: string; avatar: string; color: string };
 }
 
-const defaultFeedbackData: Feedback[] = [
-  {
-    id: "5.1",
-    number: "5.1",
-    user: { name: "Mike Johnson", avatar: "M", color: "bg-orange-500" },
-    content: "Can we make the hands more prominent? They seem to blend into the background a bit.",
-    timestamp: "2 hours ago",
-    resolved: false,
-    source: "client",
-    x: 25,
-    y: 15,
-    replies: [
-      {
-        id: "5.1-1",
-        user: { name: "Andrea Smith", avatar: "A", color: "bg-green-500" },
-        content: "I agree! Maybe add a subtle shadow or outline?",
-        timestamp: "1 hour ago",
-      },
-      {
-        id: "5.1-2",
-        user: { name: "Nina Patel", avatar: "N", color: "bg-purple-500" },
-        content: "Working on it now. Will push an update shortly.",
-        timestamp: "45 min ago",
-      },
-    ],
-  },
-  {
-    id: "5.2",
-    number: "5.2",
-    user: { name: "Andrea Smith", avatar: "A", color: "bg-green-500" },
-    content: "Love the color palette! The pink background really pops.",
-    timestamp: "3 hours ago",
-    resolved: true,
-    source: "team",
-    x: 70,
-    y: 45,
-    replies: [
-      {
-        id: "5.2-1",
-        user: { name: "Mike Johnson", avatar: "M", color: "bg-orange-500" },
-        content: "Thanks! Went through several iterations to get it right.",
-        timestamp: "2 hours ago",
-      },
-    ],
-  },
-  {
-    id: "5.3",
-    number: "5.3",
-    user: { name: "Nina Patel", avatar: "N", color: "bg-purple-500" },
-    content: "The user labels need better positioning. They're overlapping with some elements.",
-    timestamp: "5 hours ago",
-    resolved: false,
-    source: "client",
-    x: 40,
-    y: 75,
-    replies: [],
-  },
-];
-
-// Current user
-const currentUser = {
+// Default current user fallback
+const defaultCurrentUser = {
   name: "You",
   avatar: "Y",
   color: "bg-blue-500",
@@ -146,23 +82,24 @@ const currentUser = {
 
 export function CommentsPanel({
   feedbacks: externalFeedbacks,
-  onToggleResolved,
   onAddReply,
   onFeedbackClick,
   openFeedbackId,
-  hideResolved = false,
-  onHideResolvedChange,
   viewMode = "comments",
   aiSuggestions = [],
   onIgnoreAISuggestion,
+  userRole = "client",
+  workmode = "productive",
+  currentUser: propCurrentUser,
 }: CommentsPanelProps) {
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>(externalFeedbacks || defaultFeedbackData);
-  const [expandedFeedbacks, setExpandedFeedbacks] = useState<Set<string>>(new Set(["5.1"]));
+  const currentUser = propCurrentUser || defaultCurrentUser;
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>(externalFeedbacks || []);
+  const [expandedFeedbacks, setExpandedFeedbacks] = useState<Set<string>>(new Set());
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"client" | "team">("client");
 
-  // Sync with external feedbacks when they change
+  // Sync with external feedbacks
   useEffect(() => {
     if (externalFeedbacks) {
       setFeedbacks(externalFeedbacks);
@@ -172,31 +109,22 @@ export function CommentsPanel({
   // Open specific feedback when marker is clicked
   useEffect(() => {
     if (openFeedbackId) {
-      // Find the feedback and switch to its source tab
       const feedback = feedbacks.find(f => f.id === openFeedbackId);
       if (feedback) {
-        setFilter(feedback.source);
+        // Clients can only see client feedbacks
+        if (userRole !== "client") {
+          setFilter(feedback.source);
+        }
         setExpandedFeedbacks(prev => new Set([...prev, openFeedbackId]));
       }
     }
   }, [openFeedbackId, feedbacks]);
 
-  // Filter feedbacks based on source, hideResolved, and sort (unresolved first, then resolved)
-  const filteredFeedbacks = feedbacks
-    .filter((f) => {
-      if (f.source !== filter) return false;
-      if (hideResolved && f.resolved) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      // Unresolved items come first
-      if (a.resolved !== b.resolved) {
-        return a.resolved ? 1 : -1;
-      }
-      return 0; // Keep original order within same resolved status
-    });
+  // In creative mode, show all feedbacks combined; in productive mode, filter by source tab
+  const filteredFeedbacks = workmode === "creative"
+    ? feedbacks
+    : feedbacks.filter((f) => f.source === filter);
 
-  // Toggle expand/collapse for a feedback
   const toggleExpand = (id: string) => {
     setExpandedFeedbacks((prev) => {
       const newSet = new Set(prev);
@@ -209,18 +137,6 @@ export function CommentsPanel({
     });
   };
 
-  // Toggle resolved status
-  const toggleResolved = (id: string) => {
-    if (onToggleResolved) {
-      onToggleResolved(id);
-    } else {
-      setFeedbacks((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, resolved: !f.resolved } : f))
-      );
-    }
-  };
-
-  // Add a reply to a feedback
   const handleAddReply = (feedbackId: string) => {
     const replyText = replyTexts[feedbackId];
     if (!replyText?.trim()) return;
@@ -244,36 +160,28 @@ export function CommentsPanel({
       );
     }
 
-    // Clear the reply text and close reply input
     setReplyTexts((prev) => ({ ...prev, [feedbackId]: "" }));
     setActiveReplyId(null);
-
-    // Expand the feedback to show the new reply
     setExpandedFeedbacks((prev) => new Set([...prev, feedbackId]));
   };
 
-  // Handle clicking on a feedback (to highlight on canvas)
   const handleFeedbackClick = (feedbackId: string) => {
     if (onFeedbackClick) {
       onFeedbackClick(feedbackId);
     }
   };
 
-  // Update reply text for a specific feedback
   const updateReplyText = (feedbackId: string, text: string) => {
     setReplyTexts((prev) => ({ ...prev, [feedbackId]: text }));
   };
 
-  // Start replying to a feedback
   const startReply = (feedbackId: string) => {
     setActiveReplyId(feedbackId);
-    // Expand the feedback when starting to reply
     setExpandedFeedbacks((prev) => new Set([...prev, feedbackId]));
   };
 
   const clientCount = feedbacks.filter((f) => f.source === "client").length;
   const teamCount = feedbacks.filter((f) => f.source === "team").length;
-  const resolvedCount = feedbacks.filter((f) => f.resolved).length;
 
   return (
     <div className="absolute top-20 right-3 bottom-3 w-[300px] lg:w-[340px] xl:w-[380px] bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl border border-gray-200 dark:border-[#444] flex flex-col z-10 overflow-hidden">
@@ -306,26 +214,10 @@ export function CommentsPanel({
               </>
             )}
           </div>
-          {/* Hide Resolved Toggle - Only show when not in AI mode */}
-          {viewMode !== "ai" && resolvedCount > 0 && (
-            <button
-              onClick={() => onHideResolvedChange?.(!hideResolved)}
-              className={cn(
-                "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-all",
-                hideResolved
-                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
-                  : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]"
-              )}
-              title={hideResolved ? "Show resolved feedback" : "Hide resolved feedback"}
-            >
-              {hideResolved ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              {hideResolved ? "Hidden" : "Hide"} ({resolvedCount})
-            </button>
-          )}
         </div>
 
-        {/* Filter Tabs - Client / Team (hidden in AI mode) */}
-        {viewMode !== "ai" && (
+        {/* Filter Tabs - hidden in creative mode (everyone collaborates) and from client users in productive mode */}
+        {viewMode !== "ai" && workmode === "productive" && userRole !== "client" && (
           <div className="flex gap-1 bg-gray-100 dark:bg-[#1a1a1a] p-1 rounded-lg">
             <button
               onClick={() => setFilter("client")}
@@ -351,12 +243,10 @@ export function CommentsPanel({
             </button>
           </div>
         )}
-
       </div>
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
-        {/* AI Suggestions List (shown in AI mode) */}
         {viewMode === "ai" ? (
           aiSuggestions.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 p-8">
@@ -381,34 +271,27 @@ export function CommentsPanel({
                     className="p-3 hover:bg-gray-50 dark:hover:bg-[#333] transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      {/* Number badge with severity color */}
                       <div className={cn(
                         "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0",
                         severityColor
                       )}>
                         {index + 1}
                       </div>
-
                       <div className="flex-1 min-w-0">
-                        {/* Type label */}
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="text-xs font-medium text-gray-500 dark:text-gray-400 capitalize">
                             {suggestion.type}
                           </span>
-                          {/* Ignore button */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onIgnoreAISuggestion?.(suggestion.id);
                             }}
                             className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                            title="Ignore"
                           >
                             Ignore
                           </button>
                         </div>
-
-                        {/* Suggestion text */}
                         <p className="text-sm text-gray-800 dark:text-white leading-relaxed">
                           {suggestion.title}
                         </p>
@@ -422,14 +305,9 @@ export function CommentsPanel({
         ) : filteredFeedbacks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 p-8">
             <MessageSquare className="w-12 h-12 mb-3 opacity-50" />
-            <p className="text-sm font-medium">
-              {hideResolved ? `All ${filter} feedback is resolved` : `No ${filter} feedback yet`}
-            </p>
+            <p className="text-sm font-medium">No {workmode === "creative" ? "" : `${filter} `}feedback yet</p>
             <p className="text-xs mt-1 text-center">
-              {hideResolved
-                ? "Toggle 'Show resolved' to see all feedback"
-                : "Use the Comment, Draw, or Shape tool to add feedback on the creative"
-              }
+              Use the Comment, Draw, or Shape tool to add feedback on the creative
             </p>
           </div>
         ) : (
@@ -447,65 +325,50 @@ export function CommentsPanel({
                 )}
                 onClick={() => handleFeedbackClick(feedback.id)}
               >
-                {/* Feedback Content */}
                 <div className="p-4">
                   <div className="flex items-start gap-3">
                     {/* Feedback Number Badge */}
                     <div
                       className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 shadow-sm",
-                        feedback.resolved
-                          ? "bg-green-500 text-white"
-                          : "bg-red-500 text-white"
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 shadow-sm text-white",
+                        workmode === "creative"
+                          ? feedback.source === "client" ? "bg-orange-500" : "bg-indigo-500"
+                          : "bg-red-500"
                       )}
-                      title={`Feedback ${feedback.number}`}
+                      title={`${workmode === "creative" ? `${feedback.source} ` : ""}Feedback ${feedback.number}`}
                     >
                       {feedback.number.split('.')[1] || feedback.number}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                            #{feedback.number}
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                          #{feedback.number}
+                        </span>
+                        <span className="font-medium text-sm text-gray-800 dark:text-white">
+                          {feedback.user.name}
+                        </span>
+                        {workmode === "creative" && (
+                          <span className={cn(
+                            "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full",
+                            feedback.source === "client"
+                              ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                              : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                          )}>
+                            {feedback.source}
                           </span>
-                          <span className="font-medium text-sm text-gray-800 dark:text-white">
-                            {feedback.user.name}
-                          </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
-                            {feedback.timestamp}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleResolved(feedback.id); }}
-                            className={cn(
-                              "p-1 rounded-full transition-colors",
-                              feedback.resolved
-                                ? "text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30"
-                                : "text-gray-300 dark:text-gray-600 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30"
-                            )}
-                            title={feedback.resolved ? "Mark as unresolved" : "Mark as resolved"}
-                          >
-                            {feedback.resolved ? (
-                              <CheckCircle2 className="w-5 h-5" />
-                            ) : (
-                              <Circle className="w-5 h-5" />
-                            )}
-                          </button>
-                        </div>
+                        )}
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {feedback.timestamp}
+                        </span>
                       </div>
 
-                      <p className={cn(
-                        "text-sm leading-relaxed",
-                        feedback.resolved ? "text-gray-500 dark:text-gray-400" : "text-gray-700 dark:text-gray-300"
-                      )}>
+                      <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
                         {feedback.content}
                       </p>
 
                       {/* Action Buttons */}
                       <div className="flex items-center gap-3 mt-2">
-                        {/* Reply Button */}
                         <button
                           onClick={(e) => { e.stopPropagation(); startReply(feedback.id); }}
                           className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -514,7 +377,6 @@ export function CommentsPanel({
                           Reply
                         </button>
 
-                        {/* Expand/Collapse Replies */}
                         {feedback.replies.length > 0 && (
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleExpand(feedback.id); }}
@@ -532,7 +394,7 @@ export function CommentsPanel({
                     </div>
                   </div>
 
-                  {/* Replies Section */}
+                  {/* Replies */}
                   {isExpanded && feedback.replies.length > 0 && (
                     <div className="mt-3 ml-12 space-y-3">
                       {feedback.replies.map((reply) => (
@@ -561,13 +423,13 @@ export function CommentsPanel({
                     </div>
                   )}
 
-                  {/* Reply Input - Shows when replying or expanded */}
+                  {/* Reply Input */}
                   {(isReplying || isExpanded) && (
                     <div className="mt-3 ml-12 animate-in fade-in slide-in-from-top-1 duration-200">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-7 w-7 shrink-0">
-                          <AvatarFallback className="bg-blue-500 text-white text-xs font-medium">
-                            Y
+                          <AvatarFallback className={cn(currentUser.color, "text-white text-xs font-medium")}>
+                            {currentUser.avatar}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 flex items-center bg-gray-100 dark:bg-[#1a1a1a] rounded-full px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-200 dark:focus-within:ring-blue-800 transition-all">

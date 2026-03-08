@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { RoomContent } from "@/components/room/room-content"
+import { getUserRole } from "@/lib/get-user-role"
+
+export const dynamic = "force-dynamic"
 
 interface RoomPageProps {
   searchParams: Promise<{ client?: string }>
@@ -19,6 +22,8 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   if (!user) {
     redirect("/login")
   }
+
+  const { role: userRole, clientId: userClientId } = await getUserRole(supabase, user.id)
 
   if (!clientId) {
     redirect("/studio")
@@ -40,13 +45,26 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  // Fetch organization
-  const { data: orgs } = await supabase
+  // Fetch organization: owned or member
+  const { data: ownedOrgs } = await supabase
     .from("organizations")
     .select("id,name,logo_url")
     .eq("created_by", user.id)
 
-  const organization = orgs?.[0] ?? null
+  let organization = ownedOrgs?.[0] ?? null
+
+  if (!organization) {
+    const { data: memberOrg } = await supabase
+      .from("organization_members")
+      .select("organizations(id,name,logo_url)")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single()
+
+    if (memberOrg?.organizations) {
+      organization = memberOrg.organizations as unknown as { id: string; name: string; logo_url: string | null }
+    }
+  }
 
   // Fetch client directory for header
   const { data: allClients } = organization
@@ -149,6 +167,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     secondaryFont: fontsRaw[1]?.font_name || "Inter",
     tertiaryFont: fontsRaw[2]?.font_name || "Inter",
     colors: colorsRaw.map((c) => c.hex),
+    colorDetails: colorsRaw.map((c) => ({ hex: c.hex, name: c.name || "" })),
+    fonts: fontsRaw.map((f) => ({ label: f.label, fontName: f.font_name, fontUrl: f.font_url })),
+    brandImages: ((client.brand_image_urls as string[]) || []),
     projects: (projects || []).map((p) => {
       const endDate = p.end_date ? new Date(p.end_date + "T00:00:00") : null
       const daysLeft = endDate
@@ -314,10 +335,11 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
         organizationLogoUrl={organization?.logo_url ?? null}
         clientDirectory={clientDirectory}
         teamMembers={teamMembers}
+        userRole={userRole}
       />
       <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} />
-        <RoomContent clientData={clientData} orgMembers={teamMembers} clientEditData={clientEditData} organizationId={organization?.id ?? null} />
+        <AppSidebar user={userData} userRole={userRole} clientId={userClientId} />
+        <RoomContent clientData={clientData} orgMembers={teamMembers} clientEditData={clientEditData} organizationId={organization?.id ?? null} userRole={userRole} />
       </div>
     </div>
   )

@@ -26,7 +26,6 @@ import {
   Check,
   X,
   Copy,
-  Link2,
   Shield,
   Contrast,
   Maximize,
@@ -119,6 +118,7 @@ interface StudioHeaderProps {
   organizationLogoUrl?: string | null
   clientDirectory: { id: string; name: string; logoUrl?: string }[]
   teamMembers?: OrgMember[]
+  userRole?: "admin" | "designer" | "client"
 }
 
 const searchPlaceholders = [
@@ -147,6 +147,7 @@ export function StudioHeader({
   organizationLogoUrl,
   clientDirectory,
   teamMembers = [],
+  userRole = "admin",
 }: StudioHeaderProps) {
   const router = useRouter()
   const [notificationDialogOpen, setNotificationDialogOpen] = React.useState(false)
@@ -158,12 +159,12 @@ export function StudioHeader({
   const [isAnimating, setIsAnimating] = React.useState(false)
   const searchInputRef = React.useRef<HTMLInputElement>(null)
 
-  // Invite modal state
-  const [inviteModalOpen, setInviteModalOpen] = React.useState(false)
-  const [inviteEmail, setInviteEmail] = React.useState("")
-  const [inviteEmails, setInviteEmails] = React.useState<string[]>([])
-  const [inviteRole, setInviteRole] = React.useState("member")
-  const [linkCopied, setLinkCopied] = React.useState(false)
+  // Add Team Member modal state
+  const [addMemberModalOpen, setAddMemberModalOpen] = React.useState(false)
+  const [newMemberName, setNewMemberName] = React.useState("")
+  const [newMemberEmail, setNewMemberEmail] = React.useState("")
+  const [newMemberRole, setNewMemberRole] = React.useState("designer")
+  const [addingMember, setAddingMember] = React.useState(false)
 
   // Theme state
   const [isDark, setIsDark] = React.useState(false)
@@ -263,29 +264,28 @@ export function StudioHeader({
   const unreadNotifications = notifications.filter(n => !n.read).length
   const unreadMessages = messages.filter(m => !m.read).length
 
-  // Invite modal functions
-  const handleAddEmail = () => {
-    if (inviteEmail && !inviteEmails.includes(inviteEmail) && inviteEmail.includes("@")) {
-      setInviteEmails([...inviteEmails, inviteEmail])
-      setInviteEmail("")
+  // Add Team Member function
+  const handleAddTeamMember = async () => {
+    if (!organizationId || !newMemberName.trim()) return
+    setAddingMember(true)
+    try {
+      const supabase = createClient()
+      await supabase.from("organization_members").insert({
+        organization_id: organizationId,
+        name: newMemberName.trim(),
+        email: newMemberEmail.trim() || null,
+        role: newMemberRole,
+      })
+      setAddMemberModalOpen(false)
+      setNewMemberName("")
+      setNewMemberEmail("")
+      setNewMemberRole("designer")
+      window.location.reload()
+    } catch (err) {
+      console.error("Failed to add team member:", err)
+    } finally {
+      setAddingMember(false)
     }
-  }
-
-  const handleRemoveEmail = (email: string) => {
-    setInviteEmails(inviteEmails.filter(e => e !== email))
-  }
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText("https://revue.app/invite/abc123")
-    setLinkCopied(true)
-    setTimeout(() => setLinkCopied(false), 2000)
-  }
-
-  const handleSendInvites = () => {
-    console.log("Sending invites:", { emails: inviteEmails, role: inviteRole })
-    setInviteModalOpen(false)
-    setInviteEmails([])
-    setInviteEmail("")
   }
 
   const ensureClientId = async (clientName: string) => {
@@ -358,48 +358,49 @@ export function StudioHeader({
           </div>
         </button>
 
-        {/* Invite Members Button - Miro style */}
-        <Button
-          variant="outline"
-          onClick={() => setInviteModalOpen(true)}
-          className="h-10 px-4 gap-2 text-sm font-medium border-[#d9d9d9] dark:border-[#444] text-[#1a1a1a] dark:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] hover:border-[#bbb] dark:hover:border-[#555] rounded-lg"
-        >
-          <UserPlus className="w-4 h-4" />
-          Invite Members
-        </Button>
+        {/* Add Team Member Button - admin only */}
+        {userRole === "admin" && (
+          <Button
+            variant="outline"
+            onClick={() => setAddMemberModalOpen(true)}
+            className="h-10 px-4 gap-2 text-sm font-medium border-[#d9d9d9] dark:border-[#444] text-[#1a1a1a] dark:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] hover:border-[#bbb] dark:hover:border-[#555] rounded-lg"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Team Member
+          </Button>
+        )}
 
-        {/* Add New Dropdown - Client/Project/Creative */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              className="h-10 px-4 gap-2 text-sm font-medium bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white rounded-lg"
-            >
-              <Plus className="w-4 h-4" />
-              Add New
-              <ChevronDown className="w-4 h-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={8} className="w-48 p-1.5">
-            <DropdownMenuItem
-              onClick={() => setNewClientDialogOpen(true)}
-              className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
-            >
-              <Users className="w-4 h-4 text-[#5C6ECD]" />
-              <span className="font-medium">Add Client</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setNewBriefDialogOpen(true)}
-              className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
-            >
-              <FolderOpen className="w-4 h-4 text-[#10b981]" />
-              <span className="font-medium">Add Brief</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg">
-              <Image className="w-4 h-4 text-[#f59e0b]" />
-              <span className="font-medium">Add Creative</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Add New Dropdown - role-based */}
+        {userRole === "admin" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="h-10 px-4 gap-2 text-sm font-medium bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white rounded-lg"
+              >
+                <Plus className="w-4 h-4" />
+                Add New
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} className="w-48 p-1.5">
+              <DropdownMenuItem
+                onClick={() => setNewClientDialogOpen(true)}
+                className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+              >
+                <Users className="w-4 h-4 text-[#5C6ECD]" />
+                <span className="font-medium">Add Client</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setNewBriefDialogOpen(true)}
+                className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+              >
+                <FolderOpen className="w-4 h-4 text-[#10b981]" />
+                <span className="font-medium">Add Brief</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {/* Designer: no add buttons, only upload creatives from project room */}
 
         {/* Fullscreen Toggle */}
         <button
@@ -741,11 +742,11 @@ export function StudioHeader({
         </DialogContent>
       </Dialog>
 
-      {/* Invite Members Modal */}
-      <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
-        <DialogContent className="max-w-lg w-[90vw] p-0 gap-0 overflow-hidden rounded-xl" showCloseButton={false}>
-          <DialogTitle className="sr-only">Invite Team Members</DialogTitle>
-          <DialogDescription className="sr-only">Add people to collaborate on projects</DialogDescription>
+      {/* Add Team Member Modal */}
+      <Dialog open={addMemberModalOpen} onOpenChange={setAddMemberModalOpen}>
+        <DialogContent className="max-w-md w-[90vw] p-0 gap-0 overflow-hidden rounded-xl" showCloseButton={false}>
+          <DialogTitle className="sr-only">Add Team Member</DialogTitle>
+          <DialogDescription className="sr-only">Add a new member to your organization</DialogDescription>
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#e6e6e6] dark:border-[#333]">
             <div className="flex items-center gap-3">
@@ -753,12 +754,12 @@ export function StudioHeader({
                 <UserPlus className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-[#1a1a1a] dark:text-white">Invite Team Members</h2>
-                <p className="text-xs text-[#7a7a7a] dark:text-[#999]">Add people to collaborate on projects</p>
+                <h2 className="text-lg font-semibold text-[#1a1a1a] dark:text-white">Add Team Member</h2>
+                <p className="text-xs text-[#7a7a7a] dark:text-[#999]">Add a new member to your organization</p>
               </div>
             </div>
             <button
-              onClick={() => setInviteModalOpen(false)}
+              onClick={() => setAddMemberModalOpen(false)}
               className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
             >
               <X className="w-4 h-4 text-[#7a7a7a]" />
@@ -766,76 +767,57 @@ export function StudioHeader({
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-5">
-            {/* Email Input */}
+          <div className="p-6 space-y-4">
             <div>
-              <label className="text-xs font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider mb-2 block">
-                Email Addresses
+              <label className="text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5 block">
+                Name <span className="text-[#5C6ECD]">*</span>
               </label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7a7a7a]" />
-                  <input
-                    type="email"
-                    placeholder="Enter email address"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddEmail()}
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-[#e6e6e6] dark:border-[#444] bg-white dark:bg-[#2a2a2a] text-sm outline-none focus:border-[#5C6ECD] dark:focus:border-[#5C6ECD] transition-colors placeholder:text-[#999]"
-                  />
-                </div>
-                <Button
-                  onClick={handleAddEmail}
-                  className="h-10 px-4 bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white rounded-lg"
-                >
-                  Add
-                </Button>
-              </div>
-              {/* Email Tags */}
-              {inviteEmails.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {inviteEmails.map((email) => (
-                    <div
-                      key={email}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#f0f0f0] dark:bg-[#333] text-sm"
-                    >
-                      <span className="text-[#1a1a1a] dark:text-white">{email}</span>
-                      <button
-                        onClick={() => handleRemoveEmail(email)}
-                        className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-[#ddd] dark:hover:bg-[#444] transition-colors"
-                      >
-                        <X className="w-3 h-3 text-[#7a7a7a]" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <input
+                type="text"
+                placeholder="Enter full name"
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                className="w-full h-10 px-4 rounded-xl border border-[#e6e6e6] dark:border-[#444] bg-white dark:bg-[#2a2a2a] text-sm outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors placeholder:text-[#999] text-[#1a1a1a] dark:text-white"
+                autoFocus
+              />
             </div>
-
-            {/* Role Selection */}
             <div>
-              <label className="text-xs font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider mb-2 block">
+              <label className="text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5 block">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999]" />
+                <input
+                  type="email"
+                  placeholder="Enter email address"
+                  value={newMemberEmail}
+                  onChange={(e) => setNewMemberEmail(e.target.value)}
+                  className="w-full h-10 pl-10 pr-4 rounded-xl border border-[#e6e6e6] dark:border-[#444] bg-white dark:bg-[#2a2a2a] text-sm outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors placeholder:text-[#999] text-[#1a1a1a] dark:text-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5 block">
                 Role
               </label>
               <div className="flex gap-2">
                 {[
                   { id: "admin", label: "Admin", desc: "Full access" },
-                  { id: "member", label: "Member", desc: "Can edit" },
-                  { id: "viewer", label: "Viewer", desc: "View only" },
+                  { id: "designer", label: "Designer", desc: "Design work" },
                 ].map((role) => (
                   <button
                     key={role.id}
-                    onClick={() => setInviteRole(role.id)}
+                    onClick={() => setNewMemberRole(role.id)}
                     className={cn(
                       "flex-1 p-3 rounded-xl border transition-all text-center",
-                      inviteRole === role.id
+                      newMemberRole === role.id
                         ? "border-[#5C6ECD] bg-[#5C6ECD]/5 dark:bg-[#5C6ECD]/10"
                         : "border-[#e6e6e6] dark:border-[#444] hover:border-[#bbb] dark:hover:border-[#555]"
                     )}
                   >
                     <p className={cn(
                       "text-sm font-medium",
-                      inviteRole === role.id ? "text-[#5C6ECD]" : "text-[#1a1a1a] dark:text-white"
+                      newMemberRole === role.id ? "text-[#5C6ECD]" : "text-[#1a1a1a] dark:text-white"
                     )}>
                       {role.label}
                     </p>
@@ -844,47 +826,23 @@ export function StudioHeader({
                 ))}
               </div>
             </div>
-
-            {/* Invite Link */}
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-[#f5f5f5] dark:bg-[#2a2a2a]">
-              <Link2 className="w-4 h-4 text-[#7a7a7a]" />
-              <span className="flex-1 text-sm text-[#7a7a7a] dark:text-[#999] truncate">
-                https://revue.app/invite/abc123
-              </span>
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#333] border border-[#e6e6e6] dark:border-[#444] text-xs font-medium hover:bg-[#f0f0f0] dark:hover:bg-[#3a3a3a] transition-colors"
-              >
-                {linkCopied ? (
-                  <>
-                    <Check className="w-3 h-3 text-green-500" />
-                    <span className="text-green-500">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3" />
-                    <span>Copy Link</span>
-                  </>
-                )}
-              </button>
-            </div>
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#e6e6e6] dark:border-[#333] bg-[#fafafa] dark:bg-[#1a1a1a]">
             <Button
               variant="outline"
-              onClick={() => setInviteModalOpen(false)}
+              onClick={() => setAddMemberModalOpen(false)}
               className="h-10 px-5 rounded-lg border-[#d9d9d9] dark:border-[#444] text-[#1a1a1a] dark:text-white"
             >
               Cancel
             </Button>
             <Button
-              onClick={handleSendInvites}
-              disabled={inviteEmails.length === 0}
-              className="h-10 px-5 rounded-lg bg-[#DBFE52] hover:bg-[#c9eb4a] text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleAddTeamMember}
+              disabled={!newMemberName.trim() || addingMember}
+              className="h-10 px-5 rounded-lg bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Send Invites
+              {addingMember ? "Adding..." : "Add Member"}
             </Button>
           </div>
         </DialogContent>

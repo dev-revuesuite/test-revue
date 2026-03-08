@@ -179,8 +179,6 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     colorRows: [
       { id: "1", hex: "", font: "", name: "" },
       { id: "2", hex: "", font: "", name: "" },
-      { id: "3", hex: "", font: "", name: "" },
-      { id: "4", hex: "", font: "", name: "" },
     ],
   }
 
@@ -202,6 +200,8 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
 
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
   const [socialPopoverOpen, setSocialPopoverOpen] = useState<string | null>(null)
+  const [fontPopover, setFontPopover] = useState<{ open: boolean; editId?: string; label: string; font: string }>({ open: false, label: "", font: "" })
+  const [colorPopover, setColorPopover] = useState<{ open: boolean; editId?: string; hex: string; name: string }>({ open: false, hex: "", name: "" })
   const fontUploadRef = useRef<HTMLInputElement>(null)
   const [officeSuggestions, setOfficeSuggestions] = useState<{ placeId: string; text: string }[]>([])
   const [contactSuggestions, setContactSuggestions] = useState<{ placeId: string; text: string }[]>([])
@@ -501,12 +501,10 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
   }
 
   const removeColorRow = (id: string) => {
-    if (formData.colorRows.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        colorRows: prev.colorRows.filter(c => c.id !== id)
-      }))
-    }
+    setFormData(prev => ({
+      ...prev,
+      colorRows: prev.colorRows.filter(c => c.id !== id)
+    }))
   }
 
   const addFontRow = () => {
@@ -521,12 +519,10 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
   }
 
   const removeFontRow = (id: string) => {
-    if (formData.fontRows.length > 2) {
-      setFormData(prev => ({
-        ...prev,
-        fontRows: prev.fontRows.filter(f => f.id !== id)
-      }))
-    }
+    setFormData(prev => ({
+      ...prev,
+      fontRows: prev.fontRows.filter(f => f.id !== id)
+    }))
   }
 
   const updateFontRow = (id: string, font: string) => {
@@ -631,7 +627,9 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     placeholder,
     onChange,
     disabled = false,
-    borderless = false
+    borderless = false,
+    actionLabel,
+    onAction,
   }: {
     id: string
     value: string
@@ -640,6 +638,8 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     onChange: (value: string) => void
     disabled?: boolean
     borderless?: boolean
+    actionLabel?: string
+    onAction?: () => void
   }) => (
     <div className="relative dropdown-container" style={{ zIndex: dropdownOpen === id ? 9999 : 30 }}>
       <button
@@ -667,8 +667,8 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
           dropdownOpen === id && "rotate-180 text-[#5C6ECD]"
         )} />
       </button>
-      {dropdownOpen === id && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-2xl max-h-48 overflow-auto" style={{ zIndex: 99999 }}>
+      {dropdownOpen === id && !actionLabel && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-2xl max-h-48 overflow-auto" style={{ zIndex: 99999 }} onMouseDown={(e) => e.stopPropagation()}>
           {options.map((opt) => (
             <button
               key={opt}
@@ -686,6 +686,78 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
               {value === opt && <Check className="w-4 h-4 text-[#5C6ECD]" />}
             </button>
           ))}
+        </div>
+      )}
+      {dropdownOpen === id && actionLabel && onAction && (
+        <div className="absolute top-full left-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-xl shadow-2xl flex" style={{ zIndex: 99999, minWidth: '420px' }} onMouseDown={(e) => e.stopPropagation()}>
+          {/* Left: Font List */}
+          <div className="flex-1 max-h-56 overflow-auto py-1">
+            {/* Custom/Uploaded Fonts */}
+            {formData.customFonts.length > 0 && (
+              <>
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[#999] uppercase tracking-wider">My Fonts</p>
+                {formData.customFonts.map((f) => (
+                  <button
+                    key={f.name}
+                    type="button"
+                    onClick={() => {
+                      onChange(f.name)
+                      setDropdownOpen(null)
+                    }}
+                    className={cn(
+                      "w-full px-3 py-2 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
+                      value === f.name && "bg-[#5C6ECD]/10"
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#5C6ECD] shrink-0" />
+                      <span className={value === f.name ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{f.name}</span>
+                    </span>
+                    {value === f.name && <Check className="w-3.5 h-3.5 text-[#5C6ECD]" />}
+                  </button>
+                ))}
+                <div className="border-t border-[#e5e5e5] dark:border-[#333] my-1 mx-3" />
+              </>
+            )}
+            {/* Google Fonts */}
+            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[#999] uppercase tracking-wider">Google Fonts</p>
+            {fonts.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt)
+                  setDropdownOpen(null)
+                }}
+                className={cn(
+                  "w-full px-3 py-2 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
+                  value === opt && "bg-[#5C6ECD]/10"
+                )}
+              >
+                <span className={value === opt ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{opt}</span>
+                {value === opt && <Check className="w-3.5 h-3.5 text-[#5C6ECD]" />}
+              </button>
+            ))}
+          </div>
+          {/* Right: Upload Section */}
+          <div className="w-[140px] border-l border-[#e5e5e5] dark:border-[#333] flex flex-col items-center justify-center p-4 bg-[#fafafa] dark:bg-[#111] rounded-r-xl">
+            <button
+              type="button"
+              onClick={() => {
+                onAction()
+                setDropdownOpen(null)
+              }}
+              className="flex flex-col items-center gap-2.5 text-center group/upload"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[#5C6ECD]/10 flex items-center justify-center group-hover/upload:bg-[#5C6ECD]/20 transition-colors">
+                <Upload className="w-5 h-5 text-[#5C6ECD]" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a1a1a] dark:text-white">Upload</p>
+                <p className="text-[10px] text-[#999] mt-0.5">.TTF .OTF</p>
+              </div>
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1145,59 +1217,6 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                   Add another contact
                 </button>
 
-                {/* Contact Location */}
-                <div className="pt-6 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Location</h3>
-                  <div className="flex items-center gap-2 mb-4">
-                    <input
-                      type="checkbox"
-                      id="sameAsOffice"
-                      checked={formData.sameAsOffice}
-                      onChange={(e) => handleSameAsOffice(e.target.checked)}
-                      className="w-4 h-4border-[#e5e5e5] dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
-                    />
-                    <label htmlFor="sameAsOffice" className="text-sm text-[#666] dark:text-[#999] cursor-pointer select-none">
-                      Same as office address
-                    </label>
-                  </div>
-                  {!formData.sameAsOffice && (
-                    <div>
-                      <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                        Contact Address
-                      </label>
-                      <div ref={contactWrapperRef} className="relative">
-                        <input
-                          type="text"
-                          value={formData.contactAddress || ""}
-                          onChange={(e) => {
-                            setFormData(prev => ({ ...prev, contactAddress: e.target.value }))
-                            fetchSuggestions(e.target.value, setContactSuggestions, setShowContactSuggestions)
-                          }}
-                          onFocus={() => { if (contactSuggestions.length > 0) setShowContactSuggestions(true) }}
-                          placeholder="Start typing address..."
-                          className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                        />
-                        {showContactSuggestions && contactSuggestions.length > 0 && (
-                          <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-lg max-h-48 overflow-auto">
-                            {contactSuggestions.map((s) => (
-                              <li
-                                key={s.placeId}
-                                className="px-4 py-2.5 text-sm text-[#1a1a1a] dark:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#333] cursor-pointer"
-                                onClick={() => {
-                                  setFormData(prev => ({ ...prev, contactAddress: s.text }))
-                                  setShowContactSuggestions(false)
-                                }}
-                              >
-                                {s.text}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                      <p className="text-xs text-[#999] mt-2">Enter full address including city, state and country</p>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}
@@ -1219,302 +1238,358 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-12">
-                {/* Left Column */}
-                <div className="space-y-8">
-                  {/* Logo Upload */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Logo</h3>
-                  <div className="flex items-center gap-3">
-                    {formData.logoPreview ? (
-                      <div className="relative w-16 h-16 border border-[#e5e5e5] dark:border-[#444] overflow-hidden shrink-0">
-                        <img
-                          src={formData.logoPreview}
-                          alt="Logo preview"
-                          className="w-full h-full object-contain"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, logo: null, logoPreview: "" }))}
-                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div
-                        onClick={() => logoInputRef.current?.click()}
-                        className="w-16 h-16 border-2 border-dashed border-[#e5e5e5] dark:border-[#444] flex items-center justify-center cursor-pointer hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-colors shrink-0 group"
+              {/* Logo Upload - Full Width */}
+              <div className="mb-8">
+                <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Logo</h3>
+                {formData.logoPreview ? (
+                  <div className="flex items-center gap-4 p-4 border border-[#e5e5e5] dark:border-[#444] rounded-xl bg-[#fafafa] dark:bg-[#111]">
+                    <div className="relative w-14 h-14 rounded-lg border border-[#e5e5e5] dark:border-[#444] overflow-hidden shrink-0 bg-white dark:bg-[#1a1a1a]">
+                      <img src={formData.logoPreview} alt="Logo preview" className="w-full h-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, logo: null, logoPreview: "" }))}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white"
                       >
-                        <Upload className="w-5 h-5 text-[#999] group-hover:text-[#5C6ECD] transition-colors" />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <input
-                        readOnly
-                        placeholder="No file selected"
-                        value={formData.logo?.name || ""}
-                        className="w-full px-3 py-2.5 border border-[#e5e5e5] dark:border-[#444] bg-[#f9f9f9] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none text-sm"
-                      />
+                        <X className="w-3 h-3" />
+                      </button>
                     </div>
-                    <input
-                      ref={logoInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{formData.logo?.name || "Logo uploaded"}</p>
+                      <p className="text-xs text-[#999]">Click to replace</p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => logoInputRef.current?.click()}
-                      className="px-4 py-2.5 border border-[#5C6ECD] text-[#5C6ECD] font-medium text-sm hover:bg-[#5C6ECD] hover:text-white transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-[#5C6ECD] border border-[#5C6ECD]/30 rounded-lg hover:bg-[#5C6ECD]/5 transition-colors"
                     >
-                      Upload
+                      Replace
                     </button>
                   </div>
-                </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-3 py-6 border-2 border-dashed border-[#e5e5e5] dark:border-[#444] rounded-xl hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all group"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center group-hover:bg-[#5C6ECD]/20 transition-colors">
+                      <Upload className="w-5 h-5 text-[#5C6ECD]" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-[#1a1a1a] dark:text-white">Upload logo</p>
+                      <p className="text-xs text-[#999]">PNG, JPG or SVG</p>
+                    </div>
+                  </button>
+                )}
+                <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+              </div>
 
-                {/* Brand Fonts */}
-                <div className="pt-8 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Brand Fonts</h3>
-                  <div className="space-y-3 mb-3">
-                    {formData.fontRows.map((row, index) => (
-                      <div key={row.id} className="flex items-center gap-3">
-                        <div className="flex-1">
-                          {index <= 1 ? (
-                            <label className="block text-xs text-[#666] dark:text-[#999] mb-2">
-                              {row.label}
-                            </label>
-                          ) : (
-                            <input
-                              type="text"
-                              value={row.label}
-                              onChange={(e) => updateFontRowLabel(row.id, e.target.value)}
-                              placeholder="Font name"
-                              className="block text-xs text-[#666] dark:text-[#999] mb-2 bg-transparent border-none outline-none focus:text-[#5C6ECD] w-full"
-                            />
-                          )}
-                          <CustomDropdown
-                            id={`font-${row.id}`}
-                            value={row.font}
-                            options={getAllFonts()}
-                            placeholder="Select Font"
-                            onChange={(value) => updateFontRow(row.id, value)}
-                          />
+              {/* Two Column: Fonts & Colors */}
+              <div className="grid grid-cols-2 gap-8">
+                {/* Left: Brand Fonts */}
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Brand Fonts</h3>
+                  {/* Font List */}
+                  <div className="space-y-2 mb-3">
+                    {formData.fontRows.map((row) => (
+                      <div key={row.id} className="flex items-center gap-3 p-3 rounded-xl border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a]">
+                        <div className="w-9 h-9 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center shrink-0 text-sm font-bold text-[#5C6ECD]">
+                          {row.font ? row.font.charAt(0).toUpperCase() : "A"}
                         </div>
-                        {index > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeFontRow(row.id)}
-                            className="p-2 text-[#999] hover:text-red-500 transition-colors mt-6"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{row.font || "No font selected"}</p>
+                          <p className="text-xs text-[#999] truncate">{row.label}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFontPopover({ open: true, editId: row.id, label: row.label, font: row.font })}
+                          className="p-1.5 text-[#999] hover:text-[#5C6ECD] transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => removeFontRow(row.id)} className="p-1.5 text-[#999] hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-[#999] mb-4">
-                    You can upload your font if it is not listed on google fonts<br />
-                    Supported formats .TTF & .OTF
-                  </p>
-                  {formData.customFonts.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-xs text-[#666] dark:text-[#999] mb-2">Uploaded fonts:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {formData.customFonts.map((font, i) => (
-                          <span key={i} className="px-2 py-1 bg-[#5C6ECD]/10 text-[#5C6ECD] text-xs">
-                            {font.name}
-                          </span>
-                        ))}
+                  <button
+                    type="button"
+                    onClick={() => setFontPopover({ open: true, label: "", font: "" })}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-[#5C6ECD] border border-dashed border-[#5C6ECD]/30 rounded-lg hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Font
+                  </button>
+                  <input ref={fontUploadRef} type="file" accept=".ttf,.otf" multiple onChange={handleCustomFontUpload} className="hidden" />
+
+                  {/* Font Popover */}
+                  {fontPopover.open && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30" onClick={() => setFontPopover({ open: false, label: "", font: "" })}>
+                      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-[#e5e5e5] dark:border-[#444] w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+                        <h4 className="text-base font-semibold text-[#1a1a1a] dark:text-white mb-4">{fontPopover.editId ? "Edit Font" : "Add Font"}</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-[#666] dark:text-[#999] mb-1.5">Label</label>
+                            <input
+                              type="text"
+                              value={fontPopover.label}
+                              onChange={(e) => setFontPopover(prev => ({ ...prev, label: e.target.value }))}
+                              placeholder="e.g. Primary, Heading, Body"
+                              className="w-full px-3 py-2.5 border border-[#e5e5e5] dark:border-[#444] rounded-lg bg-white dark:bg-[#111] text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#999] !outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-[#666] dark:text-[#999] mb-1.5">Font</label>
+                            <CustomDropdown
+                              id="font-popover-select"
+                              value={fontPopover.font}
+                              options={getAllFonts()}
+                              placeholder="Select or upload font"
+                              onChange={(value) => setFontPopover(prev => ({ ...prev, font: value }))}
+                              actionLabel="Upload Custom Font (.TTF, .OTF)"
+                              onAction={() => fontUploadRef.current?.click()}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-5">
+                          <button
+                            type="button"
+                            onClick={() => setFontPopover({ open: false, label: "", font: "" })}
+                            className="flex-1 py-2.5 text-sm font-medium text-[#666] dark:text-[#999] border border-[#e5e5e5] dark:border-[#444] rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#222] transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!fontPopover.font}
+                            onClick={() => {
+                              if (fontPopover.editId) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  fontRows: prev.fontRows.map(f =>
+                                    f.id === fontPopover.editId ? { ...f, label: fontPopover.label || f.label, font: fontPopover.font } : f
+                                  )
+                                }))
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  fontRows: [
+                                    ...prev.fontRows,
+                                    { id: Date.now().toString(), label: fontPopover.label || `Font ${prev.fontRows.length + 1}`, font: fontPopover.font }
+                                  ]
+                                }))
+                              }
+                              setFontPopover({ open: false, label: "", font: "" })
+                            }}
+                            className={cn(
+                              "flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                              fontPopover.font
+                                ? "bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white"
+                                : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
+                            )}
+                          >
+                            {fontPopover.editId ? "Save" : "Add"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={addFontRow}
-                      className="w-9 h-9 flex items-center justify-center bg-black text-white hover:bg-black/80 transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => fontUploadRef.current?.click()}
-                      className="px-4 py-2 bg-[#5C6ECD] text-white text-sm font-medium hover:bg-[#4A5BC7] transition-colors flex items-center gap-2"
-                    >
-                      <Upload className="w-4 h-4" />
-                      UPLOAD YOUR FONT
-                    </button>
-                    <input
-                      ref={fontUploadRef}
-                      type="file"
-                      accept=".ttf,.otf"
-                      multiple
-                      onChange={handleCustomFontUpload}
-                      className="hidden"
-                    />
+                </div>
+
+                {/* Right: Brand Colors */}
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Brand Colors</h3>
+
+                  {/* Live Palette Preview */}
+                  {formData.colorRows.some(r => r.hex) && (
+                    <div className="flex gap-1 mb-4 p-2 rounded-lg bg-[#fafafa] dark:bg-[#111] border border-[#e5e5e5] dark:border-[#444]">
+                      {formData.colorRows.filter(r => r.hex).map((row) => (
+                        <div
+                          key={row.id}
+                          className="flex-1 h-8 rounded-md first:rounded-l-lg last:rounded-r-lg transition-colors"
+                          style={{ backgroundColor: `#${row.hex}` }}
+                          title={row.name || `#${row.hex}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Color List */}
+                  <div className="space-y-2 mb-3">
+                    {formData.colorRows.map((row) => (
+                      <div key={row.id} className="flex items-center gap-3 p-3 rounded-xl border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a]">
+                        <div
+                          className="w-9 h-9 rounded-lg border-2 border-[#e5e5e5] dark:border-[#444] shrink-0"
+                          style={{ backgroundColor: row.hex ? `#${row.hex}` : '#f0f0f0' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#1a1a1a] dark:text-white font-mono uppercase truncate">
+                            {row.hex ? `#${row.hex}` : "No color"}
+                          </p>
+                          {row.name && <p className="text-xs text-[#999] truncate">{row.name}</p>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setColorPopover({ open: true, editId: row.id, hex: row.hex, name: row.name })}
+                          className="p-1.5 text-[#999] hover:text-[#5C6ECD] transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => removeColorRow(row.id)} className="p-1.5 text-[#999] hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setColorPopover({ open: true, hex: "", name: "" })}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-[#5C6ECD] border border-dashed border-[#5C6ECD]/30 rounded-lg hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Color
+                  </button>
+
+                  {/* Color Popover */}
+                  {colorPopover.open && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30" onClick={() => setColorPopover({ open: false, hex: "", name: "" })}>
+                      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-[#e5e5e5] dark:border-[#444] w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+                        <h4 className="text-base font-semibold text-[#1a1a1a] dark:text-white mb-4">{colorPopover.editId ? "Edit Color" : "Add Color"}</h4>
+                        <div className="space-y-4">
+                          {/* Color Preview + Picker */}
+                          <div className="flex items-center gap-4">
+                            <div className="relative shrink-0">
+                              <input
+                                type="color"
+                                value={colorPopover.hex ? `#${colorPopover.hex}` : "#000000"}
+                                onChange={(e) => setColorPopover(prev => ({ ...prev, hex: e.target.value.replace("#", "") }))}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                              />
+                              <div
+                                className="w-14 h-14 rounded-xl border-2 border-[#e5e5e5] dark:border-[#444] cursor-pointer shadow-sm"
+                                style={{ backgroundColor: colorPopover.hex ? `#${colorPopover.hex}` : '#f0f0f0' }}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="block text-xs font-medium text-[#666] dark:text-[#999] mb-1.5">Hex Code</label>
+                              <div className="flex items-center border border-[#e5e5e5] dark:border-[#444] rounded-lg bg-white dark:bg-[#111] px-3 py-2.5 focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20 transition-colors">
+                                <span className="text-sm text-[#999] font-mono mr-1">#</span>
+                                <input
+                                  type="text"
+                                  value={colorPopover.hex}
+                                  onChange={(e) => {
+                                    const hex = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6)
+                                    setColorPopover(prev => ({ ...prev, hex }))
+                                  }}
+                                  placeholder="000000"
+                                  className="flex-1 bg-transparent text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#ccc] dark:placeholder:text-[#555] !outline-none font-mono border-none uppercase"
+                                  maxLength={6}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          {/* Color Name */}
+                          <div>
+                            <label className="block text-xs font-medium text-[#666] dark:text-[#999] mb-1.5">Color Name</label>
+                            <input
+                              type="text"
+                              value={colorPopover.name}
+                              onChange={(e) => setColorPopover(prev => ({ ...prev, name: e.target.value }))}
+                              placeholder="e.g. Brand Blue, Accent Green"
+                              className="w-full px-3 py-2.5 border border-[#e5e5e5] dark:border-[#444] rounded-lg bg-white dark:bg-[#111] text-sm text-[#1a1a1a] dark:text-white placeholder:text-[#999] !outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-5">
+                          <button
+                            type="button"
+                            onClick={() => setColorPopover({ open: false, hex: "", name: "" })}
+                            className="flex-1 py-2.5 text-sm font-medium text-[#666] dark:text-[#999] border border-[#e5e5e5] dark:border-[#444] rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#222] transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!colorPopover.hex}
+                            onClick={() => {
+                              if (colorPopover.editId) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  colorRows: prev.colorRows.map(c =>
+                                    c.id === colorPopover.editId ? { ...c, hex: colorPopover.hex, name: colorPopover.name } : c
+                                  )
+                                }))
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  colorRows: [
+                                    ...prev.colorRows,
+                                    { id: Date.now().toString(), hex: colorPopover.hex, font: "", name: colorPopover.name }
+                                  ]
+                                }))
+                              }
+                              setColorPopover({ open: false, hex: "", name: "" })
+                            }}
+                            className={cn(
+                              "flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                              colorPopover.hex
+                                ? "bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white"
+                                : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
+                            )}
+                          >
+                            {colorPopover.editId ? "Save" : "Add"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Right Column - Brand Colors */}
-              <div>
-                <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Brand Colors</h3>
-
-                <div className="space-y-6">
-                  {/* Image Upload Area */}
+              {/* Brand Images - Full Width */}
+              <div className="mt-8 pt-8 border-t border-[#e5e5e5] dark:border-[#333]">
+                <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Brand Images</h3>
+                {formData.brandImages.length > 0 ? (
                   <div>
-                    {formData.brandImages.length > 0 ? (
-                      <div>
-                        <div className="relative aspect-[16/9] overflow-hidden border border-[#e5e5e5] dark:border-[#444]">
-                          <img
-                            src={formData.brandImages[currentImageIndex]}
-                            alt="Brand colors"
-                            className="w-full h-full object-cover"
-                          />
+                    <div className="grid grid-cols-3 gap-3">
+                      {formData.brandImages.map((img, index) => (
+                        <div key={index} className="relative aspect-video rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#444] group">
+                          <img src={img} alt={`Brand ${index + 1}`} className="w-full h-full object-cover" />
                           <button
                             type="button"
-                            onClick={() => removeBrandImage(currentImageIndex)}
-                            className="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white"
+                            onClick={() => removeBrandImage(index)}
+                            className="absolute top-2 right-2 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <X className="w-3 h-3" />
                           </button>
                         </div>
-                        {formData.brandImages.length > 1 && (
-                          <div className="flex items-center justify-center gap-1.5 mt-3">
-                            {formData.brandImages.map((_, index) => (
-                              <button
-                                key={index}
-                                type="button"
-                                onClick={() => setCurrentImageIndex(index)}
-                                className={cn(
-                                  "w-2 h-2 rounded-full transition-colors",
-                                  index === currentImageIndex
-                                    ? "bg-[#1a1a1a] dark:bg-white"
-                                    : "bg-[#e5e5e5] dark:bg-[#444]"
-                                )}
-                              />
-                            ))}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => brandImageInputRef.current?.click()}
-                          className="w-full mt-3 py-2 text-sm font-medium text-[#5C6ECD] hover:text-[#4A5BC7] transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add more images
-                        </button>
-                      </div>
-                    ) : (
+                      ))}
                       <button
                         type="button"
                         onClick={() => brandImageInputRef.current?.click()}
-                        className="w-full aspect-[16/9] border-2 border-dashed border-[#e5e5e5] dark:border-[#444] flex flex-col items-center justify-center gap-2 text-[#999] hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 hover:text-[#5C6ECD] transition-colors group"
+                        className="aspect-video border-2 border-dashed border-[#e5e5e5] dark:border-[#444] rounded-lg flex flex-col items-center justify-center gap-1 text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all"
                       >
-                        <ImageIcon className="w-8 h-8" />
-                        <span className="text-sm font-medium">Browse media</span>
-                        <span className="text-xs">Upload to extract colors</span>
+                        <Plus className="w-5 h-5" />
+                        <span className="text-xs">Add more</span>
                       </button>
-                    )}
-                    <input
-                      ref={brandImageInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleBrandImageUpload}
-                      className="hidden"
-                    />
+                    </div>
                   </div>
-
-                  {/* Color Rows */}
-                  <div className="space-y-3">
-                    {formData.colorRows.map((row) => (
-                      <div key={row.id} className="flex items-center gap-3">
-                        {/* Color Input */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-[#999]">#</span>
-                          <div>
-                            <input
-                              type="text"
-                              value={row.hex}
-                              onChange={(e) => {
-                                // Only allow hex characters
-                                const hex = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6)
-                                updateColorRow(row.id, 'hex', hex)
-                                clearNestedError('hexColors', row.id)
-                              }}
-                              placeholder="000000"
-                              className={cn(
-                                "w-16 px-2 py-2 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors font-mono text-xs",
-                                errors.hexColors?.[row.id]
-                                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                  : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
-                              )}
-                              maxLength={6}
-                            />
-                            {errors.hexColors?.[row.id] && <p className="text-xs text-red-500 mt-0.5">{errors.hexColors[row.id]}</p>}
-                          </div>
-                          <div className="relative">
-                            <input
-                              type="color"
-                              value={row.hex ? `#${row.hex}` : "#000000"}
-                              onChange={(e) => updateColorRow(row.id, 'hex', e.target.value.replace("#", ""))}
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[100]"
-                            />
-                            <div
-                              className="w-7 h-7 rounded-full border border-[#e5e5e5] dark:border-[#444] flex items-center justify-center shrink-0 cursor-pointer"
-                              style={{ backgroundColor: row.hex ? `#${row.hex}` : '#f5f5f5' }}
-                            >
-                              <Pencil className="w-2.5 h-2.5 text-white mix-blend-difference" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Font Select */}
-                        <div className="w-36">
-                          <CustomDropdown
-                            id={`colorFont-${row.id}`}
-                            value={row.font}
-                            options={getFontRowLabels()}
-                            placeholder="Font"
-                            onChange={(value) => updateColorRow(row.id, 'font', value)}
-                          />
-                        </div>
-
-                        {/* Color Name */}
-                        <input
-                          type="text"
-                          value={row.name}
-                          onChange={(e) => updateColorRow(row.id, 'name', e.target.value)}
-                          placeholder="Color name"
-                          className="flex-1 px-3 py-2border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors text-sm"
-                        />
-
-                        {/* Remove Button */}
-                        {formData.colorRows.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeColorRow(row.id)}
-                            className="p-1.5 text-[#999] hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addColorRow}
-                      className="flex items-center gap-2 text-sm font-medium text-[#5C6ECD] hover:text-[#4A5BC7] transition-colors mt-4"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add row
-                    </button>
-                  </div>
-                </div>
-              </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => brandImageInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-3 py-8 border-2 border-dashed border-[#e5e5e5] dark:border-[#444] rounded-xl hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all group"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center group-hover:bg-[#5C6ECD]/20 transition-colors">
+                      <ImageIcon className="w-5 h-5 text-[#5C6ECD]" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-[#1a1a1a] dark:text-white">Upload brand images</p>
+                      <p className="text-xs text-[#999]">Add reference images, mood boards, or brand guidelines</p>
+                    </div>
+                  </button>
+                )}
+                <input ref={brandImageInputRef} type="file" accept="image/*" multiple onChange={handleBrandImageUpload} className="hidden" />
               </div>
             </div>
           )}

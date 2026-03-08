@@ -23,6 +23,14 @@ export async function GET(request: Request) {
           { onConflict: 'id', ignoreDuplicates: true }
         )
 
+        // Auto-link to organization if email was pre-added as a team member
+        if (user.email) {
+          await supabase.rpc('link_user_to_org_member', {
+            p_user_id: user.id,
+            p_email: user.email,
+          })
+        }
+
         // Check onboarding status
         const { data: profile } = await supabase
           .from('profiles')
@@ -32,6 +40,22 @@ export async function GET(request: Request) {
 
         if (!profile || !profile.onboarded) {
           return NextResponse.redirect(`${origin}/onboarding`)
+        }
+
+        // Role-based routing: check if user is a linked member (designer/client)
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('role')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single()
+
+        if (membership) {
+          const role = membership.role
+          if (role === 'client') {
+            return NextResponse.redirect(`${origin}/productive-zone`)
+          }
+          // admin/owner/designer goes to studio (default)
         }
       }
 

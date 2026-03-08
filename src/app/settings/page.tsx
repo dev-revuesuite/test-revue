@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { Settings } from "lucide-react"
+import { getUserRole } from "@/lib/get-user-role"
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -15,6 +16,8 @@ export default async function SettingsPage() {
     redirect("/login")
   }
 
+  const { role: userRole, clientId } = await getUserRole(supabase, user.id)
+
   const userData = {
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     email: user.email || "",
@@ -23,13 +26,14 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex h-svh">
-      <AppSidebar user={userData} />
+      <AppSidebar user={userData} userRole={userRole} clientId={clientId} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <StudioHeader
           user={userData}
           organizationId={null}
           organizationLogoUrl={null}
           clientDirectory={[]}
+          userRole={userRole}
         />
         <main className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center">

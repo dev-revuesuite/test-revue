@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronDown,
   Check,
@@ -15,7 +15,9 @@ import {
   Sparkles,
   Zap,
   CalendarIcon,
-  ExternalLink as LinkIcon
+  ExternalLink as LinkIcon,
+  Globe,
+  FileText
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
@@ -74,9 +76,12 @@ const projectTypes = [
   "Logo Design",
   "Marketing",
   "Video Production",
-  "Photography",
   "Social Media",
-  "Other"
+  "Motion Graphics",
+  "Illustration",
+  "Print Design",
+  "Packaging",
+  "Other",
 ]
 
 interface TeamMember {
@@ -112,6 +117,184 @@ interface BriefFormErrors {
   accountManager?: string
 }
 
+// ── Standalone RichDropdown (own search state, no focus issues) ──
+function RichDropdownStandalone({
+  id,
+  value,
+  members,
+  placeholder,
+  onChange,
+  showRole = false,
+  className = "",
+  error,
+}: {
+  id: string
+  value: string
+  members: TeamMember[]
+  placeholder: string
+  onChange: (value: string) => void
+  showRole?: boolean
+  className?: string
+  error?: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const filteredMembers = members.filter(m =>
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.email.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+  const selectedMember = members.find(m => m.name === value)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+        setSearchQuery("")
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+  }, [isOpen])
+
+  return (
+    <div ref={containerRef} className={cn("relative", className)} style={{ zIndex: isOpen ? 9999 : 30 }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors",
+          isOpen
+            ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-[#1a1a1a]"
+            : error
+            ? "border-red-500 bg-white dark:bg-[#1a1a1a]"
+            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]"
+        )}
+      >
+        {selectedMember ? (
+          <>
+            {selectedMember.avatar ? (
+              <img src={selectedMember.avatar} alt="" className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover rounded-full" />
+            ) : (
+              <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded-full shrink-0">
+                <span className="text-white text-xs font-bold">{selectedMember.name.substring(0, 2).toUpperCase()}</span>
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{selectedMember.name}</p>
+              {selectedMember.email && <p className="text-xs text-[#666] truncate">{selectedMember.email}</p>}
+            </div>
+          </>
+        ) : (
+          <span className="flex-1 text-[#999]">{placeholder}</span>
+        )}
+        <ChevronDown className={cn(
+          "w-5 h-5 text-[#999] transition-transform shrink-0",
+          isOpen && "rotate-180 text-[#5C6ECD]"
+        )} />
+      </button>
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-xl shadow-2xl overflow-hidden" style={{ zIndex: 99999 }}>
+          <div className="p-2.5 border-b border-[#e5e5e5] dark:border-[#444]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999]" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-[#e5e5e5] dark:border-[#444] rounded-lg bg-[#f9f9f9] dark:bg-[#0a0a0a] text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] transition-colors"
+              />
+            </div>
+          </div>
+          <div className="max-h-48 overflow-auto p-1.5">
+            {filteredMembers.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-[#999] text-center">No results found</div>
+            ) : (
+              filteredMembers.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(member.name)
+                    setIsOpen(false)
+                    setSearchQuery("")
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-lg hover:bg-[#5C6ECD]/10 transition-colors",
+                    value === member.name && "bg-[#5C6ECD]/10"
+                  )}
+                >
+                  {member.avatar ? (
+                    <img src={member.avatar} alt="" className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover rounded-full" />
+                  ) : (
+                    <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded-full shrink-0">
+                      <span className="text-white text-xs font-bold">{member.name.substring(0, 2).toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm truncate",
+                      value === member.name ? "font-medium text-[#5C6ECD]" : "text-[#1a1a1a] dark:text-white"
+                    )}>{member.name}</p>
+                    <p className="text-xs text-[#666] truncate">
+                      {showRole && member.role ? member.role : member.email}
+                    </p>
+                  </div>
+                  {value === member.name && <Check className="w-4 h-4 text-[#5C6ECD] shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
+    </div>
+  )
+}
+
+// ── Mini modal overlay (centered) ──
+function MiniModal({
+  open,
+  onClose,
+  title,
+  children,
+  width = "max-w-md",
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  children: React.ReactNode
+  width?: string
+}) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className={cn("w-full mx-4 bg-white dark:bg-[#111] rounded-2xl shadow-2xl border border-[#e5e5e5] dark:border-[#333] overflow-hidden", width)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e5e5e5] dark:border-[#333]">
+          <h3 className="text-base font-semibold text-[#1a1a1a] dark:text-white">{title}</h3>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#f0f0f0] dark:hover:bg-[#333] transition-colors">
+            <X className="w-4 h-4 text-[#999]" />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 interface NewBriefDialogProps {
   open: boolean
   onClose: () => void
@@ -123,9 +306,8 @@ interface NewBriefDialogProps {
 export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = [], teamMembers = [] }: NewBriefDialogProps) {
   const [step, setStep] = useState(1)
   const totalSteps = 4
-  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Convert teamMembers to TeamMember format for dropdowns
   const teamMembersData: TeamMember[] = teamMembers.map(m => ({
     id: m.id,
     name: m.name,
@@ -160,35 +342,41 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   const [formData, setFormData] = useState<BriefFormData>(initialFormData)
   const [errors, setErrors] = useState<BriefFormErrors>({})
 
-  // Reset form when dialog opens
+  // Mini-modal states
+  const [addDeliverableOpen, setAddDeliverableOpen] = useState(false)
+  const [newDeliverableName, setNewDeliverableName] = useState("")
+  const [newDeliverableDate, setNewDeliverableDate] = useState("")
+  const [addResourceOpen, setAddResourceOpen] = useState(false)
+  const [resourceTab, setResourceTab] = useState<"file" | "link">("file")
+  const [newLinkName, setNewLinkName] = useState("")
+  const [newLinkUrl, setNewLinkUrl] = useState("")
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [pendingLinks, setPendingLinks] = useState<{ name: string; url: string }[]>([])
+
+  const [isCreating, setIsCreating] = useState(false)
+
+  // Dropdown state for CustomDropdown
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
+
   useEffect(() => {
     if (open) {
       setFormData(initialFormData)
       setStep(1)
       setErrors({})
+      setIsCreating(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
-  const [refTypePopoverOpen, setRefTypePopoverOpen] = useState(false)
-  const [addDeliverableOpen, setAddDeliverableOpen] = useState(false)
-  const [newDeliverableName, setNewDeliverableName] = useState("")
-  const [newDeliverableDate, setNewDeliverableDate] = useState("")
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownOpen && !(e.target as Element).closest('.dropdown-container')) {
         setDropdownOpen(null)
       }
-      if (refTypePopoverOpen && !(e.target as Element).closest('.ref-type-popover')) {
-        setRefTypePopoverOpen(false)
-      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [dropdownOpen, refTypePopoverOpen])
+  }, [dropdownOpen])
 
   const clearError = (field: keyof BriefFormErrors) => {
     setErrors(prev => {
@@ -200,12 +388,11 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
 
   const validateStep = (currentStep: number): BriefFormErrors => {
     const newErrors: BriefFormErrors = {}
-
     if (currentStep === 1) {
       if (!formData.projectName.trim()) newErrors.projectName = "Project name is required"
       if (!formData.clientName.trim()) newErrors.clientName = "Please select a client"
+      if (!formData.accountManager) newErrors.accountManager = "Please select a project manager"
     }
-
     if (currentStep === 2) {
       if (!formData.startDate) newErrors.startDate = "Start date is required"
       if (!formData.endDate) newErrors.endDate = "End date is required"
@@ -213,11 +400,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
         newErrors.endDate = "End date must be after start date"
       }
     }
-
-    if (currentStep === 3) {
-      if (!formData.accountManager) newErrors.accountManager = "Please select an account manager"
-    }
-
     return newErrors
   }
 
@@ -231,108 +413,39 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     if (step < totalSteps) {
       setStep(step + 1)
     } else {
-      onComplete(formData)
+      setIsCreating(true)
+      // Small delay to show animation before calling onComplete
+      setTimeout(() => {
+        onComplete(formData)
+      }, 100)
     }
   }
 
   const handlePrevious = () => {
     setErrors({})
-    if (step > 1) {
-      setStep(step - 1)
-    }
+    if (step > 1) setStep(step - 1)
   }
 
   const canContinue = () => {
     switch (step) {
-      case 1:
-        return formData.projectName.trim() !== "" && formData.clientName.trim() !== ""
-      case 2:
-        return formData.startDate !== "" && formData.endDate !== ""
-      case 3:
-        return formData.accountManager !== ""
-      case 4:
-        return true
-      default:
-        return true
+      case 1: return formData.projectName.trim() !== "" && formData.clientName.trim() !== "" && formData.accountManager !== ""
+      case 2: return formData.startDate !== "" && formData.endDate !== ""
+      case 3: return true
+      case 4: return true
+      default: return true
     }
-  }
-
-  // Add functions
-  const addDeliverable = () => {
-    setFormData(prev => ({
-      ...prev,
-      deliverables: [
-        ...prev.deliverables,
-        { id: Date.now().toString(), name: "", date: "" }
-      ]
-    }))
   }
 
   const removeDeliverable = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      deliverables: prev.deliverables.filter(d => d.id !== id)
-    }))
-  }
-
-
-  const addReference = (type: "file" | "link") => {
-    setFormData(prev => ({
-      ...prev,
-      references: [
-        ...prev.references,
-        { id: Date.now().toString(), name: "", type }
-      ]
-    }))
-    setRefTypePopoverOpen(false)
+    setFormData(prev => ({ ...prev, deliverables: prev.deliverables.filter(d => d.id !== id) }))
   }
 
   const removeReference = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      references: prev.references.filter(r => r.id !== id)
-    }))
-  }
-
-  // Update functions
-  const updateDeliverable = (id: string, field: keyof DeliverableItem, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      deliverables: prev.deliverables.map(d =>
-        d.id === id ? { ...d, [field]: value } : d
-      )
-    }))
-  }
-
-  const updateReference = (id: string, name: string) => {
-    setFormData(prev => ({
-      ...prev,
-      references: prev.references.map(r =>
-        r.id === id ? { ...r, name } : r
-      )
-    }))
+    setFormData(prev => ({ ...prev, references: prev.references.filter(r => r.id !== id) }))
   }
 
   const updateNamingColumn = (id: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      namingColumns: prev.namingColumns.map(c =>
-        c.id === id ? { ...c, value } : c
-      )
-    }))
-  }
-
-  const handleFileUpload = (refId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files)
-      setFormData(prev => ({
-        ...prev,
-        references: prev.references.map(r =>
-          r.id === refId ? { ...r, files: [...(r.files || []), ...fileArray], name: r.name || fileArray.map(f => f.name).join(", ") } : r
-        )
-      }))
-    }
+    setFormData(prev => ({ ...prev, namingColumns: prev.namingColumns.map(c => c.id === id ? { ...c, value } : c) }))
   }
 
   // Custom Dropdown Component
@@ -359,7 +472,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
         onClick={() => !disabled && setDropdownOpen(dropdownOpen === id ? null : id)}
         disabled={disabled}
         className={cn(
-          "w-full flex items-center justify-between px-4 py-3 border text-left transition-colors",
+          "w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-colors",
           disabled
             ? "bg-[#f5f5f5] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#444] cursor-not-allowed"
             : dropdownOpen === id
@@ -370,26 +483,20 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
         <span className={value ? "text-[#1a1a1a] dark:text-white" : "text-[#999]"}>
           {value || placeholder}
         </span>
-        <ChevronDown className={cn(
-          "w-5 h-5 text-[#999] transition-transform",
-          dropdownOpen === id && "rotate-180 text-[#5C6ECD]"
-        )} />
+        <ChevronDown className={cn("w-5 h-5 text-[#999] transition-transform", dropdownOpen === id && "rotate-180 text-[#5C6ECD]")} />
       </button>
       {dropdownOpen === id && (
         <div className={cn(
-          "absolute left-0 right-0 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-2xl max-h-48 overflow-auto",
-          className.includes("dropdown-upward") ? "bottom-full mb-1" : "top-full mt-1"
+          "absolute left-0 right-0 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-xl shadow-2xl max-h-48 overflow-auto p-1.5",
+          className.includes("dropdown-upward") ? "bottom-full mb-1.5" : "top-full mt-1.5"
         )} style={{ zIndex: 99999 }}>
           {options.map((opt) => (
             <button
               key={opt}
               type="button"
-              onClick={() => {
-                onChange(opt)
-                setDropdownOpen(null)
-              }}
+              onClick={() => { onChange(opt); setDropdownOpen(null) }}
               className={cn(
-                "w-full px-4 py-2.5 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
+                "w-full px-3 py-2.5 text-left text-sm rounded-lg hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
                 value === opt && "bg-[#5C6ECD]/10 text-[#5C6ECD]"
               )}
             >
@@ -402,152 +509,20 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     </div>
   )
 
-  // Rich Dropdown Component with Profile Images and Search
-  const [richSearchQuery, setRichSearchQuery] = useState<{ [key: string]: string }>({})
-
-  const RichDropdown = ({
-    id,
-    value,
-    members,
-    placeholder,
-    onChange,
-    showRole = false,
-    className = ""
-  }: {
-    id: string
-    value: string
-    members: TeamMember[]
-    placeholder: string
-    onChange: (value: string) => void
-    showRole?: boolean
-    className?: string
-  }) => {
-    const searchQuery = richSearchQuery[id] || ""
-    const filteredMembers = members.filter(m =>
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.email.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    const selectedMember = members.find(m => m.name === value)
-
-    return (
-      <div className={cn("relative dropdown-container", className)} style={{ zIndex: dropdownOpen === id ? 9999 : 30 }}>
-        <button
-          type="button"
-          onClick={() => setDropdownOpen(dropdownOpen === id ? null : id)}
-          className={cn(
-            "w-full flex items-center gap-3 px-4 py-3 border text-left transition-colors",
-            dropdownOpen === id
-              ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-[#1a1a1a]"
-              : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]"
-          )}
-        >
-          {selectedMember ? (
-            <>
-              {selectedMember.avatar ? (
-                <img
-                  src={selectedMember.avatar}
-                  alt=""
-                  className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover rounded"
-                />
-              ) : (
-                <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded shrink-0">
-                  <span className="text-white text-xs font-bold">{selectedMember.name.substring(0, 2).toUpperCase()}</span>
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{selectedMember.name}</p>
-                {selectedMember.email && <p className="text-xs text-[#666] truncate">{selectedMember.email}</p>}
-              </div>
-            </>
-          ) : (
-            <span className="flex-1 text-[#999]">{placeholder}</span>
-          )}
-          <ChevronDown className={cn(
-            "w-5 h-5 text-[#999] transition-transform shrink-0",
-            dropdownOpen === id && "rotate-180 text-[#5C6ECD]"
-          )} />
-        </button>
-        {dropdownOpen === id && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] shadow-2xl" style={{ zIndex: 99999 }}>
-            {/* Search Input */}
-            <div className="p-2 border-b border-[#e5e5e5] dark:border-[#444]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999]" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setRichSearchQuery(prev => ({ ...prev, [id]: e.target.value }))}
-                  placeholder="Search..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-[#e5e5e5] dark:border-[#444] bg-[#f9f9f9] dark:bg-[#0a0a0a] text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-            {/* Members List */}
-            <div className="max-h-48 overflow-auto">
-              {filteredMembers.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-[#999] text-center">No results found</div>
-              ) : (
-                filteredMembers.map((member) => (
-                  <button
-                    key={member.id}
-                    type="button"
-                    onClick={() => {
-                      onChange(member.name)
-                      setDropdownOpen(null)
-                      setRichSearchQuery(prev => ({ ...prev, [id]: "" }))
-                    }}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#5C6ECD]/10 transition-colors",
-                      value === member.name && "bg-[#5C6ECD]/10"
-                    )}
-                  >
-                    {member.avatar ? (
-                      <img
-                        src={member.avatar}
-                        alt=""
-                        className="w-8 h-8 bg-[#e5e5e5] dark:bg-[#333] object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 bg-[#5C6ECD] flex items-center justify-center rounded shrink-0">
-                        <span className="text-white text-xs font-bold">{member.name.substring(0, 2).toUpperCase()}</span>
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className={cn(
-                        "text-sm truncate",
-                        value === member.name ? "font-medium text-[#5C6ECD]" : "text-[#1a1a1a] dark:text-white"
-                      )}>{member.name}</p>
-                      <p className="text-xs text-[#666] truncate">
-                        {showRole && member.role ? member.role : member.email}
-                      </p>
-                    </div>
-                    {value === member.name && <Check className="w-4 h-4 text-[#5C6ECD] shrink-0" />}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   if (!open) return null
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-[90vw] h-[90vh] bg-white dark:bg-[#0a0a0a] flex flex-col shadow-2xl">
-      {/* Header - Same as NewClientOnboarding */}
+      <div className="relative w-[90vw] h-[90vh] bg-white dark:bg-[#0a0a0a] flex flex-col shadow-2xl rounded-2xl overflow-hidden">
+      {/* Header */}
       <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
         <div className="flex items-center justify-between">
-          {/* Revue Logo */}
           <div className="flex items-center">
             <img src="/Logo/Artboard 8@2x.png" alt="Revue" width={120} height={37} className="dark:hidden" />
             <img src="/Logo/Artboard 8 copy@2x.png" alt="Revue" width={120} height={37} className="hidden dark:block" />
           </div>
 
-          {/* Steps Indicator - Same style as NewClientOnboarding */}
           <div className="flex items-center gap-6">
             {[
               { num: 1, label: "Brand Information" },
@@ -569,36 +544,51 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   >
                     {step > s.num ? <Check className="w-4 h-4" /> : s.num}
                   </div>
-                  <span
-                    className={cn(
-                      "text-sm font-medium transition-colors",
-                      step >= s.num
-                        ? "text-[#1a1a1a] dark:text-white"
-                        : "text-[#999]"
-                    )}
-                  >
+                  <span className={cn("text-sm font-medium transition-colors", step >= s.num ? "text-[#1a1a1a] dark:text-white" : "text-[#999]")}>
                     {s.label}
                   </span>
                 </div>
                 {i < 3 && (
-                  <div className={cn(
-                    "w-12 h-0.5 rounded-full transition-colors",
-                    step > s.num ? "bg-[#5C6ECD]" : "bg-[#e5e5e5] dark:bg-[#333]"
-                  )} />
+                  <div className={cn("w-12 h-0.5 rounded-full transition-colors", step > s.num ? "bg-[#5C6ECD]" : "bg-[#e5e5e5] dark:bg-[#333]")} />
                 )}
               </div>
             ))}
           </div>
 
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-[#5C6ECD] hover:bg-[#5C6ECD]/10 transition-colors"
-          >
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-[#999] hover:bg-[#f0f0f0] dark:hover:bg-[#333] hover:text-[#5C6ECD] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
       </header>
+
+      {/* Creating Animation Overlay */}
+      {isCreating && (
+        <div className="absolute inset-0 z-10 bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
+          {/* Animated rings */}
+          <div className="relative w-24 h-24 mb-8">
+            <div className="absolute inset-0 rounded-full border-4 border-[#5C6ECD]/20 animate-ping" />
+            <div className="absolute inset-2 rounded-full border-4 border-[#5C6ECD]/30 animate-ping" style={{ animationDelay: "0.2s" }} />
+            <div className="absolute inset-4 rounded-full border-4 border-[#5C6ECD]/40 animate-ping" style={{ animationDelay: "0.4s" }} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-14 h-14 bg-gradient-to-br from-[#5C6ECD] to-[#4A5BC7] rounded-full flex items-center justify-center shadow-lg shadow-[#5C6ECD]/30 animate-pulse">
+                <Sparkles className="w-7 h-7 text-white" />
+              </div>
+            </div>
+          </div>
+          <h2 className="text-xl font-semibold text-[#1a1a1a] dark:text-white mb-2 animate-pulse">Creating your brief...</h2>
+          <p className="text-sm text-[#666] dark:text-[#999]">Setting up project, uploading resources</p>
+          {/* Progress dots */}
+          <div className="flex gap-1.5 mt-6">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-[#5C6ECD] animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto overflow-x-visible px-8 pt-6 pb-8">
@@ -607,21 +597,16 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           {/* Step 1: Brand Information */}
           {step === 1 && (
             <div>
-              {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
                   <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">1</span>
                   Brand Information
                 </div>
-                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
-                  Tell us about the project
-                </h1>
-                <p className="text-[#666] dark:text-[#999]">
-                  Basic information to get started with your new brief
-                </p>
+                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">Tell us about the project</h1>
+                <p className="text-[#666] dark:text-[#999]">Basic information to get started with your new brief</p>
               </div>
 
-              <div className="space-y-6 overflow-visible">
+              <div className="space-y-5 overflow-visible">
                 {/* Project Name */}
                 <div>
                   <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
@@ -630,64 +615,71 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   <input
                     type="text"
                     value={formData.projectName}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, projectName: e.target.value }))
-                      clearError('projectName')
-                    }}
+                    onChange={(e) => { setFormData(prev => ({ ...prev, projectName: e.target.value })); clearError('projectName') }}
                     placeholder="Enter project name"
                     className={cn(
-                      "w-full px-4 py-3 border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
+                      "w-full px-4 py-3 rounded-xl border bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:ring-2 transition-colors",
                       errors.projectName
                         ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                         : "border-[#e5e5e5] dark:border-[#444] focus:border-[#5C6ECD] focus:ring-[#5C6ECD]/20"
                     )}
                   />
-                  {errors.projectName && <p className="text-xs text-red-500 mt-1">{errors.projectName}</p>}
+                  {errors.projectName && <p className="text-xs text-red-500 mt-1.5">{errors.projectName}</p>}
+                </div>
+
+                {/* Client Name + Project Type row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
+                      Client Name <span className="text-[#5C6ECD] font-normal">*</span>
+                    </label>
+                    <RichDropdownStandalone
+                      id="clientName"
+                      value={formData.clientName}
+                      members={clientDirectory.map(c => ({ id: c.id, name: c.name, email: "", avatar: c.logoUrl }))}
+                      placeholder="Select Client"
+                      onChange={(value) => { setFormData(prev => ({ ...prev, clientName: value })); clearError('clientName') }}
+                      error={errors.clientName}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
+                      Project Type <span className="text-[#5C6ECD] font-normal">*</span>
+                    </label>
+                    <CustomDropdown
+                      id="projectType"
+                      value={formData.projectType}
+                      options={projectTypes}
+                      placeholder="Select Type"
+                      onChange={(value) => setFormData(prev => ({ ...prev, projectType: value }))}
+                    />
+                  </div>
+                </div>
+
+                {/* Project Manager */}
+                <div>
+                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
+                    Project Manager <span className="text-[#5C6ECD] font-normal">*</span>
+                  </label>
+                  <RichDropdownStandalone
+                    id="accountManager"
+                    value={formData.accountManager}
+                    members={teamMembersData}
+                    placeholder="Select Manager"
+                    onChange={(value) => { setFormData(prev => ({ ...prev, accountManager: value })); clearError('accountManager') }}
+                    error={errors.accountManager}
+                  />
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Description
-                  </label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">Description</label>
+                  <textarea
                     value={formData.description}
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Enter project description"
-                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
-                  />
-                </div>
-
-                {/* Client Name */}
-                <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Client Name <span className="text-[#5C6ECD] font-normal">*</span>
-                  </label>
-                  <RichDropdown
-                    id="clientName"
-                    value={formData.clientName}
-                    members={clientDirectory.map(c => ({ id: c.id, name: c.name, email: "", avatar: c.logoUrl }))}
-                    placeholder="Select Client"
-                    onChange={(value) => {
-                      setFormData(prev => ({ ...prev, clientName: value }))
-                      clearError('clientName')
-                    }}
-                  />
-                  {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
-                </div>
-
-                {/* Project Type */}
-                <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Project Type <span className="text-[#5C6ECD] font-normal">*</span>
-                  </label>
-                  <CustomDropdown
-                    id="projectType"
-                    value={formData.projectType}
-                    options={projectTypes}
-                    placeholder="Select Type"
-                    onChange={(value) => setFormData(prev => ({ ...prev, projectType: value }))}
+                    placeholder="Describe the project scope, goals, and any important details..."
+                    rows={3}
+                    className="w-full px-4 py-3 rounded-xl border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors resize-none"
                   />
                 </div>
               </div>
@@ -697,24 +689,18 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           {/* Step 2: Timeline & Milestone */}
           {step === 2 && (
             <div>
-              {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
                   <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">2</span>
                   Timeline & Milestone
                 </div>
-                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
-                  Set the timeline
-                </h1>
-                <p className="text-[#666] dark:text-[#999]">
-                  Define project dates and milestones
-                </p>
+                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">Set the timeline</h1>
+                <p className="text-[#666] dark:text-[#999]">Define project dates and milestones</p>
               </div>
 
               <div className="space-y-6 overflow-visible">
                 {/* Date Row */}
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Start Date Picker */}
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                       Start Date <span className="text-[#5C6ECD] font-normal">*</span>
@@ -724,10 +710,8 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full justify-start text-left font-normal h-12 px-4 bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
-                            errors.startDate
-                              ? "border-red-500"
-                              : "border-[#e5e5e5] dark:border-[#444]",
+                            "w-full justify-start text-left font-normal h-12 px-4 rounded-xl bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            errors.startDate ? "border-red-500" : "border-[#e5e5e5] dark:border-[#444]",
                             !formData.startDate && "text-[#999]"
                           )}
                         >
@@ -735,22 +719,17 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                           {formData.startDate ? format(new Date(formData.startDate), "PPP") : "Select date"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 rounded-xl" align="start">
                         <Calendar
                           mode="single"
                           selected={formData.startDate ? new Date(formData.startDate) : undefined}
-                          onSelect={(date) => {
-                            setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" }))
-                            clearError('startDate')
-                          }}
+                          onSelect={(date) => { setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" })); clearError('startDate') }}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
-                    {errors.startDate && <p className="text-xs text-red-500 mt-1">{errors.startDate}</p>}
+                    {errors.startDate && <p className="text-xs text-red-500 mt-1.5">{errors.startDate}</p>}
                   </div>
-
-                  {/* End Date Picker */}
                   <div>
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                       End Date <span className="text-[#5C6ECD] font-normal">*</span>
@@ -760,10 +739,8 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full justify-start text-left font-normal h-12 px-4 bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
-                            errors.endDate
-                              ? "border-red-500"
-                              : "border-[#e5e5e5] dark:border-[#444]",
+                            "w-full justify-start text-left font-normal h-12 px-4 rounded-xl bg-white dark:bg-transparent hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                            errors.endDate ? "border-red-500" : "border-[#e5e5e5] dark:border-[#444]",
                             !formData.endDate && "text-[#999]"
                           )}
                         >
@@ -771,37 +748,34 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                           {formData.endDate ? format(new Date(formData.endDate), "PPP") : "Select date"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 rounded-xl" align="start">
                         <Calendar
                           mode="single"
                           selected={formData.endDate ? new Date(formData.endDate) : undefined}
-                          onSelect={(date) => {
-                            setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" }))
-                            clearError('endDate')
-                          }}
+                          onSelect={(date) => { setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" })); clearError('endDate') }}
                           disabled={(date) => formData.startDate ? date < new Date(formData.startDate) : false}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
-                    {errors.endDate && <p className="text-xs text-red-500 mt-1">{errors.endDate}</p>}
+                    {errors.endDate && <p className="text-xs text-red-500 mt-1.5">{errors.endDate}</p>}
                   </div>
                 </div>
 
                 {/* Deliverables */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
+                <div className="pt-5 border-t border-[#e5e5e5] dark:border-[#333]">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white">Deliverables</h3>
                     {formData.deliverables.length > 0 && (
-                      <span className="text-xs text-[#999]">{formData.deliverables.length} item{formData.deliverables.length !== 1 ? "s" : ""}</span>
+                      <span className="text-xs text-[#999] bg-[#f5f5f5] dark:bg-[#222] px-2 py-0.5 rounded-full">{formData.deliverables.length} item{formData.deliverables.length !== 1 ? "s" : ""}</span>
                     )}
                   </div>
                   {formData.deliverables.length > 0 ? (
-                    <div className="space-y-2 mb-3">
+                    <div className="space-y-2 mb-4">
                       {formData.deliverables.map((item, index) => (
-                        <div key={item.id} className="group flex items-center gap-3 px-3 py-2.5 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
-                          <div className="w-5 h-5 rounded-full border-2 border-[#ccc] dark:border-[#555] shrink-0 flex items-center justify-center">
-                            <span className="text-[9px] font-bold text-[#999]">{index + 1}</span>
+                        <div key={item.id} className="group flex items-center gap-3 px-4 py-3 border border-[#e5e5e5] dark:border-[#333] rounded-xl hover:border-[#5C6ECD]/30 transition-colors bg-[#fafafa] dark:bg-[#111]">
+                          <div className="w-6 h-6 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] shrink-0 flex items-center justify-center">
+                            <span className="text-[10px] font-bold">{index + 1}</span>
                           </div>
                           <span className="flex-1 text-sm text-[#1a1a1a] dark:text-white truncate">{item.name}</span>
                           {item.date && (
@@ -821,96 +795,19 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       ))}
                     </div>
                   ) : (
-                    <div className="mb-3 py-8 border border-dashed border-[#e5e5e5] dark:border-[#333] text-center">
+                    <div className="mb-4 py-8 border border-dashed border-[#e5e5e5] dark:border-[#333] rounded-xl text-center">
                       <p className="text-sm text-[#999] mb-1">No deliverables added yet</p>
                       <p className="text-xs text-[#bbb] dark:text-[#555]">Add items that need to be delivered for this project</p>
                     </div>
                   )}
-                  <Popover open={addDeliverableOpen} onOpenChange={setAddDeliverableOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add deliverable
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 p-4" align="start">
-                      <h4 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">New Deliverable</h4>
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={newDeliverableName}
-                          onChange={(e) => setNewDeliverableName(e.target.value)}
-                          placeholder="Deliverable name"
-                          className="w-full px-3 py-2 text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] transition-colors"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && newDeliverableName.trim()) {
-                              setFormData(prev => ({
-                                ...prev,
-                                deliverables: [...prev.deliverables, { id: Date.now().toString(), name: newDeliverableName.trim(), date: newDeliverableDate }]
-                              }))
-                              setNewDeliverableName("")
-                              setNewDeliverableDate("")
-                              setAddDeliverableOpen(false)
-                            }
-                          }}
-                        />
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className={cn(
-                                "w-full flex items-center gap-2 px-3 py-2 text-sm border transition-colors",
-                                newDeliverableDate
-                                  ? "border-[#5C6ECD] text-[#5C6ECD]"
-                                  : "border-[#e5e5e5] dark:border-[#444] text-[#999]"
-                              )}
-                            >
-                              <CalendarIcon className="w-4 h-4" />
-                              {newDeliverableDate ? format(new Date(newDeliverableDate), "MMM dd, yyyy") : "Due date (optional)"}
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={newDeliverableDate ? new Date(newDeliverableDate) : undefined}
-                              onSelect={(date) => setNewDeliverableDate(date ? format(date, "yyyy-MM-dd") : "")}
-                              disabled={(date) => {
-                                if (formData.startDate && date < new Date(formData.startDate)) return true
-                                if (formData.endDate && date > new Date(formData.endDate)) return true
-                                return false
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <button
-                          type="button"
-                          disabled={!newDeliverableName.trim()}
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              deliverables: [...prev.deliverables, { id: Date.now().toString(), name: newDeliverableName.trim(), date: newDeliverableDate }]
-                            }))
-                            setNewDeliverableName("")
-                            setNewDeliverableDate("")
-                            setAddDeliverableOpen(false)
-                          }}
-                          className={cn(
-                            "w-full py-2 text-sm font-medium transition-colors",
-                            newDeliverableName.trim()
-                              ? "bg-[#5C6ECD] text-white hover:bg-[#4A5BC7]"
-                              : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
-                          )}
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                  <button
+                    type="button"
+                    onClick={() => { setNewDeliverableName(""); setNewDeliverableDate(""); setAddDeliverableOpen(true) }}
+                    className="w-full py-2.5 border border-dashed border-[#ccc] dark:border-[#444] rounded-xl text-sm text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add deliverable
+                  </button>
                 </div>
               </div>
             </div>
@@ -919,43 +816,27 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           {/* Step 3: Team & Settings */}
           {step === 3 && (
             <div>
-              {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
                   <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">3</span>
                   Team & Settings
                 </div>
-                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
-                  Assign the team
-                </h1>
-                <p className="text-[#666] dark:text-[#999]">
-                  Select team members for this project
-                </p>
+                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">Assign the team</h1>
+                <p className="text-[#666] dark:text-[#999]">Select team members for this project</p>
               </div>
 
               <div className="space-y-6 overflow-visible">
-                {/* Project Manager */}
-                <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
-                    Project Manager <span className="text-[#5C6ECD] font-normal">*</span>
-                  </label>
-                  <RichDropdown
-                    id="accountManager"
-                    value={formData.accountManager}
-                    members={teamMembersData}
-                    placeholder="Select Manager"
-                    onChange={(value) => {
-                      setFormData(prev => ({ ...prev, accountManager: value }))
-                      clearError('accountManager')
-                    }}
-                  />
-                  {errors.accountManager && <p className="text-xs text-red-500 mt-1">{errors.accountManager}</p>}
-                </div>
-
                 {/* Team Members as Cards */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Team Members</h3>
-                  <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white">Team Members</h3>
+                    {formData.teamMemberIds.length > 0 && (
+                      <span className="text-xs text-[#5C6ECD] bg-[#5C6ECD]/10 px-2.5 py-0.5 rounded-full font-medium">
+                        {formData.teamMemberIds.length} selected
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
                     {teamMembersData
                       .filter(m => m.name !== formData.accountManager)
                       .map((member) => {
@@ -973,25 +854,25 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                               }))
                             }}
                             className={cn(
-                              "relative flex items-center gap-3 p-3 border-2 text-left transition-all",
+                              "relative flex items-center gap-3 p-3.5 border-2 rounded-xl text-left transition-all",
                               isSelected
                                 ? "border-[#5C6ECD] bg-[#5C6ECD]/5"
-                                : "border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/40"
+                                : "border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/40 hover:bg-[#5C6ECD]/[0.02]"
                             )}
                           >
                             {isSelected && (
-                              <div className="absolute top-2 right-2 w-5 h-5 bg-[#5C6ECD] flex items-center justify-center rounded-full">
+                              <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#5C6ECD] flex items-center justify-center rounded-full">
                                 <Check className="w-3 h-3 text-white" />
                               </div>
                             )}
                             {member.avatar ? (
-                              <img src={member.avatar} alt="" className="w-9 h-9 object-cover rounded-full shrink-0" />
+                              <img src={member.avatar} alt="" className="w-10 h-10 object-cover rounded-full shrink-0" />
                             ) : (
-                              <div className="w-9 h-9 bg-[#5C6ECD] flex items-center justify-center rounded-full shrink-0">
+                              <div className="w-10 h-10 bg-gradient-to-br from-[#5C6ECD] to-[#4A5BC7] flex items-center justify-center rounded-full shrink-0">
                                 <span className="text-white text-xs font-bold">{member.name.substring(0, 2).toUpperCase()}</span>
                               </div>
                             )}
-                            <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex-1 min-w-0 pr-5">
                               <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{member.name}</p>
                               <p className="text-[11px] text-[#999] truncate">{member.email}</p>
                             </div>
@@ -1002,25 +883,23 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                 </div>
 
                 {/* Settings */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
+                <div className="pt-5 border-t border-[#e5e5e5] dark:border-[#333]">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <label className="text-sm font-semibold text-[#1a1a1a] dark:text-white">
-                        Auto delete iteration
-                      </label>
+                      <label className="text-sm font-semibold text-[#1a1a1a] dark:text-white">Auto delete iteration</label>
                       <p className="text-xs text-[#999] mt-0.5">Automatically remove old iterations after</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5 bg-[#f5f5f5] dark:bg-[#222] p-1 rounded-lg">
                       {deleteIterationOptions.map((opt) => (
                         <button
                           key={opt}
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, autoDeleteIteration: opt }))}
                           className={cn(
-                            "px-3 py-1.5 text-xs font-medium transition-colors",
+                            "px-3 py-1.5 text-xs font-medium rounded-md transition-all",
                             formData.autoDeleteIteration === opt
-                              ? "bg-[#5C6ECD] text-white"
-                              : "bg-[#f5f5f5] dark:bg-[#222] text-[#666] dark:text-[#999] hover:bg-[#5C6ECD]/10"
+                              ? "bg-[#5C6ECD] text-white shadow-sm"
+                              : "text-[#666] dark:text-[#999] hover:text-[#5C6ECD]"
                           )}
                         >
                           {opt}
@@ -1028,12 +907,12 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       ))}
                     </div>
                   </div>
-                  <label className="flex items-center gap-3 cursor-pointer p-3 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 border border-[#e5e5e5] dark:border-[#333] rounded-xl hover:border-[#5C6ECD]/30 transition-colors">
                     <input
                       type="checkbox"
                       checked={formData.needQCTool}
                       onChange={(e) => setFormData(prev => ({ ...prev, needQCTool: e.target.checked }))}
-                      className="w-4 h-4 border-black dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD]"
+                      className="w-4 h-4 border-black dark:border-[#444] text-[#5C6ECD] focus:ring-[#5C6ECD] focus:ring-offset-0 accent-[#5C6ECD] rounded"
                     />
                     <div className="flex-1">
                       <span className="text-sm font-medium text-[#1a1a1a] dark:text-white">Enable QC Tool</span>
@@ -1043,27 +922,27 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                 </div>
 
                 {/* Workmode */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
+                <div className="pt-5 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-4">Workmode</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, workmode: "productive" }))}
                       className={cn(
-                        "relative p-5 border-2 text-left transition-all group",
+                        "relative p-5 border-2 rounded-xl text-left transition-all group",
                         formData.workmode === "productive"
                           ? "border-[#5C6ECD] bg-[#5C6ECD]/5 shadow-lg shadow-[#5C6ECD]/10"
                           : "border-[#e5e5e5] dark:border-[#444] hover:border-[#5C6ECD]/50 hover:bg-[#5C6ECD]/5"
                       )}
                     >
                       {formData.workmode === "productive" && (
-                        <div className="absolute top-3 right-3 w-5 h-5 bg-[#5C6ECD] flex items-center justify-center">
+                        <div className="absolute top-3 right-3 w-5 h-5 bg-[#5C6ECD] flex items-center justify-center rounded-full">
                           <Check className="w-3 h-3 text-white" />
                         </div>
                       )}
                       <div className="flex items-center gap-3 mb-3">
                         <div className={cn(
-                          "w-10 h-10 flex items-center justify-center transition-colors",
+                          "w-10 h-10 flex items-center justify-center rounded-lg transition-colors",
                           formData.workmode === "productive"
                             ? "bg-[#5C6ECD]"
                             : "bg-[#e5e5e5] dark:bg-[#333] group-hover:bg-[#5C6ECD]/20"
@@ -1078,27 +957,27 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, workmode: "creative" }))}
                       className={cn(
-                        "relative p-5 border-2 text-left transition-all group overflow-hidden",
+                        "relative p-5 border-2 rounded-xl text-left transition-all group overflow-hidden",
                         formData.workmode === "creative"
                           ? "border-transparent bg-gradient-to-br from-[#A259FF] via-[#FF7262] to-[#DBFE52] shadow-lg"
                           : "border-[#e5e5e5] dark:border-[#444] hover:border-[#A259FF]/50"
                       )}
                     >
                       {formData.workmode !== "creative" && (
-                        <div className="absolute inset-0 bg-gradient-to-br from-[#A259FF]/0 via-[#FF7262]/0 to-[#DBFE52]/0 group-hover:from-[#A259FF]/5 group-hover:via-[#FF7262]/5 group-hover:to-[#DBFE52]/5 transition-all" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#A259FF]/0 via-[#FF7262]/0 to-[#DBFE52]/0 group-hover:from-[#A259FF]/5 group-hover:via-[#FF7262]/5 group-hover:to-[#DBFE52]/5 transition-all rounded-xl" />
                       )}
                       {formData.workmode === "creative" && (
-                        <div className="absolute inset-[2px] bg-white dark:bg-[#0a0a0a]" />
+                        <div className="absolute inset-[2px] bg-white dark:bg-[#0a0a0a] rounded-[10px]" />
                       )}
                       <div className="relative">
                         {formData.workmode === "creative" && (
-                          <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-[#A259FF] to-[#FF7262] flex items-center justify-center">
+                          <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-[#A259FF] to-[#FF7262] flex items-center justify-center rounded-full">
                             <Check className="w-3 h-3 text-white" />
                           </div>
                         )}
                         <div className="flex items-center gap-3 mb-3">
                           <div className={cn(
-                            "w-10 h-10 flex items-center justify-center transition-all",
+                            "w-10 h-10 flex items-center justify-center rounded-lg transition-all",
                             formData.workmode === "creative"
                               ? "bg-gradient-to-br from-[#A259FF] to-[#FF7262]"
                               : "bg-[#e5e5e5] dark:bg-[#333] group-hover:bg-gradient-to-br group-hover:from-[#A259FF]/20 group-hover:to-[#FF7262]/20"
@@ -1124,41 +1003,42 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           {/* Step 4: Resources */}
           {step === 4 && (
             <div>
-              {/* Step Header */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5C6ECD]/10 text-[#5C6ECD] text-sm font-medium mb-4">
                   <span className="w-5 h-5 rounded-full bg-[#5C6ECD] text-white text-xs flex items-center justify-center">4</span>
                   Resources
                 </div>
-                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">
-                  Add resources
-                </h1>
-                <p className="text-[#666] dark:text-[#999]">
-                  Upload references and set naming conventions
-                </p>
+                <h1 className="text-2xl font-semibold text-[#1a1a1a] dark:text-white mb-2">Add resources</h1>
+                <p className="text-[#666] dark:text-[#999]">Upload references and set naming conventions</p>
               </div>
 
               <div className="space-y-6 overflow-visible">
-                {/* References (combined file + link) */}
+                {/* References */}
                 <div>
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">References</h3>
                   {formData.references.length > 0 ? (
-                    <div className="space-y-2 mb-3">
+                    <div className="space-y-2 mb-4">
                       {formData.references.map((ref) => (
-                        <div key={ref.id} className="group flex items-center gap-3 p-3 border border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD]/30 transition-colors">
+                        <div key={ref.id} className="group flex items-center gap-3 p-3.5 border border-[#e5e5e5] dark:border-[#333] rounded-xl hover:border-[#5C6ECD]/30 transition-colors bg-[#fafafa] dark:bg-[#111]">
                           <div className={cn(
-                            "w-8 h-8 flex items-center justify-center shrink-0 text-white text-xs font-bold",
+                            "w-9 h-9 flex items-center justify-center shrink-0 text-white rounded-lg",
                             ref.type === "file" ? "bg-[#5C6ECD]" : "bg-[#10b981]"
                           )}>
-                            {ref.type === "file" ? <Upload className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                            {ref.type === "file" ? <FileText className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-[#1a1a1a] dark:text-white truncate">{ref.name || (ref.type === "file" ? "Untitled" : "Untitled link")}</p>
+                            <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{ref.name || (ref.type === "file" ? "Uploaded files" : "External link")}</p>
                             {ref.type === "file" && ref.files && ref.files.length > 0 && (
                               <p className="text-[11px] text-[#999] truncate">{ref.files.length} file{ref.files.length !== 1 ? "s" : ""}: {ref.files.map(f => f.name).join(", ")}</p>
                             )}
+                            {ref.type === "link" && ref.name && (
+                              <p className="text-[11px] text-[#999] truncate">{ref.name}</p>
+                            )}
                           </div>
-                          <span className="text-[10px] uppercase tracking-wider text-[#999] font-medium shrink-0">
+                          <span className={cn(
+                            "text-[10px] uppercase tracking-wider font-semibold shrink-0 px-2 py-0.5 rounded-full",
+                            ref.type === "file" ? "bg-[#5C6ECD]/10 text-[#5C6ECD]" : "bg-[#10b981]/10 text-[#10b981]"
+                          )}>
                             {ref.type}
                           </span>
                           <button
@@ -1172,85 +1052,26 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       ))}
                     </div>
                   ) : (
-                    <div className="mb-3 py-6 border border-dashed border-[#e5e5e5] dark:border-[#333] text-center">
-                      <p className="text-sm text-[#999]">No references added yet</p>
-                    </div>
-                  )}
-                  <Popover open={refTypePopoverOpen} onOpenChange={setRefTypePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-dashed border-[#ccc] dark:border-[#444] text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add reference
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-4" align="start">
-                      <h4 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Add Reference</h4>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const id = Date.now().toString()
-                            setFormData(prev => ({ ...prev, references: [...prev.references, { id, name: "", type: "file" }] }))
-                            setRefTypePopoverOpen(false)
-                            // trigger file picker
-                            setTimeout(() => fileInputRefs.current[id]?.click(), 100)
-                          }}
-                          className="flex flex-col items-center gap-2 p-4 border-2 border-[#e5e5e5] dark:border-[#333] hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/5 transition-all"
-                        >
-                          <div className="w-10 h-10 bg-[#5C6ECD]/10 flex items-center justify-center rounded-full">
-                            <Upload className="w-5 h-5 text-[#5C6ECD]" />
-                          </div>
-                          <span className="text-sm font-medium text-[#1a1a1a] dark:text-white">Upload files</span>
-                          <span className="text-[11px] text-[#999]">Multiple files</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addReference("link")}
-                          className="flex flex-col items-center gap-2 p-4 border-2 border-[#e5e5e5] dark:border-[#333] hover:border-[#10b981] hover:bg-[#10b981]/5 transition-all"
-                        >
-                          <div className="w-10 h-10 bg-[#10b981]/10 flex items-center justify-center rounded-full">
-                            <LinkIcon className="w-5 h-5 text-[#10b981]" />
-                          </div>
-                          <span className="text-sm font-medium text-[#1a1a1a] dark:text-white">External link</span>
-                          <span className="text-[11px] text-[#999]">URL reference</span>
-                        </button>
+                    <div className="mb-4 py-8 border border-dashed border-[#e5e5e5] dark:border-[#333] rounded-xl text-center">
+                      <div className="w-10 h-10 bg-[#f5f5f5] dark:bg-[#222] rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Upload className="w-5 h-5 text-[#999]" />
                       </div>
-                    </PopoverContent>
-                  </Popover>
-                  {/* Hidden file inputs for references */}
-                  {formData.references.filter(r => r.type === "file").map((ref) => (
-                    <input
-                      key={ref.id}
-                      ref={(el) => { fileInputRefs.current[ref.id] = el }}
-                      type="file"
-                      multiple
-                      onChange={(e) => handleFileUpload(ref.id, e)}
-                      className="hidden"
-                    />
-                  ))}
-                  {/* Hidden file inputs for link-type references that also want inline name editing */}
-                  {formData.references.filter(r => r.type === "link" && !r.name).length > 0 && (
-                    <div className="mt-2">
-                      {formData.references.filter(r => r.type === "link" && !r.name).map((ref) => (
-                        <input
-                          key={ref.id}
-                          type="text"
-                          autoFocus
-                          placeholder="Paste link URL..."
-                          onBlur={(e) => updateReference(ref.id, e.target.value)}
-                          onChange={(e) => updateReference(ref.id, e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] transition-colors"
-                        />
-                      ))}
+                      <p className="text-sm text-[#999]">No references added yet</p>
+                      <p className="text-xs text-[#bbb] dark:text-[#555] mt-1">Upload files or add external links</p>
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => { setResourceTab("file"); setNewLinkName(""); setNewLinkUrl(""); setPendingFiles([]); setPendingLinks([]); setAddResourceOpen(true) }}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border border-dashed border-[#ccc] dark:border-[#444] rounded-xl text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add reference
+                  </button>
                 </div>
 
                 {/* Naming Convention */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
+                <div className="pt-5 border-t border-[#e5e5e5] dark:border-[#333]">
                   <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-1">Naming Convention</h3>
                   <p className="text-xs text-[#999] mb-3">Suggested order : Brand Name_Project name_Date_Version</p>
                   <div className="flex items-center gap-1 flex-wrap pb-2">
@@ -1274,24 +1095,13 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                   </div>
                 </div>
 
-                {/* Other Description */}
-                <div className="pt-4 border-t border-[#e5e5e5] dark:border-[#333]">
-                  <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-3">Other Description</h3>
-                  <textarea
-                    value={formData.otherDescription}
-                    onChange={(e) => setFormData(prev => ({ ...prev, otherDescription: e.target.value }))}
-                    placeholder=""
-                    rows={4}
-                    className="w-full px-4 py-3 border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors resize-none"
-                  />
-                </div>
               </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Footer - Same as NewClientOnboarding */}
+      {/* Footer */}
       <footer className="border-t border-[#e5e5e5] dark:border-[#333] px-8 py-4 shrink-0">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div>
@@ -1299,7 +1109,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
               <button
                 type="button"
                 onClick={handlePrevious}
-                className="px-6 py-2.5 font-medium text-[#1a1a1a] dark:text-white border border-[#e5e5e5] dark:border-[#444] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
+                className="px-6 py-2.5 font-medium rounded-xl text-[#1a1a1a] dark:text-white border border-[#e5e5e5] dark:border-[#444] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
               >
                 Previous
               </button>
@@ -1310,21 +1120,275 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
             onClick={handleNext}
             disabled={!canContinue()}
             className={cn(
-              "group flex items-center gap-2 px-8 py-2.5 font-medium transition-all",
+              "group flex items-center gap-2 px-8 py-2.5 font-medium rounded-xl transition-all",
               canContinue()
                 ? "bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white shadow-lg shadow-[#5C6ECD]/25"
                 : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
             )}
           >
             {step === totalSteps ? "Create Brief" : "Continue"}
-            <ArrowRight className={cn(
-              "w-4 h-4 transition-transform duration-200",
-              canContinue() && "group-hover:translate-x-1"
-            )} />
+            <ArrowRight className={cn("w-4 h-4 transition-transform duration-200", canContinue() && "group-hover:translate-x-1")} />
           </button>
         </div>
       </footer>
       </div>
     </div>
+
+    {/* ── Add Deliverable Modal ── */}
+    <MiniModal open={addDeliverableOpen} onClose={() => setAddDeliverableOpen(false)} title="Add Deliverable">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5">Name</label>
+          <input
+            type="text"
+            value={newDeliverableName}
+            onChange={(e) => setNewDeliverableName(e.target.value)}
+            placeholder="e.g. Homepage Design, Logo Concepts..."
+            className="w-full px-4 py-3 rounded-xl text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newDeliverableName.trim()) {
+                setFormData(prev => ({ ...prev, deliverables: [...prev.deliverables, { id: Date.now().toString(), name: newDeliverableName.trim(), date: newDeliverableDate }] }))
+                setNewDeliverableName(""); setNewDeliverableDate(""); setAddDeliverableOpen(false)
+              }
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5">Due Date <span className="text-[#999] font-normal">(optional)</span></label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-3 rounded-xl text-sm border transition-colors",
+                  newDeliverableDate
+                    ? "border-[#5C6ECD] text-[#5C6ECD] bg-[#5C6ECD]/5"
+                    : "border-[#e5e5e5] dark:border-[#444] text-[#999] hover:border-[#5C6ECD]"
+                )}
+              >
+                <CalendarIcon className="w-4 h-4" />
+                {newDeliverableDate ? format(new Date(newDeliverableDate), "MMM dd, yyyy") : "Select due date"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-xl z-[70]" align="center">
+              <Calendar
+                mode="single"
+                selected={newDeliverableDate ? new Date(newDeliverableDate) : undefined}
+                onSelect={(date) => setNewDeliverableDate(date ? format(date, "yyyy-MM-dd") : "")}
+                disabled={(date) => {
+                  if (formData.startDate && date < new Date(formData.startDate)) return true
+                  if (formData.endDate && date > new Date(formData.endDate)) return true
+                  return false
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <button
+          type="button"
+          disabled={!newDeliverableName.trim()}
+          onClick={() => {
+            setFormData(prev => ({ ...prev, deliverables: [...prev.deliverables, { id: Date.now().toString(), name: newDeliverableName.trim(), date: newDeliverableDate }] }))
+            setNewDeliverableName(""); setNewDeliverableDate(""); setAddDeliverableOpen(false)
+          }}
+          className={cn(
+            "w-full py-3 rounded-xl text-sm font-semibold transition-all",
+            newDeliverableName.trim()
+              ? "bg-[#5C6ECD] text-white hover:bg-[#4A5BC7] shadow-lg shadow-[#5C6ECD]/25"
+              : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
+          )}
+        >
+          Add Deliverable
+        </button>
+      </div>
+    </MiniModal>
+
+    {/* ── Add Resource Modal ── */}
+    <MiniModal open={addResourceOpen} onClose={() => setAddResourceOpen(false)} title="Add Reference" width="max-w-lg">
+      <div className="space-y-5">
+        {/* Tab selector */}
+        <div className="flex bg-[#f5f5f5] dark:bg-[#222] p-1 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setResourceTab("file")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-md transition-all",
+              resourceTab === "file"
+                ? "bg-white dark:bg-[#333] text-[#5C6ECD] shadow-sm"
+                : "text-[#666] dark:text-[#999] hover:text-[#5C6ECD]"
+            )}
+          >
+            <Upload className="w-4 h-4" />
+            Upload Files
+          </button>
+          <button
+            type="button"
+            onClick={() => setResourceTab("link")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-md transition-all",
+              resourceTab === "link"
+                ? "bg-white dark:bg-[#333] text-[#10b981] shadow-sm"
+                : "text-[#666] dark:text-[#999] hover:text-[#10b981]"
+            )}
+          >
+            <Globe className="w-4 h-4" />
+            External Link
+          </button>
+        </div>
+
+        {resourceTab === "file" && (
+          <div className="space-y-4">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-[#e5e5e5] dark:border-[#444] rounded-xl py-8 text-center cursor-pointer hover:border-[#5C6ECD] hover:bg-[#5C6ECD]/[0.02] transition-colors"
+            >
+              <div className="w-12 h-12 bg-[#5C6ECD]/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Upload className="w-6 h-6 text-[#5C6ECD]" />
+              </div>
+              <p className="text-sm font-medium text-[#1a1a1a] dark:text-white">Click to upload files</p>
+              <p className="text-xs text-[#999] mt-1">Supports multiple files at once</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={(e) => {
+                if (e.target.files) setPendingFiles(prev => [...prev, ...Array.from(e.target.files!)])
+                e.target.value = ""
+              }}
+              className="hidden"
+            />
+            {pendingFiles.length > 0 && (
+              <div className="space-y-1.5 max-h-48 overflow-auto">
+                {pendingFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-[#f9f9f9] dark:bg-[#111] rounded-lg">
+                    <FileText className="w-4 h-4 text-[#5C6ECD] shrink-0" />
+                    <span className="text-sm text-[#1a1a1a] dark:text-white flex-1 truncate">{f.name}</span>
+                    <span className="text-[10px] text-[#999] shrink-0">{(f.size / 1024).toFixed(0)}KB</span>
+                    <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} className="text-[#ccc] hover:text-red-500 transition-colors">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={pendingFiles.length === 0}
+              onClick={() => {
+                // Create one reference per file so each gets uploaded individually
+                const newRefs = pendingFiles.map(f => ({
+                  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  name: f.name,
+                  type: "file" as const,
+                  files: [f],
+                }))
+                setFormData(prev => ({ ...prev, references: [...prev.references, ...newRefs] }))
+                setPendingFiles([]); setAddResourceOpen(false)
+              }}
+              className={cn(
+                "w-full py-3 rounded-xl text-sm font-semibold transition-all",
+                pendingFiles.length > 0
+                  ? "bg-[#5C6ECD] text-white hover:bg-[#4A5BC7] shadow-lg shadow-[#5C6ECD]/25"
+                  : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
+              )}
+            >
+              Add {pendingFiles.length > 0 ? `${pendingFiles.length} File${pendingFiles.length !== 1 ? "s" : ""}` : "Files"}
+            </button>
+          </div>
+        )}
+
+        {resourceTab === "link" && (
+          <div className="space-y-4">
+            {/* Already added links */}
+            {pendingLinks.length > 0 && (
+              <div className="space-y-2 max-h-40 overflow-auto">
+                {pendingLinks.map((link, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2.5 bg-[#f0fdf4] dark:bg-[#10b981]/10 border border-[#10b981]/20 rounded-lg">
+                    <Globe className="w-4 h-4 text-[#10b981] shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[#1a1a1a] dark:text-white truncate font-medium">{link.name}</p>
+                      <p className="text-[11px] text-[#999] truncate">{link.url}</p>
+                    </div>
+                    <button type="button" onClick={() => setPendingLinks(prev => prev.filter((_, j) => j !== i))} className="text-[#ccc] hover:text-red-500 transition-colors shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Add new link form */}
+            <div className="space-y-3 p-4 bg-[#fafafa] dark:bg-[#111] rounded-xl border border-[#e5e5e5] dark:border-[#333]">
+              <input
+                type="text"
+                value={newLinkName}
+                onChange={(e) => setNewLinkName(e.target.value)}
+                placeholder="Link name (e.g. Competitor Website)"
+                className="w-full px-4 py-2.5 rounded-lg text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/20 transition-colors"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#999]" />
+                  <input
+                    type="url"
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full pl-9 pr-4 py-2.5 rounded-lg text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/20 transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newLinkUrl.trim()) {
+                        setPendingLinks(prev => [...prev, { name: newLinkName.trim() || newLinkUrl.trim(), url: newLinkUrl.trim() }])
+                        setNewLinkName(""); setNewLinkUrl("")
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={!newLinkUrl.trim()}
+                  onClick={() => {
+                    setPendingLinks(prev => [...prev, { name: newLinkName.trim() || newLinkUrl.trim(), url: newLinkUrl.trim() }])
+                    setNewLinkName(""); setNewLinkUrl("")
+                  }}
+                  className={cn(
+                    "px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0",
+                    newLinkUrl.trim()
+                      ? "bg-[#10b981]/10 text-[#10b981] hover:bg-[#10b981]/20"
+                      : "bg-[#f5f5f5] dark:bg-[#222] text-[#999] cursor-not-allowed"
+                  )}
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={pendingLinks.length === 0}
+              onClick={() => {
+                const newRefs = pendingLinks.map(l => ({
+                  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  name: l.name,
+                  type: "link" as const,
+                }))
+                setFormData(prev => ({ ...prev, references: [...prev.references, ...newRefs] }))
+                setPendingLinks([]); setNewLinkName(""); setNewLinkUrl(""); setAddResourceOpen(false)
+              }}
+              className={cn(
+                "w-full py-3 rounded-xl text-sm font-semibold transition-all",
+                pendingLinks.length > 0
+                  ? "bg-[#10b981] text-white hover:bg-[#059669] shadow-lg shadow-[#10b981]/25"
+                  : "bg-[#e5e5e5] dark:bg-[#333] text-[#999] cursor-not-allowed"
+              )}
+            >
+              Add {pendingLinks.length > 0 ? `${pendingLinks.length} Link${pendingLinks.length !== 1 ? "s" : ""}` : "Links"}
+            </button>
+          </div>
+        )}
+      </div>
+    </MiniModal>
+    </>
   )
 }

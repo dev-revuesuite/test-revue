@@ -13,6 +13,7 @@ interface StudioContentProps {
   }
   clients: StudioClient[]
   onAddClient?: () => void
+  userRole?: "admin" | "designer" | "client"
 }
 
 interface StudioClient {
@@ -115,7 +116,7 @@ const formatDate = (value?: string | null) => {
   }
 }
 
-export function StudioContent({ user, clients, onAddClient }: StudioContentProps) {
+export function StudioContent({ user, clients, onAddClient, userRole = "admin" }: StudioContentProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [showWelcome, setShowWelcome] = useState(false)
 
@@ -125,10 +126,10 @@ export function StudioContent({ user, clients, onAddClient }: StudioContentProps
   }, [])
 
   useEffect(() => {
-    if (!isLoading && clients.length === 0) {
+    if (!isLoading && clients.length === 0 && userRole === "admin") {
       setShowWelcome(true)
     }
-  }, [isLoading, clients.length])
+  }, [isLoading, clients.length, userRole])
 
   return (
     <main className="flex-1 overflow-auto bg-background">

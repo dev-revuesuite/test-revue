@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { ZoneContent, type ZoneProject } from "@/components/zone/zone-content"
+import { getUserRole } from "@/lib/get-user-role"
 
 export default async function CreativeZonePage() {
   const supabase = await createClient()
@@ -13,6 +14,12 @@ export default async function CreativeZonePage() {
 
   if (!user) {
     redirect("/login")
+  }
+
+  const { role: userRole, clientId } = await getUserRole(supabase, user.id)
+
+  if (userRole === "client") {
+    redirect(clientId ? `/room?client=${clientId}` : "/productive-zone")
   }
 
   const { data: profile } = await supabase
@@ -31,12 +38,26 @@ export default async function CreativeZonePage() {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  const { data: orgs } = await supabase
+  // Find org: owned by user or user is a linked member
+  const { data: ownedOrgs } = await supabase
     .from("organizations")
     .select("id,name,logo_url")
     .eq("created_by", user.id)
 
-  const organization = orgs?.[0] ?? null
+  let organization = ownedOrgs?.[0] ?? null
+
+  if (!organization) {
+    const { data: memberOrg } = await supabase
+      .from("organization_members")
+      .select("organizations(id,name,logo_url)")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single()
+
+    if (memberOrg?.organizations) {
+      organization = memberOrg.organizations as unknown as { id: string; name: string; logo_url: string | null }
+    }
+  }
 
   const { data: allClients } = organization
     ? await supabase
@@ -76,7 +97,7 @@ export default async function CreativeZonePage() {
     ? await supabase
         .from("projects")
         .select(
-          "id,name,project_type,client_id,status,brief_status,start_date,end_date,created_at,workmode"
+          "id,name,project_type,client_id,status,brief_status,start_date,end_date,created_at,workmode,references_data,external_links"
         )
         .in("client_id", clientIds)
         .eq("workmode", "creative")
@@ -147,6 +168,13 @@ export default async function CreativeZonePage() {
       createdAt: p.created_at,
       team: projectTeamMap[p.id] || [],
       creativesCount: creativesCountMap[p.id] || 0,
+      references: ((p.references_data as Record<string, string>[]) || []).map((r) => ({
+        name: r.name || "",
+        fileUrl: r.file_url || undefined,
+      })),
+      externalLinks: ((p.external_links as Record<string, string>[]) || []).map((l) => ({
+        name: l.name || "",
+      })),
     }
   })
 
@@ -158,9 +186,10 @@ export default async function CreativeZonePage() {
         organizationLogoUrl={organization?.logo_url ?? null}
         clientDirectory={clientDirectory}
         teamMembers={teamMembers}
+        userRole={userRole}
       />
       <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} />
+        <AppSidebar user={userData} userRole={userRole} />
         <ZoneContent zone="creative" projects={zoneProjects} />
       </div>
     </div>

@@ -4,9 +4,9 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { AccountContent } from "@/components/account/account-content"
 
-type TabType = "profile" | "settings" | "team" | "organisations" | "roles"
+type TabType = "profile" | "settings" | "team" | "organisations"
 
-const validTabs: TabType[] = ["profile", "settings", "team", "organisations", "roles"]
+const validTabs: TabType[] = ["profile", "settings", "team", "organisations"]
 
 export default async function AccountPage({
   searchParams,
@@ -46,13 +46,23 @@ export default async function AccountPage({
     preferences: (profile?.preferences as Record<string, unknown>) || {},
   }
 
-  // Fetch organization
-  const { data: orgs } = await supabase
-    .from("organizations")
-    .select("id,name,logo_url,email,phone,website,industry,size,country,state")
-    .eq("created_by", user.id)
+  // Fetch organization via membership (works for all roles, not just creator)
+  const { data: membershipData } = await supabase
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .single()
 
-  const organization = orgs?.[0] ?? null
+  const orgId = membershipData?.organization_id ?? null
+
+  const { data: organization } = orgId
+    ? await supabase
+        .from("organizations")
+        .select("id,name,logo_url,email,phone,website,industry,size,country,state")
+        .eq("id", orgId)
+        .single()
+    : { data: null }
 
   const orgData = organization
     ? {

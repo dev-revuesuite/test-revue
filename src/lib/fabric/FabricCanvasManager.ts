@@ -452,6 +452,36 @@ export class FabricCanvasManager {
   }
 
   /**
+   * Add a single drawing incrementally (for realtime updates)
+   */
+  async addDrawing(drawing: DrawingPath): Promise<void> {
+    if (!this.canvas) return;
+
+    // Check if drawing already exists on canvas
+    const objects = this.canvas.getObjects();
+    const exists = objects.some((obj) => {
+      const extObj = obj as ExtendedFabricObject;
+      return extObj.id === drawing.id;
+    });
+
+    if (!exists) {
+      await FabricSerializer.fromDrawingPaths(this.canvas, [drawing]);
+    }
+  }
+
+  /**
+   * Get IDs of all drawings currently on canvas
+   */
+  getDrawingIds(): string[] {
+    if (!this.canvas) return [];
+    const objects = this.canvas.getObjects();
+    return objects
+      .filter((obj) => obj.type !== "image")
+      .map((obj) => (obj as ExtendedFabricObject).id)
+      .filter((id): id is string => !!id);
+  }
+
+  /**
    * Get current drawings as DrawingPath array
    */
   getDrawings(): DrawingPath[] {
@@ -607,11 +637,16 @@ export class FabricCanvasManager {
     if (path.type !== "path") return null;
 
     const fabricPath = path as unknown as { path: (string | number)[][] };
-    const pathData = fabricPath.path;
+    const rawPath = fabricPath.path;
     const points: { x: number; y: number }[] = [];
+    let pathDataString: string | undefined;
 
-    if (pathData && Array.isArray(pathData)) {
-      pathData.forEach((cmd: (string | number)[]) => {
+    if (rawPath && Array.isArray(rawPath)) {
+      // Build full SVG path string preserving all commands (M, L, Q, C, etc.)
+      pathDataString = rawPath.map((cmd: (string | number)[]) => cmd.join(" ")).join(" ");
+
+      // Also extract simplified points for backward compatibility
+      rawPath.forEach((cmd: (string | number)[]) => {
         if (cmd[0] === "M" || cmd[0] === "L" || cmd[0] === "Q") {
           if (typeof cmd[1] === "number" && typeof cmd[2] === "number") {
             points.push({ x: cmd[1], y: cmd[2] });
@@ -623,6 +658,7 @@ export class FabricCanvasManager {
     return {
       id: path.id || crypto.randomUUID(),
       type: "draw",
+      pathData: pathDataString,
       points,
       color: (path.stroke as string) || this.toolConfig.color,
       strokeWidth: path.strokeWidth || this.toolConfig.strokeWidth,

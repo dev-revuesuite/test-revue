@@ -50,6 +50,39 @@ export function OnboardingForm({ userEmail }: { userEmail: string }) {
       return
     }
 
+    // Auto-link to organization if email was pre-added as a team member
+    await supabase.rpc("link_user_to_org_member", {
+      p_user_id: userId,
+      p_email: userEmail,
+    })
+
+    // Check if user is already linked to an org as a member
+    const { data: existingMembership } = await supabase
+      .from("organization_members")
+      .select("organization_id, role")
+      .eq("user_id", userId)
+      .limit(1)
+      .single()
+
+    if (existingMembership) {
+      // Update the member record with latest name/avatar
+      await supabase
+        .from("organization_members")
+        .update({ name: fullName || userEmail.split("@")[0] })
+        .eq("user_id", userId)
+        .eq("organization_id", existingMembership.organization_id)
+
+      // Route based on role
+      if (existingMembership.role === "client") {
+        router.push("/productive-zone")
+      } else {
+        router.push("/studio")
+      }
+      router.refresh()
+      return
+    }
+
+    // No existing membership — create org as owner
     const { data: existingOrg } = await supabase
       .from("organizations")
       .select("id")

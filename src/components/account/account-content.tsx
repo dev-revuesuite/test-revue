@@ -62,29 +62,11 @@ interface AccountContentProps {
   organizationId?: string | null
 }
 
-type TabType = "profile" | "settings" | "team" | "organisations" | "roles"
+type TabType = "profile" | "settings" | "team" | "organisations"
 
 // mockTeamMembers removed — now uses real data from props
 
-const mockRoles = [
-  { id: "1", name: "Team admin", description: "Full access to all features and settings", members: 2, permissions: ["manage_team", "manage_billing", "manage_roles", "edit_content", "view_content"] },
-  { id: "2", name: "Editor", description: "Can edit and publish content", members: 5, permissions: ["edit_content", "view_content"] },
-  { id: "3", name: "Viewer", description: "Can only view content", members: 12, permissions: ["view_content"] },
-  { id: "4", name: "Member", description: "Standard team member access", members: 8, permissions: ["edit_content", "view_content"] },
-]
-
 // mockOrganisations removed — now uses real data from props
-
-const allPermissions = [
-  { id: "manage_team", label: "Manage Team", description: "Add, remove and manage team members" },
-  { id: "manage_billing", label: "Manage Billing", description: "Access billing and subscription settings" },
-  { id: "manage_roles", label: "Manage Roles", description: "Create and edit roles" },
-  { id: "edit_content", label: "Edit Content", description: "Create and edit projects and files" },
-  { id: "view_content", label: "View Content", description: "View projects and files" },
-  { id: "delete_content", label: "Delete Content", description: "Delete projects and files" },
-  { id: "manage_clients", label: "Manage Clients", description: "Add and manage clients" },
-  { id: "export_data", label: "Export Data", description: "Export data and reports" },
-]
 
 export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId }: AccountContentProps) {
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
@@ -94,7 +76,6 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
     { id: "settings", label: "Settings" },
     { id: "team", label: "Team" },
     { id: "organisations", label: "Organisations" },
-    { id: "roles", label: "Manage Roles" },
   ]
 
   return (
@@ -134,7 +115,7 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
           {activeTab === "settings" && <SettingsTab initialPreferences={profileData?.preferences} />}
           {activeTab === "team" && <TeamTab initialMembers={teamMembers} organizationId={organizationId ?? null} />}
           {activeTab === "organisations" && <OrganisationsTab initialOrg={organization} />}
-          {activeTab === "roles" && <RolesTab />}
+          {/* Manage Roles tab removed */}
         </div>
       </div>
     </main>
@@ -1175,250 +1156,6 @@ function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
               onChange={(v) => updateOrg("state", v)}
             />
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Roles Tab - Similar design to Team
-function RolesTab() {
-  const [roles, setRoles] = useState(mockRoles)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([])
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
-
-  const filteredRoles = roles.filter((role) =>
-    role.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    role.description.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const sortedRoles = [...filteredRoles].sort((a, b) => {
-    if (sortOrder === "asc") return a.name.localeCompare(b.name)
-    return b.name.localeCompare(a.name)
-  })
-
-  const toggleSelectAll = () => {
-    if (selectedRoles.length === sortedRoles.length) {
-      setSelectedRoles([])
-    } else {
-      setSelectedRoles(sortedRoles.map(r => r.id))
-    }
-  }
-
-  const toggleSelect = (id: string) => {
-    if (selectedRoles.includes(id)) {
-      setSelectedRoles(selectedRoles.filter(r => r !== id))
-    } else {
-      setSelectedRoles([...selectedRoles, id])
-    }
-  }
-
-  const handleCreateRole = (newRole: { name: string; description: string; permissions: string[] }) => {
-    const role = {
-      id: String(roles.length + 1),
-      ...newRole,
-      members: 0
-    }
-    setRoles([...roles, role])
-    setShowCreateModal(false)
-  }
-
-  const deleteRole = (id: string) => {
-    setRoles(roles.filter(r => r.id !== id))
-  }
-
-  return (
-    <div className="w-full">
-      {/* Filter Bar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Filter by:</span>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search roles..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 w-48 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Role
-        </button>
-      </div>
-
-      {/* Table */}
-      <div className="border-t border-border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 pr-4 w-8">
-                <Checkbox
-                  checked={selectedRoles.length === sortedRoles.length && sortedRoles.length > 0}
-                  onChange={toggleSelectAll}
-                />
-              </th>
-              <th className="text-left py-3 px-4">
-                <button
-                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                  className="flex items-center gap-1 text-sm font-medium text-foreground hover:text-muted-foreground"
-                >
-                  Role Name
-                  <ArrowUpDown className="w-3.5 h-3.5" />
-                </button>
-              </th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Description</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Members</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Permissions</th>
-              <th className="text-left py-3 px-4 w-20"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRoles.map((role) => (
-              <tr key={role.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                <td className="py-3 pr-4">
-                  <Checkbox
-                    checked={selectedRoles.includes(role.id)}
-                    onChange={() => toggleSelect(role.id)}
-                  />
-                </td>
-                <td className="py-3 px-4">
-                  <p className="text-sm font-medium text-foreground">{role.name}</p>
-                </td>
-                <td className="py-3 px-4 text-sm text-muted-foreground max-w-xs truncate">{role.description}</td>
-                <td className="py-3 px-4 text-sm text-muted-foreground">{role.members} members</td>
-                <td className="py-3 px-4">
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded text-sm hover:bg-muted transition-colors">
-                    <Pencil className="w-3.5 h-3.5" />
-                    Manage access
-                  </button>
-                </td>
-                <td className="py-3 px-4">
-                  <MoreDropdown onDelete={() => deleteRole(role.id)} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Create Role Modal */}
-      {showCreateModal && (
-        <CreateRoleModal
-          onClose={() => setShowCreateModal(false)}
-          onCreate={handleCreateRole}
-        />
-      )}
-    </div>
-  )
-}
-
-// Create Role Modal
-function CreateRoleModal({
-  onClose,
-  onCreate
-}: {
-  onClose: () => void
-  onCreate: (role: { name: string; description: string; permissions: string[] }) => void
-}) {
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
-
-  const togglePermission = (id: string) => {
-    if (selectedPermissions.includes(id)) {
-      setSelectedPermissions(selectedPermissions.filter(p => p !== id))
-    } else {
-      setSelectedPermissions([...selectedPermissions, id])
-    }
-  }
-
-  const handleSubmit = () => {
-    if (name.trim()) {
-      onCreate({ name, description, permissions: selectedPermissions })
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">Create Role</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Title</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter role title"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter role description"
-              rows={3}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-3">Access Levels / Permissions</label>
-            <div className="space-y-2">
-              {allPermissions.map((permission) => (
-                <label
-                  key={permission.id}
-                  className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/30 transition-colors"
-                >
-                  <Checkbox
-                    checked={selectedPermissions.includes(permission.id)}
-                    onChange={() => togglePermission(permission.id)}
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">{permission.label}</p>
-                    <p className="text-xs text-muted-foreground">{permission.description}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!name.trim()}
-            className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Create Role
-          </button>
         </div>
       </div>
     </div>

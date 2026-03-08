@@ -16,14 +16,17 @@ export class FabricSerializer {
       if (extObj.type === "image") return;
 
       if (extObj.type === "path") {
-        // Freehand drawing
+        // Freehand drawing - store full SVG path string to preserve curves
         const path = obj as Path;
-        const pathData = path.path;
+        const rawPath = path.path;
 
-        if (pathData && Array.isArray(pathData)) {
+        if (rawPath && Array.isArray(rawPath)) {
+          // Build full SVG path string preserving all commands (M, L, Q, C, etc.)
+          const pathString = rawPath.map((cmd: (string | number)[]) => cmd.join(" ")).join(" ");
+
+          // Also extract simplified points for backward compatibility
           const points: { x: number; y: number }[] = [];
-
-          pathData.forEach((cmd: (string | number)[]) => {
+          rawPath.forEach((cmd: (string | number)[]) => {
             if (cmd[0] === "M" || cmd[0] === "L" || cmd[0] === "Q") {
               if (typeof cmd[1] === "number" && typeof cmd[2] === "number") {
                 points.push({ x: cmd[1], y: cmd[2] });
@@ -34,6 +37,7 @@ export class FabricSerializer {
           drawings.push({
             id: extObj.id || crypto.randomUUID(),
             type: "draw",
+            pathData: pathString,
             points,
             color: (path.stroke as string) || "#FF5733",
             strokeWidth: path.strokeWidth || 2,
@@ -102,8 +106,9 @@ export class FabricSerializer {
     drawings: DrawingPath[]
   ): Promise<void> {
     for (const drawing of drawings) {
-      if (drawing.type === "draw" && drawing.points && drawing.points.length > 0) {
-        const pathString = this.pointsToPathString(drawing.points);
+      if (drawing.type === "draw" && (drawing.pathData || (drawing.points && drawing.points.length > 0))) {
+        // Use full pathData if available (preserves curves), fall back to simplified points
+        const pathString = drawing.pathData || this.pointsToPathString(drawing.points || []);
 
         const path = new Path(pathString, {
           stroke: drawing.color,
