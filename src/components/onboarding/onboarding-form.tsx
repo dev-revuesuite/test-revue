@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -58,13 +59,14 @@ export function OnboardingForm({
   organizationName = "",
 }: OnboardingFormProps) {
   const router = useRouter()
+  const { setTheme: applyTheme } = useTheme()
   const [step, setStep] = useState(0)
   const [role, setRole] = useState<UserRole>(detectedRole)
   const [fullName, setFullName] = useState(userName)
   const [orgName, setOrgName] = useState(organizationName)
   const [jobTitle, setJobTitle] = useState("")
   const [phone, setPhone] = useState("")
-  const [theme, setTheme] = useState<"light" | "dark">("light")
+  const [selectedTheme, setSelectedTheme] = useState<"light" | "dark">("light")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [animateIn, setAnimateIn] = useState(true)
@@ -115,7 +117,7 @@ export function OnboardingForm({
         full_name: fullName || undefined,
         job_title: jobTitle || undefined,
         phone: phone || undefined,
-        preferences: { theme },
+        preferences: { theme: selectedTheme },
         onboarded: true,
       })
       .eq("id", userId)
@@ -157,6 +159,9 @@ export function OnboardingForm({
         .update({ name: fullName || userEmail.split("@")[0] })
         .eq("user_id", userId)
         .eq("organization_id", existingMembership.organization_id)
+
+      // Apply theme preference
+      applyTheme(selectedTheme)
 
       // Route based on role
       if (existingMembership.role === "client") {
@@ -210,6 +215,9 @@ export function OnboardingForm({
         )
       }
     }
+
+    // Apply theme preference
+    applyTheme(selectedTheme)
 
     if (role === "client") {
       router.push("/client-portal")
@@ -469,10 +477,10 @@ export function OnboardingForm({
       <div className="flex gap-4 w-full">
         <button
           type="button"
-          onClick={() => setTheme("light")}
+          onClick={() => setSelectedTheme("light")}
           className={cn(
             "flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200",
-            theme === "light"
+            selectedTheme === "light"
               ? "border-[#DBFE52] bg-[#DBFE52]/5"
               : "border-zinc-800 hover:border-zinc-700"
           )}
@@ -480,20 +488,20 @@ export function OnboardingForm({
           <div
             className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center",
-              theme === "light" ? "bg-[#DBFE52]/20" : "bg-zinc-800"
+              selectedTheme === "light" ? "bg-[#DBFE52]/20" : "bg-zinc-800"
             )}
           >
             <Sun
               className={cn(
                 "w-6 h-6",
-                theme === "light" ? "text-[#DBFE52]" : "text-zinc-500"
+                selectedTheme === "light" ? "text-[#DBFE52]" : "text-zinc-500"
               )}
             />
           </div>
           <span
             className={cn(
               "text-sm font-medium",
-              theme === "light" ? "text-white" : "text-zinc-500"
+              selectedTheme === "light" ? "text-white" : "text-zinc-500"
             )}
           >
             Light
@@ -502,10 +510,10 @@ export function OnboardingForm({
 
         <button
           type="button"
-          onClick={() => setTheme("dark")}
+          onClick={() => setSelectedTheme("dark")}
           className={cn(
             "flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200",
-            theme === "dark"
+            selectedTheme === "dark"
               ? "border-[#DBFE52] bg-[#DBFE52]/5"
               : "border-zinc-800 hover:border-zinc-700"
           )}
@@ -513,20 +521,20 @@ export function OnboardingForm({
           <div
             className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center",
-              theme === "dark" ? "bg-[#DBFE52]/20" : "bg-zinc-800"
+              selectedTheme === "dark" ? "bg-[#DBFE52]/20" : "bg-zinc-800"
             )}
           >
             <Moon
               className={cn(
                 "w-6 h-6",
-                theme === "dark" ? "text-[#DBFE52]" : "text-zinc-500"
+                selectedTheme === "dark" ? "text-[#DBFE52]" : "text-zinc-500"
               )}
             />
           </div>
           <span
             className={cn(
               "text-sm font-medium",
-              theme === "dark" ? "text-white" : "text-zinc-500"
+              selectedTheme === "dark" ? "text-white" : "text-zinc-500"
             )}
           >
             Dark

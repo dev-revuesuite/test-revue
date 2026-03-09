@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +16,7 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
+  const { setTheme } = useTheme()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +69,7 @@ export function LoginForm({
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("onboarded")
+        .select("onboarded, preferences")
         .eq("id", userId)
         .single()
 
@@ -75,6 +77,12 @@ export function LoginForm({
         router.push("/onboarding")
         router.refresh()
         return
+      }
+
+      // Apply saved theme preference
+      const savedTheme = (profile.preferences as { theme?: string })?.theme
+      if (savedTheme === "dark" || savedTheme === "light") {
+        setTheme(savedTheme)
       }
 
       // Role-based routing

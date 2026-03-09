@@ -26,7 +26,7 @@ const allNavItems = [
     title: "Master Drive",
     url: "/master-drive",
     icon: HardDrive,
-    roles: ["admin", "designer", "client"] as UserRole[],
+    roles: ["admin", "designer"] as UserRole[],
   },
   {
     title: "Creative Zone",
