@@ -642,12 +642,13 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
 
     // Insert first iteration if file was uploaded
     if (file && thumbnailUrl) {
-      await supabase.from("creative_iterations").insert({
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from("iterations").insert({
         creative_id: inserted.id,
         version: 1,
-        file_url: thumbnailUrl,
-        file_type: file.type,
-        file_name: file.name,
+        image_url: thumbnailUrl,
+        name: "Iteration 1",
+        created_by: user?.id,
       })
     }
 
