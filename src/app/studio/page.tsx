@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioContent } from "@/components/studio/studio-content"
 import { getUserRole } from "@/lib/get-user-role"
+import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 
 export default async function StudioPage() {
   const supabase = await createClient()
@@ -43,52 +44,9 @@ export default async function StudioPage() {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  // Find org: owned by user first
-  const { data: ownedOrgs } = await supabase
-    .from("organizations")
-    .select("id,name,logo_url,clients(count)")
-    .eq("created_by", user.id)
-
-  let organization: { id: string; name: string; logo_url: string | null; clients?: { count: number }[] } | null =
-    ownedOrgs?.reduce((best, current) => {
-      const currentCount = current.clients?.[0]?.count ?? 0
-      const bestCount = best?.clients?.[0]?.count ?? -1
-      return currentCount > bestCount ? current : best
-    }, null as (typeof ownedOrgs extends (infer T)[] ? T | null : null)) ?? null
-
-  // If no owned org, check orgs where user is a linked member
-  if (!organization) {
-    const { data: memberOrg } = await supabase
-      .from("organization_members")
-      .select("organizations(id,name,logo_url)")
-      .eq("user_id", user.id)
-      .limit(1)
-      .single()
-
-    if (memberOrg?.organizations) {
-      organization = memberOrg.organizations as unknown as { id: string; name: string; logo_url: string | null }
-    }
-  }
-
-  if (!organization) {
-    const { data: createdOrg } = await supabase
-      .from("organizations")
-      .insert({ name: `${userData.name} Studio`, created_by: user.id })
-      .select("id,name,logo_url")
-      .single()
-
-    if (createdOrg) {
-      organization = { ...createdOrg, clients: [{ count: 0 }] }
-      await supabase.from("organization_members").insert({
-        organization_id: createdOrg.id,
-        user_id: user.id,
-        role: "owner",
-        name: userData.name,
-        email: userData.email,
-        avatar_url: userData.avatar || null,
-      })
-    }
-  }
+  // Get active organization and all user orgs for the switcher
+  const organization = await getActiveOrganization(supabase, user.id)
+  const allOrganizations = await getUserOrganizations(supabase, user.id)
 
   const { data: clients } = organization
     ? await supabase
@@ -141,7 +99,10 @@ export default async function StudioPage() {
       <StudioHeader
         user={userData}
         organizationId={organization?.id ?? null}
+        organizationName={organization?.name ?? ""}
         organizationLogoUrl={organization?.logo_url ?? null}
+        currentOrgId={organization?.id}
+        organizations={allOrganizations}
         clientDirectory={clientDirectory}
         teamMembers={teamMembers}
         userRole={userRole}

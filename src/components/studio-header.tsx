@@ -56,6 +56,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { OrgSwitcher } from "@/components/org-switcher"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
 
@@ -115,7 +116,10 @@ interface StudioHeaderProps {
     avatar: string
   }
   organizationId: string | null
+  organizationName?: string
   organizationLogoUrl?: string | null
+  currentOrgId?: string
+  organizations?: { id: string; name: string; logo_url: string | null; role: string }[]
   clientDirectory: { id: string; name: string; logoUrl?: string }[]
   teamMembers?: OrgMember[]
   userRole?: "admin" | "designer" | "client"
@@ -144,7 +148,10 @@ const recentSearches = [
 export function StudioHeader({
   user,
   organizationId,
+  organizationName = "",
   organizationLogoUrl,
+  currentOrgId,
+  organizations = [],
   clientDirectory,
   teamMembers = [],
   userRole = "admin",
@@ -319,16 +326,25 @@ export function StudioHeader({
           <img src="/Logo/Artboard 5@2x.png" alt="Revue" width={28} height={28} className="hidden dark:block" />
           <div className="absolute right-0 top-1/2 h-6 w-px -translate-y-1/2 bg-[#e6e6e6] dark:bg-[#333]" />
         </div>
-        {/* Organisation Logo */}
+        {/* Organisation Switcher */}
         <div className="ml-3 flex items-center">
-          <img
-            src={
-              organizationLogoUrl ||
-              "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg"
-            }
-            alt="Organization logo"
-            className="h-6 w-[72px] object-contain"
-          />
+          {currentOrgId && organizations.length > 0 ? (
+            <OrgSwitcher
+              currentOrgId={currentOrgId}
+              currentOrgName={organizationName}
+              currentOrgLogo={organizationLogoUrl ?? null}
+              organizations={organizations}
+            />
+          ) : (
+            <img
+              src={
+                organizationLogoUrl ||
+                "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg"
+              }
+              alt="Organization logo"
+              className="h-6 w-[72px] object-contain"
+            />
+          )}
         </div>
       </div>
 

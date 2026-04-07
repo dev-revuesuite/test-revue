@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { getUserRole } from "@/lib/get-user-role"
+import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { MessageCircleQuestion, BookOpen, Mail, ExternalLink } from "lucide-react"
 
 export default async function HelpDeskPage() {
@@ -34,25 +35,9 @@ export default async function HelpDeskPage() {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  const { data: ownedOrgs } = await supabase
-    .from("organizations")
-    .select("id,name,logo_url")
-    .eq("created_by", user.id)
-
-  let organization = ownedOrgs?.[0] ?? null
-
-  if (!organization) {
-    const { data: memberOrg } = await supabase
-      .from("organization_members")
-      .select("organizations(id,name,logo_url)")
-      .eq("user_id", user.id)
-      .limit(1)
-      .single()
-
-    if (memberOrg?.organizations) {
-      organization = memberOrg.organizations as unknown as { id: string; name: string; logo_url: string | null }
-    }
-  }
+  // Get active organization and all user orgs for the switcher
+  const organization = await getActiveOrganization(supabase, user.id)
+  const allOrganizations = await getUserOrganizations(supabase, user.id)
 
   const helpItems = [
     {
@@ -84,7 +69,10 @@ export default async function HelpDeskPage() {
       <StudioHeader
         user={userData}
         organizationId={organization?.id ?? null}
+        organizationName={organization?.name ?? ""}
         organizationLogoUrl={organization?.logo_url ?? null}
+        currentOrgId={organization?.id}
+        organizations={allOrganizations}
         clientDirectory={[]}
         teamMembers={[]}
         userRole={userRole}
