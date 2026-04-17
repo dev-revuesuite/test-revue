@@ -186,6 +186,16 @@ export function LoginForm({
           />
         </div>
 
+        {/* Forgot password link */}
+        <div className="flex justify-end -mt-1">
+          <a
+            href="/forgot-password"
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-primary"
+          >
+            Forgot password?
+          </a>
+        </div>
+
         <Button
           type="submit"
           disabled={loading}
