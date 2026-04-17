@@ -59,6 +59,7 @@ import { Input } from "@/components/ui/input"
 import { OrgSwitcher } from "@/components/org-switcher"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
+import { NewOrganizationDialog } from "@/components/studio/new-org-dialog"
 
 const notifications = [
   {
@@ -183,6 +184,7 @@ export function StudioHeader({
   const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false)
   // New brief dialog state
   const [newBriefDialogOpen, setNewBriefDialogOpen] = React.useState(false)
+  const [newOrgDialogOpen, setNewOrgDialogOpen] = React.useState(false)
 
   React.useEffect(() => {
     const isDarkMode = document.documentElement.classList.contains("dark")
@@ -412,6 +414,14 @@ export function StudioHeader({
               >
                 <FolderOpen className="w-4 h-4 text-[#10b981]" />
                 <span className="font-medium">Add Brief</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-1 bg-[#e6e6e6] dark:bg-[#333]" />
+              <DropdownMenuItem
+                onClick={() => setNewOrgDialogOpen(true)}
+                className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+              >
+                <Building2 className="w-4 h-4 text-[#f59e0b]" />
+                <span className="font-medium">Add Organization</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1089,6 +1099,12 @@ export function StudioHeader({
           setNewBriefDialogOpen(false)
           router.refresh()
         }}
+      />
+
+      {/* New Organization Dialog */}
+      <NewOrganizationDialog
+        open={newOrgDialogOpen}
+        onClose={() => setNewOrgDialogOpen(false)}
       />
 
     </header>
