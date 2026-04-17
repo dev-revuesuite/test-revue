@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { getUserRole } from "@/lib/get-user-role"
+import { getUserOrganizations } from "@/lib/get-active-organization"
 import { ClientPortalContent } from "@/components/client-portal/client-portal-content"
 
 export default async function ClientPortalPage() {
@@ -44,6 +45,8 @@ export default async function ClientPortalPage() {
         .single()
     : { data: null }
 
+  const allOrganizations = await getUserOrganizations(supabase, user.id)
+
   // Fetch all clients linked to this user via client_users table
   const { data: clientLinks } = await supabase
     .from("client_users")
@@ -58,10 +61,11 @@ export default async function ClientPortalPage() {
   }
 
   // Fetch client details with project counts
-  const { data: clients } = clientIds.length > 0
+  const { data: clients } = clientIds.length > 0 && organizationId
     ? await supabase
         .from("clients")
         .select("id, name, logo_url, industry")
+        .eq("organization_id", organizationId)
         .in("id", clientIds)
         .order("name")
     : { data: [] }
@@ -89,7 +93,10 @@ export default async function ClientPortalPage() {
       <StudioHeader
         user={userData}
         organizationId={organization?.id ?? null}
+        organizationName={organization?.name ?? ""}
         organizationLogoUrl={organization?.logo_url ?? null}
+        currentOrgId={organization?.id ?? undefined}
+        organizations={allOrganizations}
         clientDirectory={[]}
         userRole={userRole}
       />
