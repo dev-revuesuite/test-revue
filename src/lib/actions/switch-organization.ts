@@ -1,6 +1,7 @@
 "use server"
 
 import { cookies } from "next/headers"
+import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 
 /**
@@ -58,6 +59,9 @@ export async function switchOrganization(orgId: string) {
     maxAge: 60 * 60 * 24 * 365, // 1 year
     sameSite: "lax",
   })
+
+  // Invalidate all cached pages so navigation loads fresh data for the new org
+  revalidatePath("/", "layout")
 
   return { success: true }
 }

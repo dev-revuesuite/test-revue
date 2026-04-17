@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { AccountContent } from "@/components/account/account-content"
+import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 
 type TabType = "profile" | "settings" | "team" | "organisations"
 
@@ -46,15 +47,11 @@ export default async function AccountPage({
     preferences: (profile?.preferences as Record<string, unknown>) || {},
   }
 
-  // Fetch organization via membership (works for all roles, not just creator)
-  const { data: membershipData } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .single()
+  // Get active organization and all user orgs for the switcher
+  const activeOrg = await getActiveOrganization(supabase, user.id)
+  const allOrganizations = await getUserOrganizations(supabase, user.id)
 
-  const orgId = membershipData?.organization_id ?? null
+  const orgId = activeOrg?.id ?? null
 
   const { data: organization } = orgId
     ? await supabase
@@ -107,7 +104,10 @@ export default async function AccountPage({
       <StudioHeader
         user={userData}
         organizationId={organization?.id ?? null}
+        organizationName={organization?.name ?? ""}
         organizationLogoUrl={organization?.logo_url ?? null}
+        currentOrgId={organization?.id ?? undefined}
+        organizations={allOrganizations}
         clientDirectory={[]}
       />
       <div className="flex flex-1 overflow-hidden">
