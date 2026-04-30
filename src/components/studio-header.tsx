@@ -945,7 +945,7 @@ export function StudioHeader({
           }
 
           // Insert client — single row with all data
-          const { error } = await supabase.from("clients").insert({
+          const { data: newClient, error } = await supabase.from("clients").insert({
             organization_id: organizationId,
             name,
             industry: data.industry || null,
@@ -975,11 +975,18 @@ export function StudioHeader({
                 name: c.name || null,
               })),
             brand_image_urls: brandImageUrls,
-          })
+          }).select("id").single()
 
           if (error) {
             console.error("Failed to create client:", error)
             return
+          }
+
+          // Auto-link any existing users whose email is in the client's contacts
+          if (newClient?.id) {
+            await supabase.rpc("link_existing_users_for_client", {
+              p_client_id: newClient.id,
+            })
           }
 
           setNewClientDialogOpen(false)

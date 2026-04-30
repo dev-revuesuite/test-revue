@@ -797,6 +797,11 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       return
     }
 
+    // Auto-link any existing users whose email is in the updated client's contacts
+    await supabase.rpc("link_existing_users_for_client", {
+      p_client_id: client.id,
+    })
+
     setEditClientOpen(false)
     router.refresh()
   }
