@@ -1000,6 +1000,7 @@ export function StudioHeader({
         onClose={() => setNewBriefDialogOpen(false)}
         clientDirectory={clientDirectory}
         teamMembers={teamMembers}
+        organizationId={organizationId}
         onComplete={async (data) => {
           const projectName = data.projectName?.trim() || "Untitled Project"
           const clientName = data.clientName?.trim()
@@ -1101,6 +1102,27 @@ export function StudioHeader({
 
           if (projectMembers.length > 0) {
             await supabase.from("project_members").insert(projectMembers)
+          }
+
+          // Insert selected client users into project_client_users table
+          if (data.clientUserIds && data.clientUserIds.length > 0) {
+            const projectClientUsers = data.clientUserIds.map(userId => ({
+              project_id: newProject.id,
+              client_user_id: userId
+            }))
+            console.log("💾 Saving client user access:", projectClientUsers)
+            const { data: insertedData, error: insertError } = await supabase
+              .from("project_client_users")
+              .insert(projectClientUsers)
+              .select()
+
+            if (insertError) {
+              console.error("❌ Failed to save client user access:", insertError)
+            } else {
+              console.log("✅ Client user access saved:", insertedData)
+            }
+          } else {
+            console.log("⚠️ No client users selected for this project")
           }
 
           setNewBriefDialogOpen(false)

@@ -50,10 +50,10 @@ export default async function StudioPage() {
 
   const { data: clients } = organization
     ? await supabase
-        .from("clients")
-        .select("id,name,logo_url,created_at,interaction_date,feedback_date,projects(count)")
-        .eq("organization_id", organization.id)
-        .order("created_at", { ascending: false })
+      .from("clients")
+      .select("id,name,logo_url,created_at,interaction_date,feedback_date,projects(count)")
+      .eq("organization_id", organization.id)
+      .order("created_at", { ascending: false })
     : { data: [] }
 
   const clientsData =
@@ -79,20 +79,24 @@ export default async function StudioPage() {
   // Fetch organization members for manager/team dropdowns in brief dialog
   const { data: orgMembersRaw } = organization
     ? await supabase
-        .from("organization_members")
-        .select("id, name, email, avatar_url, role")
-        .eq("organization_id", organization.id)
-        .order("name")
+      .from("organization_members")
+      .select("id, name, email, avatar_url, role")
+      .eq("organization_id", organization.id)
+      .not("name", "is", null)
+      .not("email", "is", null)
+      .order("name")
     : { data: [] }
 
   const teamMembers =
-    orgMembersRaw?.map((m) => ({
-      id: m.id,
-      name: m.name || "",
-      email: m.email || "",
-      avatar: m.avatar_url || "",
-      role: m.role || "",
-    })) ?? []
+    orgMembersRaw
+      ?.filter((m) => m.name && m.name.trim() !== "" && m.email && m.email.trim() !== "")
+      ?.map((m) => ({
+        id: m.id,
+        name: m.name || "",
+        email: m.email || "",
+        avatar: m.avatar_url || "",
+        role: m.role || "",
+      })) ?? []
 
   return (
     <div className="flex flex-col h-svh">

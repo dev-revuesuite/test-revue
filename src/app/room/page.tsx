@@ -53,9 +53,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   // Fetch client directory for header
   const { data: allClients } = organization
     ? await supabase
-        .from("clients")
-        .select("id,name,logo_url")
-        .eq("organization_id", organization.id)
+      .from("clients")
+      .select("id,name,logo_url")
+      .eq("organization_id", organization.id)
     : { data: [] }
 
   const clientDirectory =
@@ -64,10 +64,10 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   // Fetch team members for header
   const { data: orgMembersRaw } = organization
     ? await supabase
-        .from("organization_members")
-        .select("id, name, email, avatar_url, role")
-        .eq("organization_id", organization.id)
-        .order("name")
+      .from("organization_members")
+      .select("id, name, email, avatar_url, role")
+      .eq("organization_id", organization.id)
+      .order("name")
     : { data: [] }
 
   const teamMembers =
@@ -79,10 +79,10 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
       role: m.role || "",
     })) ?? []
 
-  // Fetch client data
+  // Fetch client data and validate it belongs to current organization
   const { data: client } = await supabase
     .from("clients")
-    .select("id,name,industry,logo_url,fonts,colors,contacts,social_links,brand_image_urls,website_url,office_address,contact_address")
+    .select("id,name,industry,logo_url,fonts,colors,contacts,social_links,brand_image_urls,website_url,office_address,contact_address,organization_id")
     .eq("id", clientId)
     .single()
 
@@ -90,22 +90,108 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     redirect("/studio")
   }
 
-  // Fetch projects for this client
-  const { data: projects } = await supabase
-    .from("projects")
-    .select(
-      "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables"
-    )
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false })
+  // Validate client belongs to current organization
+  if (organization && client.organization_id !== organization.id) {
+    console.error("Client does not belong to current organization")
+    redirect("/studio")
+  }
+
+  // Fetch projects for this client with user-specific access control
+  // First, get the organization_member id for this user
+  const { data: orgMember } = organization
+    ? await supabase
+      .from("organization_members")
+      .select("id")
+      .eq("organization_id", organization.id)
+      .eq("user_id", user.id)
+      .eq("role", "client")
+      .single()
+    : { data: null }
+
+  console.log("🔍 DEBUG - Current user org member ID:", orgMember?.id)
+  console.log("🔍 DEBUG - User role:", userRole)
+  console.log("🔍 DEBUG - Client ID:", clientId)
+
+  let projects = null
+
+  if (userRole === "client" && orgMember) {
+    // For client users, check project_client_users table for access
+    const { data: accessibleProjectIds, error: accessError } = await supabase
+      .from("project_client_users")
+      .select("project_id")
+      .eq("client_user_id", orgMember.id)
+
+    console.log("🔍 DEBUG - Accessible project IDs for this user:", accessibleProjectIds)
+    console.log("🔍 DEBUG - Access query error:", accessError)
+
+    const accessibleIds = (accessibleProjectIds || []).map(p => p.project_id)
+
+    // Get all projects for this client
+    const { data: allProjectsData } = await supabase
+      .from("projects")
+      .select(
+        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables"
+      )
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+
+    console.log("🔍 DEBUG - All projects for client:", allProjectsData?.map(p => ({ id: p.id, name: p.name })))
+
+    if (!allProjectsData || allProjectsData.length === 0) {
+      projects = []
+    } else {
+      // For each project, check if it has ANY entries in project_client_users
+      const projectIds = allProjectsData.map(p => p.id)
+      const { data: allProjectAccess, error: allAccessError } = await supabase
+        .from("project_client_users")
+        .select("project_id, client_user_id")
+        .in("project_id", projectIds)
+
+      console.log("🔍 DEBUG - All project access entries:", allProjectAccess)
+      console.log("🔍 DEBUG - All access query error:", allAccessError)
+
+      const projectsWithAccess = new Set((allProjectAccess || []).map(p => p.project_id))
+
+      console.log("🔍 DEBUG - Projects with access control enabled:", Array.from(projectsWithAccess))
+
+      // Filter projects:
+      // - If project has entries in project_client_users: only show if user has access
+      // - If project has NO entries (old project): show to all client users (backward compatibility)
+      projects = allProjectsData.filter(project => {
+        const hasAccessControl = projectsWithAccess.has(project.id)
+        const userHasAccess = accessibleIds.includes(project.id)
+        const shouldShow = hasAccessControl ? userHasAccess : true
+
+        console.log(`🔍 DEBUG - Project "${project.name}":`, {
+          hasAccessControl,
+          userHasAccess,
+          shouldShow
+        })
+
+        return shouldShow
+      })
+
+      console.log("🔍 DEBUG - Final filtered projects:", projects?.map(p => p.name))
+    }
+  } else {
+    // For non-client users (admin, manager, etc.), show all projects
+    const { data: projectsData } = await supabase
+      .from("projects")
+      .select(
+        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables"
+      )
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+    projects = projectsData
+  }
 
   // Fetch creatives from the creatives table
   const projectIds = (projects || []).map((p) => p.id)
   const { data: allCreatives } = projectIds.length > 0
     ? await supabase
-        .from("creatives")
-        .select("*")
-        .in("project_id", projectIds)
+      .from("creatives")
+      .select("*")
+      .in("project_id", projectIds)
     : { data: [] }
 
   type CreativeRow = NonNullable<typeof allCreatives>[number]
@@ -118,9 +204,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   // Fetch project members from junction table
   const { data: projectMembersData } = projectIds.length > 0
     ? await supabase
-        .from("project_members")
-        .select("project_id, member_id, role, organization_members(name, avatar_url)")
-        .in("project_id", projectIds)
+      .from("project_members")
+      .select("project_id, member_id, role, organization_members(name, avatar_url)")
+      .in("project_id", projectIds)
     : { data: [] }
 
   const projectTeamMap: Record<string, { id: string; name: string; role: string; avatar?: string }[]> = {}
@@ -158,11 +244,11 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
       const endDate = p.end_date ? new Date(p.end_date + "T00:00:00") : null
       const daysLeft = endDate
         ? Math.max(
-            0,
-            Math.ceil(
-              (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-            )
+          0,
+          Math.ceil(
+            (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           )
+        )
         : 0
       const createdDate = p.created_at ? new Date(p.created_at) : new Date()
 
@@ -178,10 +264,10 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
         }),
         deadline: endDate
           ? endDate.toLocaleDateString("en-US", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })
           : "No deadline",
         daysLeft,
         status: (p.brief_status || "brief_received") as
@@ -264,48 +350,48 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     logoPreview: client.logo_url || "",
     contacts: contactsRaw.length > 0
       ? contactsRaw.map((c, i) => ({
-          id: String(i + 1),
-          name: c.name || "",
-          email: c.email || "",
-          countryCode: c.country_code || "+91",
-          phone: c.phone || "",
-          whatsapp: c.whatsapp ?? false,
-        }))
+        id: String(i + 1),
+        name: c.name || "",
+        email: c.email || "",
+        countryCode: c.country_code || "+91",
+        phone: c.phone || "",
+        whatsapp: c.whatsapp ?? false,
+      }))
       : [{ id: "1", name: "", email: "", countryCode: "+91", phone: "", whatsapp: false }],
     socialLinks: socialLinksRaw.length > 0
       ? socialLinksRaw.map((s, i) => ({
-          id: String(i + 1),
-          platform: s.platform || "Instagram",
-          url: s.url || "",
-        }))
+        id: String(i + 1),
+        platform: s.platform || "Instagram",
+        url: s.url || "",
+      }))
       : [
-          { id: "1", platform: "Instagram", url: "" },
-          { id: "2", platform: "Facebook", url: "" },
-          { id: "3", platform: "LinkedIn", url: "" },
-        ],
+        { id: "1", platform: "Instagram", url: "" },
+        { id: "2", platform: "Facebook", url: "" },
+        { id: "3", platform: "LinkedIn", url: "" },
+      ],
     fontRows: fontsRaw.length > 0
       ? fontsRaw.map((f, i) => ({
-          id: String(i + 1),
-          label: f.label || (i === 0 ? "Primary" : "Secondary"),
-          font: f.font_name || "",
-        }))
+        id: String(i + 1),
+        label: f.label || (i === 0 ? "Primary" : "Secondary"),
+        font: f.font_name || "",
+      }))
       : [
-          { id: "1", label: "Primary", font: "" },
-          { id: "2", label: "Secondary", font: "" },
-        ],
+        { id: "1", label: "Primary", font: "" },
+        { id: "2", label: "Secondary", font: "" },
+      ],
     colorRows: colorsRaw.length > 0
       ? colorsRaw.map((c, i) => ({
-          id: String(i + 1),
-          hex: c.hex || "",
-          font: c.font_label || "",
-          name: c.name || "",
-        }))
+        id: String(i + 1),
+        hex: c.hex || "",
+        font: c.font_label || "",
+        name: c.name || "",
+      }))
       : [
-          { id: "1", hex: "", font: "", name: "" },
-          { id: "2", hex: "", font: "", name: "" },
-          { id: "3", hex: "", font: "", name: "" },
-          { id: "4", hex: "", font: "", name: "" },
-        ],
+        { id: "1", hex: "", font: "", name: "" },
+        { id: "2", hex: "", font: "", name: "" },
+        { id: "3", hex: "", font: "", name: "" },
+        { id: "4", hex: "", font: "", name: "" },
+      ],
     brandImages: brandImageUrlsRaw,
     logo: null as File | null,
     customFonts: [] as { name: string; file: File }[],
