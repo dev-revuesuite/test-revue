@@ -112,7 +112,23 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   console.log("🔍 DEBUG - User role:", userRole)
   console.log("🔍 DEBUG - Client ID:", clientId)
 
-  let projects = null
+  type ProjectData = {
+    id: string
+    name: string
+    project_type: string | null
+    description: string | null
+    start_date: string | null
+    end_date: string | null
+    created_at: string | null
+    brief_status: string | null
+    workmode: string | null
+    references_data: unknown
+    external_links: unknown
+    budget: number | null
+    project_deliverables: unknown
+  }
+
+  let projects: ProjectData[] | null = null
 
   if (userRole === "client" && orgMember) {
     // For client users, check project_client_users table for access
@@ -186,7 +202,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   }
 
   // Fetch creatives from the creatives table
-  const projectIds = (projects || []).map((p) => p.id)
+  const projectIds = projects ? projects.map((p) => p.id) : []
   const { data: allCreatives } = projectIds.length > 0
     ? await supabase
       .from("creatives")
@@ -301,7 +317,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
           name: l.name || "",
           url: l.name || undefined,
         })),
-        budget: p.budget || undefined,
+        budget: p.budget ? String(p.budget) : undefined,
         deliverables: (
           (p.project_deliverables as Record<string, string>[]) || []
         ).map((d) => ({
