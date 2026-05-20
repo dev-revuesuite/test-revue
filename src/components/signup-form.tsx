@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/password-input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
@@ -16,20 +17,11 @@ export function SignupForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [name, setName] = useState(() => searchParams.get("name") ?? "")
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  // Pre-fill from invitation token
-  useEffect(() => {
-    const token = searchParams.get("token")
-    const inviteEmail = searchParams.get("email")
-    const inviteName = searchParams.get("name")
-    if (inviteEmail) setEmail(inviteEmail)
-    if (inviteName) setName(inviteName)
-  }, [searchParams])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -205,9 +197,8 @@ export function SignupForm({
           <Label htmlFor="password" className="w-24 shrink-0 text-base">
             Password
           </Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             placeholder="Min. 6 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

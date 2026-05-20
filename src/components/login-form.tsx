@@ -6,6 +6,7 @@ import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/password-input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
@@ -175,9 +176,8 @@ export function LoginForm({
 
         <div className="flex items-center gap-3">
           <Label htmlFor="password" className="w-24 shrink-0 text-base">Password</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
