@@ -5,6 +5,7 @@ import { StudioHeader } from "@/components/studio-header"
 import { RoomContent } from "@/components/room/room-content"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
+import { resolveIterationMediaType } from "@/lib/media-type"
 
 export const dynamic = "force-dynamic"
 
@@ -217,6 +218,28 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     return acc
   }, {})
 
+  const creativeIds = (allCreatives || []).map((c) => c.id)
+  const { data: iterationsMeta } = creativeIds.length > 0
+    ? await supabase
+        .from("iterations")
+        .select("creative_id, media_type, page_count, version")
+        .in("creative_id", creativeIds)
+        .order("version", { ascending: false })
+    : { data: [] }
+
+  const iterationMetaByCreative: Record<
+    string,
+    { mediaType: string | null; pageCount: number | null }
+  > = {}
+  for (const row of iterationsMeta || []) {
+    if (!iterationMetaByCreative[row.creative_id]) {
+      iterationMetaByCreative[row.creative_id] = {
+        mediaType: row.media_type ?? null,
+        pageCount: row.page_count ?? null,
+      }
+    }
+  }
+
   // Fetch project members from junction table
   const { data: projectMembersData } = projectIds.length > 0
     ? await supabase
@@ -329,24 +352,35 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
             | "completed",
           dueDate: d.dueDate || undefined,
         })),
-        creatives: (creativesByProject[p.id] || []).map((c) => ({
-          id: c.id,
-          name: c.name,
-          type: (c.type || "design") as
-            | "image"
-            | "video"
-            | "document"
-            | "design",
-          thumbnailUrl: c.thumbnail_url || "",
-          updatedAt: c.updated_at
-            ? new Date(c.updated_at).toLocaleDateString("en-US", { day: "numeric", month: "short" })
-            : "Recently",
-          feedbackCount: c.feedback_count || 0,
-          iteration: c.iteration || 1,
-          status: (c.status || "in_progress") as
-            | "in_progress"
-            | "completed",
-        })),
+        creatives: (creativesByProject[p.id] || []).map((c) => {
+          const thumb = c.thumbnail_url || ""
+          const meta = iterationMetaByCreative[c.id]
+          const mediaType = resolveIterationMediaType(
+            meta?.mediaType ?? (c.type === "document" ? "pdf" : "image"),
+            thumb
+          )
+
+          return {
+            id: c.id,
+            name: c.name,
+            type: (c.type || "design") as
+              | "image"
+              | "video"
+              | "document"
+              | "design",
+            thumbnailUrl: thumb,
+            mediaType,
+            pageCount: meta?.pageCount ?? null,
+            updatedAt: c.updated_at
+              ? new Date(c.updated_at).toLocaleDateString("en-US", { day: "numeric", month: "short" })
+              : "Recently",
+            feedbackCount: c.feedback_count || 0,
+            iteration: c.iteration || 1,
+            status: (c.status || "in_progress") as
+              | "in_progress"
+              | "completed",
+          }
+        }),
       }
     }),
   }

@@ -95,6 +95,10 @@ interface CommunicationSidebarProps {
   onShowAIOptionsChange?: (show: boolean) => void;
   // Role-based
   canAddFeedback?: boolean;
+  /** Multi-page PDF: show “current page only” note in AI panel */
+  isPdfCreative?: boolean;
+  currentPage?: number;
+  pageCount?: number;
 }
 
 export function CommunicationSidebar({
@@ -111,6 +115,9 @@ export function CommunicationSidebar({
   showAIOptions: externalShowAIOptions,
   onShowAIOptionsChange,
   canAddFeedback = true,
+  isPdfCreative = false,
+  currentPage = 1,
+  pageCount = 1,
 }: CommunicationSidebarProps) {
   const [internalShowAIOptions, setInternalShowAIOptions] = useState(false);
 
@@ -260,6 +267,12 @@ export function CommunicationSidebar({
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {isPdfCreative && pageCount > 1 && (
+              <p className="text-[10px] text-amber-700 dark:text-amber-300/90 bg-amber-50 dark:bg-amber-900/20 border border-amber-200/80 dark:border-amber-800/50 rounded-lg px-2.5 py-2 mb-2 leading-snug">
+                Analyses current page only (page {currentPage} of {pageCount})
+              </p>
+            )}
 
             {/* Analysis Options */}
             <div className="space-y-1">

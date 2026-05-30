@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { X, Upload, Info, FileImage, Trash2, CloudUpload } from "lucide-react";
+import { X, Upload, Info, FileImage, Trash2, CloudUpload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface NewIterationDialogProps {
   open: boolean;
   onClose: () => void;
-  onUpload: (file: File) => void;
+  onUpload: (file: File) => void | Promise<void>;
   currentIteration: number;
   isFirstIteration?: boolean;
 }
@@ -23,6 +23,7 @@ export function NewIterationDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (file: File) => {
@@ -57,14 +58,24 @@ export function NewIterationDialog({
     if (file) handleFileSelect(file);
   };
 
-  const handleUpload = () => {
-    if (selectedFile) {
-      onUpload(selectedFile);
-      handleClose();
+  const handleUpload = async () => {
+    if (!selectedFile || isUploading) return;
+    setIsUploading(true);
+    try {
+      await onUpload(selectedFile);
+      // Close on success; on error the dialog stays open so the user can retry
+      setSelectedFile(null);
+      setPreview(null);
+      onClose();
+    } catch (err) {
+      console.error("Iteration upload failed:", err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleClose = () => {
+    if (isUploading) return;
     setSelectedFile(null);
     setPreview(null);
     onClose();
@@ -101,7 +112,8 @@ export function NewIterationDialog({
           {!isFirstIteration && (
             <button
               onClick={handleClose}
-              className="p-2.5 hover:bg-gray-100 dark:hover:bg-[#2a2a2a] rounded-xl transition-colors"
+              disabled={isUploading}
+              className="p-2.5 hover:bg-gray-100 dark:hover:bg-[#2a2a2a] rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
@@ -204,6 +216,7 @@ export function NewIterationDialog({
             <Button
               variant="ghost"
               onClick={handleClose}
+              disabled={isUploading}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             >
               Cancel
@@ -211,16 +224,25 @@ export function NewIterationDialog({
           )}
           <Button
             onClick={handleUpload}
-            disabled={!selectedFile}
+            disabled={!selectedFile || isUploading}
             className={cn(
               "gap-2 font-medium",
-              !selectedFile
+              !selectedFile || isUploading
                 ? "bg-gray-200 dark:bg-[#333] text-gray-400 dark:text-gray-500 cursor-not-allowed"
                 : "bg-[#DBFE52] hover:bg-[#d0f043] text-black shadow-sm"
             )}
           >
-            <Upload className="w-4 h-4" />
-            {isFirstIteration ? "Upload & Get Started" : `Create Iteration ${currentIteration + 1}`}
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4" />
+                {isFirstIteration ? "Upload & Get Started" : `Create Iteration ${currentIteration + 1}`}
+              </>
+            )}
           </Button>
         </div>
       </div>

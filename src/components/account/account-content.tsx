@@ -17,6 +17,7 @@ import {
   Pencil,
   ArrowUpDown,
   BarChart3,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -141,18 +142,26 @@ function EditableRow({
 }: {
   label: string
   value: string
-  onSave: (value: string) => void
+  onSave: (value: string) => void | Promise<void>
   type?: "text" | "email" | "tel"
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(value)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handleSave = () => {
-    onSave(editValue)
-    setIsEditing(false)
+  const handleSave = async () => {
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      await onSave(editValue)
+      setIsEditing(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleCancel = () => {
+    if (isSaving) return
     setEditValue(value)
     setIsEditing(false)
   }
@@ -167,11 +176,31 @@ function EditableRow({
               type={type}
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
-              className="px-3 py-1.5 border border-border rounded bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              disabled={isSaving}
+              className="px-3 py-1.5 border border-border rounded bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               autoFocus
             />
-            <button onClick={handleSave} className="text-sm text-[#5C6ECD] font-medium">Save</button>
-            <button onClick={handleCancel} className="text-sm text-muted-foreground font-medium">Cancel</button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="inline-flex items-center gap-1.5 text-sm text-[#5C6ECD] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+            <button
+              onClick={handleCancel}
+              disabled={isSaving}
+              className="text-sm text-muted-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
           </div>
         ) : (
           <>
@@ -195,6 +224,8 @@ function ProfileTab({ user, profileData }: { user: { name: string; email: string
     designation: profileData?.jobTitle || "",
   })
   const [avatarUrl, setAvatarUrl] = useState(user.avatar)
+  const [isAvatarUploading, setIsAvatarUploading] = useState(false)
+  const [isAvatarDeleting, setIsAvatarDeleting] = useState(false)
 
   const updateProfileField = async (field: string, value: string) => {
     const supabase = createClient()
@@ -205,6 +236,7 @@ function ProfileTab({ user, profileData }: { user: { name: string; email: string
   }
 
   const handleAvatarUpload = async () => {
+    if (isAvatarUploading) return
     const supabase = createClient()
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     if (!currentUser) return
@@ -214,27 +246,38 @@ function ProfileTab({ user, profileData }: { user: { name: string; email: string
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
-      const ext = file.name.split(".").pop()
-      const path = `${currentUser.id}/${Date.now()}-avatar.${ext}`
-      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file)
-      if (uploadErr) {
-        console.error("Avatar upload failed:", uploadErr)
-        return
+      setIsAvatarUploading(true)
+      try {
+        const ext = (file.name.split(".").pop() || "").replace(/[^A-Za-z0-9]+/g, "")
+        const path = `${currentUser.id}/${Date.now()}-avatar${ext ? `.${ext}` : ""}`
+        const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file)
+        if (uploadErr) {
+          console.error("Avatar upload failed:", uploadErr)
+          return
+        }
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path)
+        const newUrl = urlData.publicUrl
+        await supabase.from("profiles").update({ avatar_url: newUrl }).eq("id", currentUser.id)
+        setAvatarUrl(newUrl)
+      } finally {
+        setIsAvatarUploading(false)
       }
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path)
-      const newUrl = urlData.publicUrl
-      await supabase.from("profiles").update({ avatar_url: newUrl }).eq("id", currentUser.id)
-      setAvatarUrl(newUrl)
     }
     input.click()
   }
 
   const handleDeleteAvatar = async () => {
-    const supabase = createClient()
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    if (!currentUser) return
-    await supabase.from("profiles").update({ avatar_url: null }).eq("id", currentUser.id)
-    setAvatarUrl("")
+    if (isAvatarDeleting || isAvatarUploading || !avatarUrl) return
+    setIsAvatarDeleting(true)
+    try {
+      const supabase = createClient()
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (!currentUser) return
+      await supabase.from("profiles").update({ avatar_url: null }).eq("id", currentUser.id)
+      setAvatarUrl("")
+    } finally {
+      setIsAvatarDeleting(false)
+    }
   }
 
   return (
@@ -258,8 +301,34 @@ function ProfileTab({ user, profileData }: { user: { name: string; email: string
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handleAvatarUpload} className="text-sm text-foreground hover:text-muted-foreground font-medium">Edit</button>
-            <button onClick={handleDeleteAvatar} className="text-sm text-foreground hover:text-muted-foreground font-medium">Delete</button>
+            <button
+              onClick={handleAvatarUpload}
+              disabled={isAvatarUploading || isAvatarDeleting}
+              className="inline-flex items-center gap-1.5 text-sm text-foreground hover:text-muted-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAvatarUploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                "Edit"
+              )}
+            </button>
+            <button
+              onClick={handleDeleteAvatar}
+              disabled={isAvatarUploading || isAvatarDeleting}
+              className="inline-flex items-center gap-1.5 text-sm text-foreground hover:text-muted-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAvatarDeleting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -691,7 +760,7 @@ function EditMemberModal({
 }: {
   member: FullTeamMember
   onClose: () => void
-  onSave: (member: FullTeamMember) => void
+  onSave: (member: FullTeamMember) => void | Promise<void>
 }) {
   const [name, setName] = useState(member.name)
   const [email, setEmail] = useState(member.email)
@@ -699,17 +768,24 @@ function EditMemberModal({
   const [designation, setDesignation] = useState(member.designation)
   const [role, setRole] = useState(member.role)
   const [organisations, setOrganisations] = useState(member.organisations.join(", "))
+  const [isSaving, setIsSaving] = useState(false)
 
-  const handleSave = () => {
-    onSave({
-      ...member,
-      name,
-      email,
-      phone,
-      designation,
-      role,
-      organisations: organisations.split(",").map(i => i.trim()).filter(Boolean)
-    })
+  const handleSave = async () => {
+    if (isSaving || !name.trim() || !email.trim()) return
+    setIsSaving(true)
+    try {
+      await onSave({
+        ...member,
+        name,
+        email,
+        phone,
+        designation,
+        role,
+        organisations: organisations.split(",").map(i => i.trim()).filter(Boolean)
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -718,7 +794,11 @@ function EditMemberModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground">Edit Team Member</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
@@ -790,16 +870,24 @@ function EditMemberModal({
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+            disabled={isSaving}
+            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            disabled={!name.trim() || !email.trim()}
-            className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!name.trim() || !email.trim() || isSaving}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Changes
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Changes"
+            )}
           </button>
         </div>
       </div>
@@ -808,11 +896,22 @@ function EditMemberModal({
 }
 
 // Invite Member Modal
-function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvite: (data: { name: string; email: string; designation: string; role: string }) => void }) {
+function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvite: (data: { name: string; email: string; designation: string; role: string }) => void | Promise<void> }) {
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
   const [designation, setDesignation] = useState("")
   const [role, setRole] = useState("Member")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSendInvite = async () => {
+    if (isSubmitting || !email.trim() || !name.trim()) return
+    setIsSubmitting(true)
+    try {
+      await onInvite({ name, email, designation, role })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -820,7 +919,11 @@ function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvit
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground">Invite Team Member</h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
@@ -871,16 +974,24 @@ function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvit
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+            disabled={isSubmitting}
+            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
-            onClick={() => onInvite({ name, email, designation, role })}
-            disabled={!email.trim() || !name.trim()}
-            className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleSendInvite}
+            disabled={!email.trim() || !name.trim() || isSubmitting}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Send Invite
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              "Send Invite"
+            )}
           </button>
         </div>
       </div>
@@ -896,8 +1007,20 @@ function PerformanceModal({
 }: {
   member: FullTeamMember
   onClose: () => void
-  onDelete: () => void
+  onDelete: () => void | Promise<void>
 }) {
+  const [isRemoving, setIsRemoving] = useState(false)
+
+  const handleRemove = async () => {
+    if (isRemoving) return
+    setIsRemoving(true)
+    try {
+      await onDelete()
+    } finally {
+      setIsRemoving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
@@ -926,12 +1049,24 @@ function PerformanceModal({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={onDelete}
-              className="text-sm text-destructive hover:text-destructive/80 font-medium"
+              onClick={handleRemove}
+              disabled={isRemoving}
+              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              REMOVE
+              {isRemoving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  REMOVING...
+                </>
+              ) : (
+                "REMOVE"
+              )}
             </button>
-            <button onClick={onClose} className="p-1 hover:bg-muted rounded transition-colors">
+            <button
+              onClick={onClose}
+              disabled={isRemoving}
+              className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <X className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
@@ -1045,6 +1180,7 @@ function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
     state: "",
     logo: ""
   })
+  const [isLogoUploading, setIsLogoUploading] = useState(false)
 
   const updateOrg = async (field: string, value: string) => {
     setOrg({ ...org, [field]: value })
@@ -1055,25 +1191,30 @@ function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
   }
 
   const handleLogoUpload = async () => {
-    if (!org.id) return
+    if (!org.id || isLogoUploading) return
     const input = document.createElement("input")
     input.type = "file"
     input.accept = "image/*"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
-      const supabase = createClient()
-      const ext = file.name.split(".").pop()
-      const path = `${org.id}/${Date.now()}-logo.${ext}`
-      const { error: uploadErr } = await supabase.storage.from("org-logos").upload(path, file)
-      if (uploadErr) {
-        console.error("Logo upload failed:", uploadErr)
-        return
+      setIsLogoUploading(true)
+      try {
+        const supabase = createClient()
+        const ext = (file.name.split(".").pop() || "").replace(/[^A-Za-z0-9]+/g, "")
+        const path = `${org.id}/${Date.now()}-logo${ext ? `.${ext}` : ""}`
+        const { error: uploadErr } = await supabase.storage.from("org-logos").upload(path, file)
+        if (uploadErr) {
+          console.error("Logo upload failed:", uploadErr)
+          return
+        }
+        const { data: urlData } = supabase.storage.from("org-logos").getPublicUrl(path)
+        const logoUrl = urlData.publicUrl
+        await supabase.from("organizations").update({ logo_url: logoUrl }).eq("id", org.id)
+        setOrg({ ...org, logo: logoUrl })
+      } finally {
+        setIsLogoUploading(false)
       }
-      const { data: urlData } = supabase.storage.from("org-logos").getPublicUrl(path)
-      const logoUrl = urlData.publicUrl
-      await supabase.from("organizations").update({ logo_url: logoUrl }).eq("id", org.id)
-      setOrg({ ...org, logo: logoUrl })
     }
     input.click()
   }
@@ -1107,7 +1248,20 @@ function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={handleLogoUpload} className="text-sm text-foreground hover:text-muted-foreground font-medium">Upload</button>
+              <button
+                onClick={handleLogoUpload}
+                disabled={isLogoUploading}
+                className="inline-flex items-center gap-1.5 text-sm text-foreground hover:text-muted-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLogoUploading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  "Upload"
+                )}
+              </button>
             </div>
           </div>
         </div>

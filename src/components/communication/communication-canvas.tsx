@@ -8,9 +8,37 @@ import { CommunicationSidebar } from "./communication-sidebar";
 import { CommentsPanel, Feedback, ReplyItem, AIAnalysisType, AISuggestion } from "./comments-panel";
 import { ZoomControls } from "./zoom-controls";
 import { CanvasArea } from "./canvas-area";
+import type { PdfPageViewerReadyPayload } from "./pdf-page-viewer";
 import { ShareDialog } from "./share-dialog";
 import { NewIterationDialog } from "./new-iteration-dialog";
 import { ShapeType, DrawingPath } from "@/lib/fabric";
+import { getMediaTypeFromFile, getMediaTypeFromUrl, type MediaType } from "@/lib/media-type";
+import { captureCreativeMediaSnapshot } from "@/lib/capture-creative-media";
+import { PdfPagePager } from "./pdf-page-pager";
+
+function feedbackPageNumber(f: Feedback): number {
+  return f.pageNumber ?? 1;
+}
+
+function drawingPageNumber(d: DrawingPath): number {
+  return d.pageNumber ?? 1;
+}
+
+function normalizeIteration(iter: Iteration): Iteration {
+  return {
+    ...iter,
+    mediaType: iter.mediaType ?? getMediaTypeFromUrl(iter.imageUrl),
+    pageCount: iter.pageCount ?? null,
+    feedbacks: iter.feedbacks.map((f) => ({
+      ...f,
+      pageNumber: f.pageNumber ?? 1,
+    })),
+    drawings: iter.drawings.map((d) => ({
+      ...d,
+      pageNumber: d.pageNumber ?? 1,
+    })),
+  };
+}
 
 // Define iteration type with image, feedbacks, drawings, and AI suggestions
 interface Iteration {
@@ -19,6 +47,8 @@ interface Iteration {
   name: string;
   timestamp: string;
   imageUrl: string;
+  mediaType: MediaType;
+  pageCount?: number | null;
   feedbacks: Feedback[];
   drawings: DrawingPath[];
   aiSuggestions: AISuggestion[];
@@ -65,7 +95,7 @@ export function RevueCanvas({
 }: RevueCanvasProps = {}) {
   const supabase = createClient();
   const currentUser = propCurrentUser || defaultUser;
-  const startIterations = propIterations || [];
+  const startIterations = (propIterations || []).map(normalizeIteration);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   // Role-based permissions
@@ -96,6 +126,9 @@ export function RevueCanvas({
   const [compareMode, setCompareMode] = useState(false);
   const [compareIterationId, setCompareIterationId] = useState<string | null>(null);
 
+  // PDF page (pager UI in Phase 5; page 1 for Phase 3)
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Rotation state
   const [rotation, setRotation] = useState(0);
 
@@ -112,6 +145,7 @@ export function RevueCanvas({
   // AI Analysis state
   const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
   const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
+  const aiSnapshotRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
 
@@ -165,14 +199,12 @@ export function RevueCanvas({
             id: string; iteration_id: string; number: string; content: string;
             x: number; y: number; resolved: boolean; source: string;
             drawing_id: string | null; user_id: string; created_at: string;
+            page_number?: number;
           };
-          // Skip if we added this locally (optimistic update already applied)
-          if (localFeedbackIdsRef.current.has(row.number + row.content)) return;
-          // Only process feedbacks for our iterations (use ref for fresh data)
+          if (localFeedbackIdsRef.current.has(row.id)) return;
           const currentIterations = iterationsRef.current;
           const iterationIds = currentIterations.map(i => i.id);
           if (!iterationIds.includes(row.iteration_id)) return;
-          // Skip if already in state
           const existing = currentIterations.find(i => i.id === row.iteration_id)?.feedbacks.find(f => f.id === row.id);
           if (existing) return;
 
@@ -187,6 +219,7 @@ export function RevueCanvas({
             source: row.source as "client" | "team",
             x: row.x || 0,
             y: row.y || 0,
+            pageNumber: row.page_number ?? 1,
             replies: [],
             drawingId: row.drawing_id || undefined,
           };
@@ -206,15 +239,12 @@ export function RevueCanvas({
           const row = payload.new as {
             id: string; feedback_id: string; user_id: string; content: string; created_at: string;
           };
-          // Skip if we added this locally
-          if (localReplyIdsRef.current.has(row.feedback_id + row.content)) return;
-          // Use ref for fresh data
+          if (localReplyIdsRef.current.has(row.id)) return;
           const currentIterations = iterationsRef.current;
           const parentIteration = currentIterations.find(i =>
             i.feedbacks.some(f => f.id === row.feedback_id)
           );
           if (!parentIteration) return;
-          // Skip if already in state
           const existingReply = parentIteration.feedbacks
             .find(f => f.id === row.feedback_id)?.replies
             .find(r => r.id === row.id);
@@ -254,8 +284,8 @@ export function RevueCanvas({
               shapeType?: string;
             };
             color: string; stroke_width: number; created_by: string; created_at: string;
+            page_number?: number;
           };
-          // Skip if we added this locally
           if (localDrawingIdsRef.current.has(row.id)) return;
           const currentIterations = iterationsRef.current;
           const iterationIds = currentIterations.map(i => i.id);
@@ -274,6 +304,7 @@ export function RevueCanvas({
             shapeType: row.data?.shapeType as DrawingPath["shapeType"],
             color: row.color,
             strokeWidth: row.stroke_width,
+            pageNumber: row.page_number ?? 1,
           };
 
           setIterations(prev => prev.map(iter =>
@@ -297,8 +328,28 @@ export function RevueCanvas({
   // Get current iteration
   const currentIteration = iterations.find(i => i.id === activeIterationId) || iterations[0];
   const currentFeedbacks = currentIteration?.feedbacks || [];
-  const currentDrawings = currentIteration?.drawings || [];
+  const allDrawings = currentIteration?.drawings || [];
   const currentAiSuggestions = currentIteration?.aiSuggestions || [];
+  const isPdfIteration = currentIteration?.mediaType === "pdf";
+  const effectivePageCount = Math.max(
+    1,
+    currentIteration?.pageCount ?? 1
+  );
+
+  // Clamp current page when page count or iteration changes
+  useEffect(() => {
+    if (currentPage > effectivePageCount) {
+      setCurrentPage(effectivePageCount);
+    }
+  }, [activeIterationId, effectivePageCount, currentPage]);
+
+  const pageFilteredFeedbacks = isPdfIteration
+    ? currentFeedbacks.filter((f) => feedbackPageNumber(f) === currentPage)
+    : currentFeedbacks;
+
+  const pageFilteredDrawings = isPdfIteration
+    ? allDrawings.filter((d) => drawingPageNumber(d) === currentPage)
+    : allDrawings;
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
@@ -358,6 +409,7 @@ export function RevueCanvas({
       source: feedbackSource,
       x: feedback.x,
       y: feedback.y,
+      pageNumber: isPdfIteration ? currentPage : 1,
       replies: [],
       drawingId: feedback.drawing?.id,
     };
@@ -368,15 +420,15 @@ export function RevueCanvas({
         : iteration
     ));
 
-    // Track locally to prevent realtime duplicate
-    const localKey = feedback.number + feedback.content;
-    localFeedbackIdsRef.current.add(localKey);
+    // Track locally by real id to prevent realtime duplicate echo
+    localFeedbackIdsRef.current.add(feedback.id);
 
-    // Persist to DB
+    // Persist to DB (use the same id so the realtime broadcast matches the optimistic row)
     if (creativeId) {
       supabase.auth.getUser().then(({ data: { user: authUser } }) => {
         if (authUser) {
           supabase.from("feedbacks").insert({
+            id: feedback.id,
             iteration_id: activeIterationId,
             number: feedback.number,
             content: feedback.content,
@@ -386,6 +438,7 @@ export function RevueCanvas({
             source: feedbackSource,
             drawing_id: feedback.drawing?.id || null,
             user_id: authUser.id,
+            page_number: isPdfIteration ? currentPage : 1,
           }).then(({ error }) => {
             if (error) console.error("Failed to save feedback:", error);
           });
@@ -394,24 +447,46 @@ export function RevueCanvas({
     }
   };
 
-  // Update drawings for current iteration
-  const handleDrawingsChange = (newDrawings: DrawingPath[]) => {
-    setIterations(prev => prev.map(iteration =>
-      iteration.id === activeIterationId
-        ? { ...iteration, drawings: newDrawings }
-        : iteration
-    ));
+  // Update drawings for current iteration (merge other PDF pages when filtering)
+  const handleDrawingsChange = (newPageDrawings: DrawingPath[]) => {
+    setIterations((prev) =>
+      prev.map((iteration) => {
+        if (iteration.id !== activeIterationId) return iteration;
+
+        if (iteration.mediaType !== "pdf") {
+          return { ...iteration, drawings: newPageDrawings };
+        }
+
+        const otherPages = iteration.drawings.filter(
+          (d) => drawingPageNumber(d) !== currentPage
+        );
+        const taggedForPage = newPageDrawings.map((d) => ({
+          ...d,
+          pageNumber: currentPage,
+        }));
+        return {
+          ...iteration,
+          drawings: [...otherPages, ...taggedForPage],
+        };
+      })
+    );
 
     // Persist new drawings to DB
     if (creativeId) {
       const existingIds = (iterationsRef.current.find(i => i.id === activeIterationId)?.drawings || []).map(d => d.id);
-      const added = newDrawings.filter(d => !existingIds.includes(d.id));
+      const added = newPageDrawings.filter(d => !existingIds.includes(d.id));
       if (added.length > 0) {
         // Track locally to prevent realtime duplicate
         for (const d of added) localDrawingIdsRef.current.add(d.id);
         supabase.auth.getUser().then(({ data: { user: authUser } }) => {
           if (authUser) {
             for (const d of added) {
+              const pageNum =
+                d.pageNumber ??
+                (iterationsRef.current.find((i) => i.id === activeIterationId)
+                  ?.mediaType === "pdf"
+                  ? currentPage
+                  : 1);
               supabase.from("drawings").upsert({
                 id: d.id,
                 iteration_id: activeIterationId,
@@ -427,6 +502,7 @@ export function RevueCanvas({
                 color: d.color,
                 stroke_width: d.strokeWidth,
                 created_by: authUser.id,
+                page_number: pageNum,
               }).then(({ error }) => {
                 if (error) console.error("Failed to save drawing:", error);
               });
@@ -439,43 +515,60 @@ export function RevueCanvas({
 
   // Add reply to feedback
   const handleAddReply = (feedbackId: string, reply: ReplyItem) => {
+    // Generate a real UUID so the optimistic id, DB id, and realtime payload id all match.
+    // This makes dedupe robust (was previously keyed on feedback_id + content, which collides).
+    const replyId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `${feedbackId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const replyWithId: ReplyItem = { ...reply, id: replyId };
+
     setIterations(prev => prev.map(iteration =>
       iteration.id === activeIterationId
         ? {
             ...iteration,
             feedbacks: iteration.feedbacks.map(f =>
               f.id === feedbackId
-                ? { ...f, replies: [...f.replies, reply] }
+                ? { ...f, replies: [...f.replies, replyWithId] }
                 : f
             )
           }
         : iteration
     ));
 
-    // Track locally to prevent realtime duplicate
-    localReplyIdsRef.current.add(feedbackId + reply.content);
+    // Track locally by real id to prevent realtime duplicate echo
+    localReplyIdsRef.current.add(replyId);
 
-    // Persist reply to DB
+    // Persist reply to DB (use same id so realtime broadcast matches the optimistic row)
     if (creativeId) {
       supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-        if (authUser) {
-          supabase.from("feedback_replies").insert({
-            feedback_id: feedbackId,
-            user_id: authUser.id,
-            content: reply.content,
-          }).then(({ error }) => {
-            if (error) console.error("Failed to save reply:", error);
-          });
-        }
+        if (!authUser) return;
+        supabase.from("feedback_replies").insert({
+          id: replyId,
+          feedback_id: feedbackId,
+          user_id: authUser.id,
+          content: reply.content,
+        }).then(({ error }) => {
+          if (error) {
+            console.error("Failed to save reply:", {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code,
+            });
+          }
+        });
       });
     }
   };
 
   // Handle feedback click from panel
   const handleFeedbackClick = (feedbackId: string) => {
+    const feedback = currentFeedbacks.find((f) => f.id === feedbackId);
+    if (feedback && isPdfIteration) {
+      setCurrentPage(feedbackPageNumber(feedback));
+    }
     setHighlightedFeedback(feedbackId);
     // Also highlight the associated drawing if any
-    const feedback = currentFeedbacks.find(f => f.id === feedbackId);
     if (feedback?.drawingId) {
       setHighlightDrawingId(feedback.drawingId);
     }
@@ -487,10 +580,13 @@ export function RevueCanvas({
 
   // Handle marker click from canvas
   const handleMarkerClick = (markerId: string) => {
+    const feedback = currentFeedbacks.find((f) => f.id === markerId);
+    if (feedback && isPdfIteration) {
+      setCurrentPage(feedbackPageNumber(feedback));
+    }
     setOpenFeedbackId(markerId);
     setHighlightedFeedback(markerId);
     // Also highlight the associated drawing if any
-    const feedback = currentFeedbacks.find(f => f.id === markerId);
     if (feedback?.drawingId) {
       setHighlightDrawingId(feedback.drawingId);
     }
@@ -521,13 +617,31 @@ export function RevueCanvas({
     setActiveIterationId(iterationId);
     setCompareMode(false);
     setRotation(0);
+    setCurrentPage(1);
   };
+
+  const handlePdfDocumentReady = useCallback(
+    ({ pageCount }: PdfPageViewerReadyPayload) => {
+      setIterations((prev) =>
+        prev.map((iter) =>
+          iter.id === activeIterationId ? { ...iter, pageCount } : iter
+        )
+      );
+      setCurrentPage((p) => Math.min(Math.max(1, p), pageCount));
+    },
+    [activeIterationId]
+  );
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
 
   // Handle new iteration upload
   const handleNewIterationUpload = async (file: File) => {
     const newVersion = iterations.length + 1;
     let imageUrl = URL.createObjectURL(file);
     let newId = crypto.randomUUID();
+    const mediaType = getMediaTypeFromFile(file);
 
     // Upload to Supabase Storage and create iteration record if connected to DB
     if (creativeId) {
@@ -553,6 +667,7 @@ export function RevueCanvas({
           version: newVersion,
           name: `Iteration ${newVersion}`,
           image_url: imageUrl,
+          media_type: mediaType,
           created_by: authUser.id,
         }).select("id").single();
 
@@ -571,6 +686,8 @@ export function RevueCanvas({
       name: `Iteration ${newVersion}`,
       timestamp: "Just now",
       imageUrl: imageUrl,
+      mediaType,
+      pageCount: null,
       drawings: [],
       feedbacks: [],
       aiSuggestions: [],
@@ -578,33 +695,44 @@ export function RevueCanvas({
 
     setIterations(prev => [newIteration, ...prev]);
     setActiveIterationId(newIteration.id);
-    setShowNewIterationDialog(false);
+    // Dialog closes itself when onUpload resolves; no need to close here.
   };
 
-  // Handle AI Analysis - saves suggestions to the current iteration
-  const handleStartAIAnalysis = useCallback((type: AIAnalysisType) => {
+  // Handle AI Analysis — rasterize visible creative (PDF page canvas or image) then run pipeline
+  const handleStartAIAnalysis = useCallback(async (type: AIAnalysisType) => {
     setAiAnalysisType(type);
     setAiAnalysisActive(true);
-    setViewMode("ai"); // Switch to AI mode when starting analysis
+    setViewMode("ai");
 
-    // Clear current iteration's suggestions while analyzing
-    setIterations(prev => prev.map(iteration =>
-      iteration.id === activeIterationId
-        ? { ...iteration, aiSuggestions: [] }
-        : iteration
-    ));
+    setIterations((prev) =>
+      prev.map((iteration) =>
+        iteration.id === activeIterationId
+          ? { ...iteration, aiSuggestions: [] }
+          : iteration
+      )
+    );
 
-    // Simulate analysis with mock suggestions after a delay
-    setTimeout(() => {
-      const mockSuggestions: AISuggestion[] = getMockSuggestions(type);
-      // Save suggestions to the current iteration
-      setIterations(prev => prev.map(iteration =>
+    const snapshot = await captureCreativeMediaSnapshot("primary");
+    aiSnapshotRef.current = snapshot;
+
+    if (!snapshot) {
+      console.warn(
+        "AI analysis: could not capture creative snapshot; using mock results only."
+      );
+    }
+
+    // TODO: send `snapshot` (PNG data URL) to image AI API when backend is wired
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    const mockSuggestions: AISuggestion[] = getMockSuggestions(type);
+    setIterations((prev) =>
+      prev.map((iteration) =>
         iteration.id === activeIterationId
           ? { ...iteration, aiSuggestions: mockSuggestions }
           : iteration
-      ));
-      setAiAnalysisActive(false);
-    }, 3000);
+      )
+    );
+    setAiAnalysisActive(false);
   }, [activeIterationId]);
 
   // Handle ignoring an AI suggestion - updates the current iteration
@@ -648,13 +776,22 @@ export function RevueCanvas({
     return suggestions[type] || [];
   };
 
-  // In productive mode, client should only see client feedbacks on canvas
-  const visibleFeedbacks = (workmode === "productive" && userRole === "client")
-    ? currentFeedbacks.filter(f => f.source === "client")
-    : currentFeedbacks;
+  // Role filter: panel shows all pages; canvas shows current page only for PDFs
+  const roleFilteredFeedbacks =
+    workmode === "productive" && userRole === "client"
+      ? currentFeedbacks.filter((f) => f.source === "client")
+      : currentFeedbacks;
+
+  const panelFeedbacks = roleFilteredFeedbacks;
+
+  const canvasFeedbacks = isPdfIteration
+    ? roleFilteredFeedbacks.filter(
+        (f) => feedbackPageNumber(f) === currentPage
+      )
+    : roleFilteredFeedbacks;
 
   // Convert feedbacks to marker format for canvas
-  const markers = visibleFeedbacks.map(f => ({
+  const markers = canvasFeedbacks.map(f => ({
     id: f.id,
     x: f.x || 0,
     y: f.y || 0,
@@ -699,13 +836,18 @@ export function RevueCanvas({
         onMarkerClick={handleMarkerClick}
         onAddReply={handleCanvasReply}
         imageUrl={currentIteration?.imageUrl || ""}
+        mediaType={currentIteration?.mediaType ?? "image"}
+        currentPage={currentPage}
+        pageCount={currentIteration?.pageCount ?? null}
+        compareMediaType={compareIteration?.mediaType ?? "image"}
+        onPdfDocumentReady={handlePdfDocumentReady}
         rotation={rotation}
         compareMode={compareMode}
         compareImageUrl={compareIteration?.imageUrl}
         compareIterations={iterations.filter(i => i.id !== activeIterationId)}
         selectedCompareId={compareIterationId}
         onCompareIterationChange={setCompareIterationId}
-        drawings={currentDrawings}
+        drawings={pageFilteredDrawings}
         onDrawingsChange={handleDrawingsChange}
         onZoomChange={setZoom}
         onToolChange={setSelectedTool}
@@ -763,13 +905,16 @@ export function RevueCanvas({
           showAIOptions={showAIAnalysisOptions}
           onShowAIOptionsChange={setShowAIAnalysisOptions}
           canAddFeedback={canAddFeedback}
+          isPdfCreative={isPdfIteration}
+          currentPage={currentPage}
+          pageCount={effectivePageCount}
         />
       )}
 
       {/* Floating Feedback Panel - Right side (hidden in fullscreen) */}
       {showComments && !compareMode && !isFullscreen && (
         <CommentsPanel
-          feedbacks={visibleFeedbacks}
+          feedbacks={panelFeedbacks}
           onAddReply={handleAddReply}
           onFeedbackClick={handleFeedbackClick}
           openFeedbackId={openFeedbackId}
@@ -779,7 +924,19 @@ export function RevueCanvas({
           userRole={userRole}
           workmode={workmode}
           currentUser={currentUser}
+          showPageLabels={isPdfIteration && effectivePageCount > 1}
         />
+      )}
+
+      {/* PDF page pager */}
+      {isPdfIteration && effectivePageCount > 1 && !isFullscreen && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+          <PdfPagePager
+            currentPage={currentPage}
+            pageCount={effectivePageCount}
+            onPageChange={handlePageChange}
+          />
+        </div>
       )}
 
       {/* Zoom Controls - Bottom Right before feedback panel */}

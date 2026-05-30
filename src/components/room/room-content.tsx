@@ -9,7 +9,7 @@ import {
   Sparkles, Zap, FolderOpen,
   X, UserPlus, Pencil, FolderKanban, CircleDot, Upload, CircleCheck,
   Settings, Layers, Link, Circle, CheckCircle2, Copy,
-  FileImage, Video, FileCheck, Layers2, Play
+  FileImage, Video, FileCheck, Layers2, Play, Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -41,6 +41,10 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
+import { getMediaTypeFromFile, isPdfFile } from "@/lib/media-type"
+import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count"
+import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
+import type { MediaType } from "@/lib/media-type"
 
 // Types
 interface Deliverable {
@@ -55,6 +59,8 @@ interface Creative {
   name: string
   type: "image" | "video" | "document" | "design"
   thumbnailUrl: string
+  mediaType?: MediaType
+  pageCount?: number | null
   updatedAt: string
   feedbackCount: number
   iteration: number
@@ -481,6 +487,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
   const [newCreative, setNewCreative] = useState({ name: "", type: "image" as Creative["type"], file: null as File | null, filePreview: "" })
   const creativeFileInputRef = useRef<HTMLInputElement>(null)
+  const [isAddingCreative, setIsAddingCreative] = useState(false)
 
   // Reference preview state
   const [previewRef, setPreviewRef] = useState<Reference | null>(null)
@@ -608,13 +615,29 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
 
   // Creative handlers
   const handleAddCreative = async () => {
-    if (!selectedProject || !newCreative.name.trim()) return
+    if (!selectedProject || !newCreative.name.trim() || isAddingCreative) return
+
+    setIsAddingCreative(true)
+    try {
+      await handleAddCreativeInner()
+    } finally {
+      setIsAddingCreative(false)
+    }
+  }
+
+  const handleAddCreativeInner = async () => {
+    if (!selectedProject) return
 
     // Upload file if provided
     let thumbnailUrl: string | null = null
     const file = newCreative.file
+    const fileMediaType = file ? getMediaTypeFromFile(file) : null
+    const creativeType =
+      file && isPdfFile(file) ? "document" : newCreative.type
+
     if (file) {
-      const path = `${selectedProject.id}/${Date.now()}-${file.name}`
+      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-")
+      const path = `${selectedProject.id}/${Date.now()}-${safeName}`
       const { error: uploadErr } = await supabase.storage.from("creatives").upload(path, file)
       if (uploadErr) {
         console.error("File upload failed:", uploadErr)
@@ -629,7 +652,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       .insert({
         project_id: selectedProject.id,
         name: newCreative.name.trim(),
-        type: newCreative.type,
+        type: creativeType,
         thumbnail_url: thumbnailUrl,
       })
       .select()
@@ -640,23 +663,42 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       return
     }
 
+    let pageCount: number | null = null
+
     // Insert first iteration if file was uploaded
     if (file && thumbnailUrl) {
       const { data: { user } } = await supabase.auth.getUser()
-      await supabase.from("iterations").insert({
-        creative_id: inserted.id,
-        version: 1,
-        image_url: thumbnailUrl,
-        name: "Iteration 1",
-        created_by: user?.id,
-      })
+      const { data: iterationRow } = await supabase
+        .from("iterations")
+        .insert({
+          creative_id: inserted.id,
+          version: 1,
+          image_url: thumbnailUrl,
+          name: "Iteration 1",
+          media_type: fileMediaType ?? "image",
+          created_by: user?.id,
+        })
+        .select("id")
+        .single()
+
+      if (fileMediaType === "pdf" && iterationRow?.id) {
+        pageCount = await getPdfPageCountFromUrl(thumbnailUrl)
+        if (pageCount != null) {
+          await supabase
+            .from("iterations")
+            .update({ page_count: pageCount })
+            .eq("id", iterationRow.id)
+        }
+      }
     }
 
     const creative: Creative = {
       id: inserted.id,
       name: inserted.name,
-      type: inserted.type as Creative["type"],
+      type: creativeType as Creative["type"],
       thumbnailUrl: thumbnailUrl || "",
+      mediaType: fileMediaType ?? "image",
+      pageCount,
       updatedAt: "Just now",
       feedbackCount: inserted.feedback_count,
       iteration: inserted.iteration,
@@ -727,8 +769,8 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
     // Upload logo if a new file was selected
     let logoUrl: string | null = d.logoPreview || null
     if (d.logo) {
-      const ext = d.logo.name.split(".").pop()
-      const path = `${organizationId}/${Date.now()}-logo.${ext}`
+      const ext = (d.logo.name.split(".").pop() || "").replace(/[^A-Za-z0-9]+/g, "")
+      const path = `${organizationId}/${Date.now()}-logo${ext ? `.${ext}` : ""}`
       const { error: uploadErr } = await supabase.storage.from("client-assets").upload(path, d.logo)
       if (!uploadErr) {
         logoUrl = supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl
@@ -743,7 +785,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       } else {
         const res = await fetch(img)
         const blob = await res.blob()
-        const ext = blob.type.split("/").pop() || "png"
+        const ext = (blob.type.split("/").pop() || "png").replace(/[^A-Za-z0-9]+/g, "")
         const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
         const { error: imgErr } = await supabase.storage.from("client-assets").upload(path, blob)
         if (!imgErr) {
@@ -758,7 +800,8 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       .map((f) => ({ label: f.label, font_name: f.font, font_url: null as string | null }))
 
     for (const customFont of d.customFonts) {
-      const path = `${organizationId}/${Date.now()}-${customFont.name}`
+      const safeName = customFont.name.replace(/[^A-Za-z0-9._-]+/g, "-")
+      const path = `${organizationId}/${Date.now()}-${safeName}`
       const { error: fontErr } = await supabase.storage.from("client-assets").upload(path, customFont.file)
       if (!fontErr) {
         fontsJson.push({
@@ -1061,35 +1104,23 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                                 : "border-border hover:border-[#5C6ECD]/50 hover:shadow-md"
                             )}
                           >
-                            {/* Thumbnail */}
-                            <div className="relative aspect-[4/3] bg-muted overflow-hidden">
-                              {creative.thumbnailUrl ? (
-                                <img src={creative.thumbnailUrl} alt={creative.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#f8f9ff] via-white to-[#f0f4ff] dark:from-[#111] dark:via-[#0a0a0a] dark:to-[#0d0f1a]">
-                                  <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)", backgroundSize: "20px 20px" }} />
-                                  <div className="relative flex flex-col items-center gap-2">
-                                    <div className="w-12 h-12 rounded-xl bg-[#5C6ECD]/10 flex items-center justify-center">
-                                      <TypeIcon className="w-6 h-6 text-[#5C6ECD]/60" />
-                                    </div>
-                                    <span className="text-xs text-muted-foreground/60 font-medium">No preview</span>
-                                  </div>
-                                </div>
-                              )}
-                              {creative.type === "video" && creative.thumbnailUrl && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="w-14 h-14 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
-                                    <Play className="w-6 h-6 text-foreground ml-1" />
-                                  </div>
-                                </div>
-                              )}
+                            <div className="relative">
+                              <CreativeCardThumbnail
+                                name={creative.name}
+                                type={creative.type}
+                                thumbnailUrl={creative.thumbnailUrl}
+                                mediaType={creative.mediaType}
+                                pageCount={creative.pageCount}
+                                typeIcon={TypeIcon}
+                                className="aspect-[4/3]"
+                              />
                               {/* Version Badge */}
-                              <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white text-xs font-bold rounded-lg">
+                              <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white text-xs font-bold rounded-lg z-10">
                                 v{creative.iteration}
                               </div>
                               {/* Status Badge */}
                               <div className={cn(
-                                "absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-lg backdrop-blur-sm",
+                                "absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-lg backdrop-blur-sm z-10",
                                 isInProgress
                                   ? "bg-amber-500/90 text-white"
                                   : "bg-emerald-500/90 text-white"
@@ -1097,7 +1128,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                                 {isInProgress ? "In Progress" : "Completed"}
                               </div>
                               {/* Open in Revue overlay on hover */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10">
                                 <span className="text-white font-medium text-sm flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
                                   <ExternalLink className="w-4 h-4" />
                                   Open in Revue
@@ -1328,7 +1359,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       </Dialog>
 
       {/* Add Creative Modal */}
-      <Dialog open={addCreativeOpen} onOpenChange={setAddCreativeOpen}>
+      <Dialog open={addCreativeOpen} onOpenChange={(open) => { if (!isAddingCreative) setAddCreativeOpen(open) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1389,9 +1420,11 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) {
+                    const isPdf = isPdfFile(file)
                     setNewCreative((prev) => ({
                       ...prev,
                       file,
+                      type: isPdf ? "document" : prev.type,
                       filePreview: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
                     }))
                   }
@@ -1436,14 +1469,23 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setAddCreativeOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddCreativeOpen(false)} disabled={isAddingCreative}>Cancel</Button>
             <Button
               onClick={handleAddCreative}
-              disabled={!newCreative.name.trim()}
+              disabled={!newCreative.name.trim() || isAddingCreative}
               className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Creative
+              {isAddingCreative ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {newCreative.file ? "Uploading..." : "Adding..."}
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Creative
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

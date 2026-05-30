@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { RevueCanvas } from "@/components/communication/communication-canvas"
+import { resolveIterationMediaType } from "@/lib/media-type"
 
 interface RevuePageProps {
   searchParams: Promise<{ projectId?: string; creativeId?: string }>
@@ -54,7 +55,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   // Fetch iterations for this creative
   const { data: iterationsRaw } = await supabase
     .from("iterations")
-    .select("id, version, name, image_url, created_by, created_at")
+    .select("id, version, name, image_url, media_type, page_count, created_by, created_at")
     .eq("creative_id", creativeId)
     .order("version", { ascending: false })
 
@@ -64,7 +65,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   const { data: feedbacksRaw } = iterationIds.length > 0
     ? await supabase
         .from("feedbacks")
-        .select("id, iteration_id, number, content, x, y, resolved, source, drawing_id, user_id, created_at")
+        .select("id, iteration_id, number, content, x, y, resolved, source, drawing_id, user_id, page_number, created_at")
         .in("iteration_id", iterationIds)
         .order("created_at", { ascending: false })
     : { data: [] }
@@ -83,7 +84,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   const { data: drawingsRaw } = iterationIds.length > 0
     ? await supabase
         .from("drawings")
-        .select("id, iteration_id, type, data, color, stroke_width, created_by, created_at")
+        .select("id, iteration_id, type, data, color, stroke_width, created_by, page_number, created_at")
         .in("iteration_id", iterationIds)
     : { data: [] }
 
@@ -124,7 +125,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   }
 
   // Build feedback map per iteration
-  type FeedbackRow = { id: string; iteration_id: string; number: string; content: string; x: number; y: number; resolved: boolean; source: string; drawing_id: string | null; user_id: string; created_at: string }
+  type FeedbackRow = { id: string; iteration_id: string; number: string; content: string; x: number; y: number; resolved: boolean; source: string; drawing_id: string | null; user_id: string; page_number: number; created_at: string }
   const feedbackMap: Record<string, FeedbackRow[]> = {}
   for (const f of (feedbacksRaw || []) as FeedbackRow[]) {
     if (!feedbackMap[f.iteration_id]) feedbackMap[f.iteration_id] = []
@@ -132,7 +133,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   }
 
   // Build drawing map per iteration
-  type DrawingRow = { id: string; iteration_id: string; type: string; data: Record<string, unknown>; color: string; stroke_width: number; created_by: string; created_at: string }
+  type DrawingRow = { id: string; iteration_id: string; type: string; data: Record<string, unknown>; color: string; stroke_width: number; created_by: string; page_number: number; created_at: string }
   const drawingMap: Record<string, DrawingRow[]> = {}
   for (const d of (drawingsRaw || []) as DrawingRow[]) {
     if (!drawingMap[d.iteration_id]) drawingMap[d.iteration_id] = []
@@ -184,12 +185,16 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     const iterFeedbacks = feedbackMap[iter.id] || []
     const iterDrawings = drawingMap[iter.id] || []
 
+    const imageUrl = iter.image_url || ""
+
     return {
       id: iter.id,
       version: iter.version,
       name: iter.name,
       timestamp: formatRelativeTime(iter.created_at),
-      imageUrl: iter.image_url || "",
+      imageUrl,
+      mediaType: resolveIterationMediaType(iter.media_type, imageUrl),
+      pageCount: iter.page_count ?? null,
       feedbacks: iterFeedbacks.map((f) => ({
         id: f.id,
         number: f.number,
@@ -200,6 +205,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
         source: f.source as "client" | "team",
         x: f.x || 0,
         y: f.y || 0,
+        pageNumber: f.page_number ?? 1,
         drawingId: f.drawing_id || undefined,
         replies: (replyMap[f.id] || []).map((r) => ({
           id: r.id,
@@ -221,6 +227,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
           shapeType: data.shapeType as "rectangle" | "circle" | "line" | "arrow" | undefined,
           color: d.color,
           strokeWidth: d.stroke_width,
+          pageNumber: d.page_number ?? 1,
         }
       }),
       aiSuggestions: [],

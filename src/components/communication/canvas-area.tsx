@@ -6,7 +6,10 @@ import { Send, X, ChevronDown, Sparkles, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DrawingPath, ShapeType } from "@/lib/fabric";
+import type { MediaType } from "@/lib/media-type";
 import { AISuggestion } from "./comments-panel";
+import { CreativeMediaDisplay } from "./creative-media-display";
+import type { PdfPageViewerReadyPayload } from "./pdf-page-viewer";
 
 interface CompareIteration {
   id: string;
@@ -61,6 +64,11 @@ interface CanvasAreaProps {
   onMarkerClick?: (markerId: string) => void;
   onAddReply?: (markerId: string, reply: ReplyItem) => void;
   imageUrl?: string;
+  mediaType?: MediaType;
+  currentPage?: number;
+  pageCount?: number | null;
+  compareMediaType?: MediaType;
+  onPdfDocumentReady?: (payload: PdfPageViewerReadyPayload) => void;
   rotation?: number;
   compareMode?: boolean;
   compareImageUrl?: string;
@@ -117,6 +125,11 @@ export function CanvasArea({
   onMarkerClick,
   onAddReply,
   imageUrl = "/assets/login.png",
+  mediaType = "image",
+  currentPage = 1,
+  pageCount = null,
+  compareMediaType = "image",
+  onPdfDocumentReady,
   rotation = 0,
   compareMode = false,
   compareImageUrl,
@@ -168,7 +181,6 @@ export function CanvasArea({
 
   // Current drawing for feedback association
   const [currentDrawing, setCurrentDrawing] = useState<DrawingPath | null>(null);
-  const [displayedSize, setDisplayedSize] = useState({ width: 0, height: 0 });
 
   const drawings = externalDrawings;
   const markers = externalMarkers || [];
@@ -179,31 +191,6 @@ export function CanvasArea({
 
   // Spacebar pan state
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-
-  // Track image natural size for SVG viewBox
-  useEffect(() => {
-    if (!imageRef.current) return;
-    const img = imageRef.current.querySelector("img") as HTMLImageElement;
-    if (!img) return;
-
-    const syncSize = () => {
-      const rect = img.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        setDisplayedSize({ width: rect.width, height: rect.height });
-      }
-    };
-
-    if (img.complete && img.naturalWidth > 0) syncSize();
-    img.addEventListener("load", syncSize);
-
-    const observer = new ResizeObserver(syncSize);
-    observer.observe(img);
-
-    return () => {
-      img.removeEventListener("load", syncSize);
-      observer.disconnect();
-    };
-  }, [imageUrl]);
 
   // Get pointer position relative to SVG overlay
   const getSvgPoint = useCallback((e: React.PointerEvent | React.MouseEvent): { x: number; y: number } | null => {
@@ -599,10 +586,15 @@ export function CanvasArea({
   const handleSubmitFeedback = () => {
     if (!feedbackText.trim()) return;
     const newNum = localFeedbackCount + 1;
-    const feedbackId = `${currentIteration}.${newNum}`;
+    const feedbackNumber = `${currentIteration}.${newNum}`;
+    // Use a real UUID for the id so the optimistic row matches the DB primary key
+    // (the human-readable "1.6" goes into `number` only, for display).
+    const feedbackId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `${feedbackNumber}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     onAddFeedback?.({
       id: feedbackId,
-      number: feedbackId,
+      number: feedbackNumber,
       content: feedbackText.trim(),
       x: markerPosition.x,
       y: markerPosition.y,
@@ -694,9 +686,10 @@ export function CanvasArea({
         style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px)` }}
       >
         <div className="flex flex-col items-center gap-4">
-          {/* Creative Image with SVG Drawing Overlay */}
+          {/* Media + annotation overlay (image or PDF page) */}
           <div
             ref={imageRef}
+            data-creative-media-root="primary"
             className={cn(
               "relative shadow-2xl rounded-lg overflow-hidden pointer-events-auto",
               isInteractiveTool && !compareMode && viewMode === "comments" && "ring-2 ring-blue-400 ring-offset-2"
@@ -706,20 +699,27 @@ export function CanvasArea({
               transformOrigin: "center center",
             }}
             onClick={handleImageClick}
+            role="presentation"
+            aria-label={
+              mediaType === "pdf" && pageCount
+                ? `PDF page ${currentPage} of ${pageCount}`
+                : "Creative canvas"
+            }
           >
-            {/* Background Image */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl}
+            <CreativeMediaDisplay
+              mediaType={mediaType}
+              url={imageUrl}
+              page={currentPage}
+              displayWidth={500}
               alt="Creative Preview"
-              className="max-w-none select-none w-[350px] lg:w-[420px] xl:w-[500px] h-auto"
-              draggable={false}
+              className="w-[350px] lg:w-[420px] xl:w-[500px]"
+              onPdfReady={onPdfDocumentReady}
             />
 
-            {/* SVG Drawing Overlay */}
             <svg
               ref={svgRef}
               className="absolute top-0 left-0 w-full h-full"
+              aria-hidden
               style={{
                 pointerEvents: isDrawingTool ? "auto" : "none",
                 touchAction: "none",
@@ -755,12 +755,19 @@ export function CanvasArea({
                   backgroundImage: "linear-gradient(rgba(168, 85, 247, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(168, 85, 247, 0.4) 1px, transparent 1px)",
                   backgroundSize: "24px 24px",
                 }} />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2.5 animate-pulse">
-                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Analyzing Design...
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2.5 animate-pulse">
+                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Analyzing Design...
+                  </div>
+                  {mediaType === "pdf" && pageCount && pageCount > 1 && (
+                    <p className="text-xs text-white/90 bg-black/50 px-3 py-1 rounded-full">
+                      Analyses current page only (page {currentPage})
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -873,11 +880,18 @@ export function CanvasArea({
                 </div>
               </div>
               <div
+                data-creative-media-root="primary"
                 className="relative shadow-2xl rounded-lg overflow-hidden bg-white dark:bg-[#2a2a2a]"
                 style={{ transform: `scale(${zoom / 100}) rotate(${rotation}deg)`, transformOrigin: "center center" }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} alt="Current Iteration" className="max-w-none select-none w-[280px] lg:w-[340px] xl:w-[400px] h-auto" draggable={false} />
+                <CreativeMediaDisplay
+                  mediaType={mediaType}
+                  url={imageUrl}
+                  page={currentPage}
+                  displayWidth={400}
+                  alt="Current Iteration"
+                  className="w-[280px] lg:w-[340px] xl:w-[400px]"
+                />
               </div>
             </div>
 
@@ -923,12 +937,19 @@ export function CanvasArea({
                 </div>
               </div>
               <div
+                data-creative-media-root="compare"
                 className="relative shadow-2xl rounded-lg overflow-hidden bg-white dark:bg-[#2a2a2a]"
                 style={{ transform: `scale(${zoom / 100}) rotate(${rotation}deg)`, transformOrigin: "center center" }}
               >
                 {compareImageUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={compareImageUrl} alt="Compare Iteration" className="max-w-none select-none w-[280px] lg:w-[340px] xl:w-[400px] h-auto" draggable={false} />
+                  <CreativeMediaDisplay
+                    mediaType={compareMediaType}
+                    url={compareImageUrl}
+                    page={currentPage}
+                    displayWidth={400}
+                    alt="Compare Iteration"
+                    className="w-[280px] lg:w-[340px] xl:w-[400px]"
+                  />
                 ) : (
                   <div className="w-[280px] lg:w-[340px] xl:w-[400px] h-[350px] lg:h-[425px] xl:h-[500px] flex items-center justify-center bg-gray-100 dark:bg-[#1a1a1a]">
                     <p className="text-gray-500 dark:text-gray-400">Select an iteration to compare</p>
@@ -1113,6 +1134,14 @@ export function CanvasArea({
           )}
         >
           <span>Compare Mode Active</span>
+          {mediaType === "pdf" && pageCount && pageCount > 1 && (
+            <>
+              <span className="text-purple-200">&bull;</span>
+              <span className="text-purple-200">
+                Page {currentPage} of {pageCount} on both sides
+              </span>
+            </>
+          )}
           <span className="text-purple-200">&bull;</span>
           <span className="text-purple-200">Press R to rotate &bull; K to exit</span>
         </div>

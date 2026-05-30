@@ -39,6 +39,7 @@ export interface Feedback {
   source: "client" | "team";
   x?: number;
   y?: number;
+  pageNumber: number;
   drawingId?: string;
 }
 
@@ -71,6 +72,8 @@ interface CommentsPanelProps {
   userRole?: "owner" | "designer" | "client";
   workmode?: "creative" | "productive";
   currentUser?: { name: string; avatar: string; color: string };
+  /** When true, show page number on every feedback (multi-page PDF). */
+  showPageLabels?: boolean;
 }
 
 // Default current user fallback
@@ -91,6 +94,7 @@ export function CommentsPanel({
   userRole = "client",
   workmode = "productive",
   currentUser: propCurrentUser,
+  showPageLabels = false,
 }: CommentsPanelProps) {
   const currentUser = propCurrentUser || defaultCurrentUser;
   const [feedbacks, setFeedbacks] = useState<Feedback[]>(externalFeedbacks || []);
@@ -345,6 +349,11 @@ export function CommentsPanel({
                         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                           #{feedback.number}
                         </span>
+                        {(showPageLabels || feedback.pageNumber > 1) && (
+                          <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#333]">
+                            Page {feedback.pageNumber}
+                          </span>
+                        )}
                         <span className="font-medium text-sm text-gray-800 dark:text-white">
                           {feedback.user.name}
                         </span>

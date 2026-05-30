@@ -1,5 +1,7 @@
 // Types for the Revue Tool communications/feedback feature
 
+export type { MediaType } from "@/lib/media-type"
+
 export interface Brief {
   id: string
   title: string
@@ -13,6 +15,8 @@ export interface Iteration {
   brief_id: string
   iteration_number: number
   image_url: string
+  media_type?: "image" | "pdf"
+  page_count?: number | null
   created_at: string
 }
 
@@ -28,6 +32,7 @@ export interface DrawingPath {
   points: { x: number; y: number }[]
   color: string
   size: number
+  page_number?: number
 }
 
 export interface Feedback {
@@ -40,6 +45,7 @@ export interface Feedback {
   user_avatar?: string
   marker_x?: number
   marker_y?: number
+  page_number?: number
   drawing_paths?: DrawingPath[] // For drawing-type feedbacks
   feedback_type: "comment" | "drawing"
   is_completed?: boolean // Mark feedback as addressed/completed
@@ -63,6 +69,7 @@ export interface Comment {
 export interface Annotation {
   id: string
   iteration_id: string
+  page_number?: number
   type: "freehand" | "rectangle" | "circle" | "arrow"
   data: AnnotationData
   color: string

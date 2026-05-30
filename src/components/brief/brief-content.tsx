@@ -24,6 +24,7 @@ import {
   Video,
   FileText,
   Palette,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,6 +52,8 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
+import { getMediaTypeFromUrl } from "@/lib/media-type"
 
 // Types
 interface Deliverable {
@@ -125,10 +128,13 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
   const [newCreative, setNewCreative] = useState({ name: "", type: "design" as Creative["type"], file: null as File | null, filePreview: "" })
   const creativeFileInputRef = useRef<HTMLInputElement>(null)
+  const [isAddingCreative, setIsAddingCreative] = useState(false)
+  const [deletingCreativeId, setDeletingCreativeId] = useState<string | null>(null)
 
   // Add Deliverable per-creative state
   const [addDeliverableCreativeId, setAddDeliverableCreativeId] = useState<string | null>(null)
   const [newDeliverableName, setNewDeliverableName] = useState("")
+  const [isAddingDeliverable, setIsAddingDeliverable] = useState(false)
 
   type StatusKey = "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
 
@@ -193,11 +199,22 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
 
   // Add Creative handler
   const handleAddCreative = async () => {
-    if (!projectData || !newCreative.name.trim()) return
+    if (!projectData || !newCreative.name.trim() || isAddingCreative) return
+    setIsAddingCreative(true)
+    try {
+      await handleAddCreativeInner()
+    } finally {
+      setIsAddingCreative(false)
+    }
+  }
+
+  const handleAddCreativeInner = async () => {
+    if (!projectData) return
 
     let uploadedUrl: string | null = null
     if (newCreative.file) {
-      const path = `${projectData.id}/${Date.now()}-${newCreative.file.name}`
+      const safeName = newCreative.file.name.replace(/[^A-Za-z0-9._-]+/g, "-")
+      const path = `${projectData.id}/${Date.now()}-${safeName}`
       const { error: uploadError } = await supabase.storage.from("creatives").upload(path, newCreative.file)
       if (uploadError) {
         console.error("Failed to upload file:", uploadError)
@@ -256,50 +273,60 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
 
   // Delete Creative handler
   const handleDeleteCreative = async (creativeId: string) => {
-    if (!projectData) return
-    const { error } = await supabase.from("creatives").delete().eq("id", creativeId)
-    if (error) {
-      console.error("Failed to delete creative:", error)
-      return
+    if (!projectData || deletingCreativeId) return
+    setDeletingCreativeId(creativeId)
+    try {
+      const { error } = await supabase.from("creatives").delete().eq("id", creativeId)
+      if (error) {
+        console.error("Failed to delete creative:", error)
+        return
+      }
+      const updatedCreatives = projectData.creatives.filter((c) => c.id !== creativeId)
+      const updated = { ...projectData, creatives: updatedCreatives }
+      setProjectData(updated)
+      setEditData(updated)
+      await recalculateBriefStatus(updatedCreatives)
+    } finally {
+      setDeletingCreativeId(null)
     }
-    const updatedCreatives = projectData.creatives.filter((c) => c.id !== creativeId)
-    const updated = { ...projectData, creatives: updatedCreatives }
-    setProjectData(updated)
-    setEditData(updated)
-    await recalculateBriefStatus(updatedCreatives)
   }
 
   // Add Deliverable to a creative handler
   const handleAddDeliverableToCreative = async (creativeId: string) => {
-    if (!projectData || !newDeliverableName.trim()) return
+    if (!projectData || !newDeliverableName.trim() || isAddingDeliverable) return
     const creative = projectData.creatives.find((c) => c.id === creativeId)
     if (!creative) return
 
-    const newDeliverable: Deliverable = {
-      id: `d${Date.now()}`,
-      name: newDeliverableName.trim(),
-      status: "pending",
+    setIsAddingDeliverable(true)
+    try {
+      const newDeliverable: Deliverable = {
+        id: `d${Date.now()}`,
+        name: newDeliverableName.trim(),
+        status: "pending",
+      }
+      const updatedDeliverables = [...creative.deliverables, newDeliverable]
+
+      const { error } = await supabase
+        .from("creatives")
+        .update({ deliverables: updatedDeliverables })
+        .eq("id", creativeId)
+
+      if (error) {
+        console.error("Failed to add deliverable:", error)
+        return
+      }
+
+      const updatedCreatives = projectData.creatives.map((c) =>
+        c.id === creativeId ? { ...c, deliverables: updatedDeliverables } : c
+      )
+      const updated = { ...projectData, creatives: updatedCreatives }
+      setProjectData(updated)
+      setEditData(updated)
+      setNewDeliverableName("")
+      setAddDeliverableCreativeId(null)
+    } finally {
+      setIsAddingDeliverable(false)
     }
-    const updatedDeliverables = [...creative.deliverables, newDeliverable]
-
-    const { error } = await supabase
-      .from("creatives")
-      .update({ deliverables: updatedDeliverables })
-      .eq("id", creativeId)
-
-    if (error) {
-      console.error("Failed to add deliverable:", error)
-      return
-    }
-
-    const updatedCreatives = projectData.creatives.map((c) =>
-      c.id === creativeId ? { ...c, deliverables: updatedDeliverables } : c
-    )
-    const updated = { ...projectData, creatives: updatedCreatives }
-    setProjectData(updated)
-    setEditData(updated)
-    setNewDeliverableName("")
-    setAddDeliverableCreativeId(null)
   }
 
   if (isLoading || !projectData) {
@@ -455,32 +482,39 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
                 const isExpanded = expandedCreatives.has(creative.id)
                 const stats = getDeliverableStats(creative.deliverables)
                 const TypeIcon = creativeTypeIcons[creative.type]
+                const isDeleting = deletingCreativeId === creative.id
 
                 return (
                   <div
                     key={creative.id}
-                    className="rounded-xl border border-border bg-card overflow-hidden"
+                    className={`relative rounded-xl border border-border bg-card overflow-hidden transition-opacity ${isDeleting ? "opacity-60 pointer-events-none" : ""}`}
                   >
+                    {isDeleting && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/40 backdrop-blur-[1px]">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-card border border-border shadow-sm text-sm text-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Deleting...
+                        </div>
+                      </div>
+                    )}
                     {/* Creative Header */}
                     <div className="p-4">
                       <div className="flex items-start gap-4">
                         {/* Thumbnail */}
                         <div
                           onClick={() => handleCreativeClick(creative)}
-                          className="w-32 h-24 rounded-lg overflow-hidden bg-muted shrink-0 cursor-pointer group relative"
+                          className="w-32 h-24 rounded-lg shrink-0 cursor-pointer group relative"
                         >
-                          {creative.thumbnailUrl ? (
-                            <img
-                              src={creative.thumbnailUrl}
-                              alt={creative.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#5C6ECD] to-[#8B5CF6]">
-                              <TypeIcon className="w-8 h-8 text-white" />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <CreativeCardThumbnail
+                            name={creative.name}
+                            type={creative.type}
+                            thumbnailUrl={creative.thumbnailUrl}
+                            mediaType={getMediaTypeFromUrl(creative.thumbnailUrl)}
+                            typeIcon={TypeIcon}
+                            className="w-full h-full rounded-lg"
+                            showVideoOverlay={false}
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center rounded-lg">
                             <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
                         </div>
@@ -528,10 +562,20 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     className="text-destructive"
+                                    disabled={isDeleting}
                                     onClick={() => handleDeleteCreative(creative.id)}
                                   >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Delete
+                                    {isDeleting ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Deleting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete
+                                      </>
+                                    )}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -668,7 +712,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
       </div>
 
       {/* Add Creative Dialog */}
-      <Dialog open={addCreativeOpen} onOpenChange={setAddCreativeOpen}>
+      <Dialog open={addCreativeOpen} onOpenChange={(open) => { if (!isAddingCreative) setAddCreativeOpen(open) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -770,21 +814,30 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setAddCreativeOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddCreativeOpen(false)} disabled={isAddingCreative}>Cancel</Button>
             <Button
               onClick={handleAddCreative}
-              disabled={!newCreative.name.trim()}
+              disabled={!newCreative.name.trim() || isAddingCreative}
               className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Creative
+              {isAddingCreative ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {newCreative.file ? "Uploading..." : "Adding..."}
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Creative
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Add Deliverable Dialog */}
-      <Dialog open={!!addDeliverableCreativeId} onOpenChange={(open) => { if (!open) setAddDeliverableCreativeId(null) }}>
+      <Dialog open={!!addDeliverableCreativeId} onOpenChange={(open) => { if (!open && !isAddingDeliverable) setAddDeliverableCreativeId(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -802,8 +855,9 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
                 placeholder="e.g., Final mockup, Icon set..."
                 value={newDeliverableName}
                 onChange={(e) => setNewDeliverableName(e.target.value)}
+                disabled={isAddingDeliverable}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && newDeliverableName.trim() && addDeliverableCreativeId) {
+                  if (e.key === "Enter" && newDeliverableName.trim() && addDeliverableCreativeId && !isAddingDeliverable) {
                     handleAddDeliverableToCreative(addDeliverableCreativeId)
                   }
                 }}
@@ -811,14 +865,23 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setAddDeliverableCreativeId(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddDeliverableCreativeId(null)} disabled={isAddingDeliverable}>Cancel</Button>
             <Button
               onClick={() => addDeliverableCreativeId && handleAddDeliverableToCreative(addDeliverableCreativeId)}
-              disabled={!newDeliverableName.trim()}
+              disabled={!newDeliverableName.trim() || isAddingDeliverable}
               className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Deliverable
+              {isAddingDeliverable ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Deliverable
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

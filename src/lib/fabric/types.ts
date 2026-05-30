@@ -18,6 +18,7 @@ export interface DrawingPath {
   line?: { x1: number; y1: number; x2: number; y2: number };
   color: string;
   strokeWidth: number;
+  pageNumber?: number;
 }
 
 // Extended fabric object with custom properties
