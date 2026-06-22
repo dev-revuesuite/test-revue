@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { RevueCanvas } from "@/components/communication/communication-canvas"
 import { resolveIterationMediaType } from "@/lib/media-type"
+import { getUserRole } from "@/lib/get-user-role"
 
 interface RevuePageProps {
   searchParams: Promise<{ projectId?: string; creativeId?: string }>
@@ -236,14 +237,10 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   const currentUser = getUserDisplay(user.id)
 
-  // Fetch user role from organization_members
-  const { data: memberData } = await supabase
-    .from("organization_members")
-    .select("role")
-    .eq("user_id", user.id)
-    .single()
-
-  const userRole = (memberData?.role as "owner" | "designer" | "client") || "client"
+  // Resolve role via the shared helper so org owners (no row in
+  // organization_members) are correctly detected as "admin", matching the rest
+  // of the app (Room, Studio, etc.).
+  const { role: userRole } = await getUserRole(supabase, user.id)
 
   return (
     <RevueCanvas

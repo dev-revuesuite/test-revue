@@ -13,6 +13,7 @@ import { ShareDialog } from "./share-dialog";
 import { NewIterationDialog } from "./new-iteration-dialog";
 import { ShapeType, DrawingPath } from "@/lib/fabric";
 import { getMediaTypeFromFile, getMediaTypeFromUrl, type MediaType } from "@/lib/media-type";
+import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
 import { captureCreativeMediaSnapshot } from "@/lib/capture-creative-media";
 import { PdfPagePager } from "./pdf-page-pager";
 
@@ -65,7 +66,7 @@ interface RevueCanvasProps {
   clientLogo?: string;
   initialIterations?: Iteration[];
   currentUser?: { name: string; avatar: string; color: string };
-  userRole?: "owner" | "designer" | "client";
+  userRole?: "owner" | "admin" | "designer" | "client";
   workmode?: "creative" | "productive";
 }
 
@@ -98,9 +99,15 @@ export function RevueCanvas({
   const startIterations = (propIterations || []).map(normalizeIteration);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Role-based permissions
-  const canUploadIterations = userRole === "owner" || userRole === "designer";
-  const canAddFeedback = userRole === "owner" || userRole === "client" || userRole === "designer";
+  // Role-based permissions ("admin" is the studio role used elsewhere in the app
+  // and is treated as the organization owner here).
+  const canUploadIterations =
+    userRole === "owner" || userRole === "admin" || userRole === "designer";
+  const canAddFeedback =
+    userRole === "owner" ||
+    userRole === "admin" ||
+    userRole === "client" ||
+    userRole === "designer";
   const canUseSidebar = true; // everyone can view
 
   const [zoom, setZoom] = useState(100);
@@ -642,12 +649,13 @@ export function RevueCanvas({
     let imageUrl = URL.createObjectURL(file);
     let newId = crypto.randomUUID();
     const mediaType = getMediaTypeFromFile(file);
+    let pageCount: number | null = null;
 
     // Upload to Supabase Storage and create iteration record if connected to DB
     if (creativeId) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
-        // Upload image to storage
+        // Upload file to storage (image or PDF)
         const filePath = `iterations/${creativeId}/${newId}/${file.name}`;
         const { data: uploadData } = await supabase.storage
           .from("revue-assets")
@@ -675,6 +683,17 @@ export function RevueCanvas({
           newId = iterData.id;
         }
 
+        // For PDFs, read page count and persist so pager renders immediately
+        if (mediaType === "pdf") {
+          pageCount = await getPdfPageCountFromUrl(imageUrl);
+          if (pageCount != null) {
+            await supabase
+              .from("iterations")
+              .update({ page_count: pageCount })
+              .eq("id", newId);
+          }
+        }
+
         // Update creative's iteration count
         await supabase.from("creatives").update({ iteration: newVersion }).eq("id", creativeId);
       }
@@ -687,7 +706,7 @@ export function RevueCanvas({
       timestamp: "Just now",
       imageUrl: imageUrl,
       mediaType,
-      pageCount: null,
+      pageCount,
       drawings: [],
       feedbacks: [],
       aiSuggestions: [],
@@ -695,6 +714,8 @@ export function RevueCanvas({
 
     setIterations(prev => [newIteration, ...prev]);
     setActiveIterationId(newIteration.id);
+    // Reset to page 1 for the new iteration
+    setCurrentPage(1);
     // Dialog closes itself when onUpload resolves; no need to close here.
   };
 
@@ -928,9 +949,9 @@ export function RevueCanvas({
         />
       )}
 
-      {/* PDF page pager */}
+      {/* PDF page pager — sits directly above the zoom controls cluster */}
       {isPdfIteration && effectivePageCount > 1 && !isFullscreen && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+        <div className="fixed bottom-16 right-[324px] lg:right-[364px] xl:right-[404px] z-50 pointer-events-auto">
           <PdfPagePager
             currentPage={currentPage}
             pageCount={effectivePageCount}
@@ -963,6 +984,7 @@ export function RevueCanvas({
         onUpload={handleNewIterationUpload}
         currentIteration={currentIteration?.version || 0}
         isFirstIteration={iterations.length === 0}
+        allowedMediaType={currentIteration?.mediaType}
       />
     </div>
   );

@@ -69,7 +69,7 @@ interface CommentsPanelProps {
   viewMode?: "view" | "comments" | "ai";
   aiSuggestions?: AISuggestion[];
   onIgnoreAISuggestion?: (id: string) => void;
-  userRole?: "owner" | "designer" | "client";
+  userRole?: "owner" | "admin" | "designer" | "client";
   workmode?: "creative" | "productive";
   currentUser?: { name: string; avatar: string; color: string };
   /** When true, show page number on every feedback (multi-page PDF). */
