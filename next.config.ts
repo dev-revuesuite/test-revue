@@ -4,6 +4,7 @@ import { APP_BASE_PATH } from "./src/lib/base-path";
 
 const nextConfig: NextConfig = {
   basePath: APP_BASE_PATH,
+  skipTrailingSlashRedirect: true,
   env: {
     NEXT_PUBLIC_BASE_PATH: APP_BASE_PATH,
   },
