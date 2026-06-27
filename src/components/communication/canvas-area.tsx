@@ -881,6 +881,13 @@ export function CanvasArea({
             ))}
           </div>
 
+          {/* Tool hint — inline above toggle so it does not cover Comments / AI buttons */}
+          {isInteractiveTool && !showPopover && !showChatPopover && !compareMode && (
+            <div className="pointer-events-none bg-gray-900/90 text-white text-xs px-4 py-2 rounded-full shadow-lg animate-in fade-in duration-300">
+              {getToolHint()}
+            </div>
+          )}
+
           {/* View Mode Toggle */}
           {!compareMode && !isFullscreen && (
             <div className="pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-300 z-50">
@@ -1171,18 +1178,6 @@ export function CanvasArea({
             </div>
           </div>
         </>
-      )}
-
-      {/* Tool hint */}
-      {isInteractiveTool && !showPopover && !showChatPopover && !compareMode && (
-        <div
-          className={cn(
-            "absolute bottom-20 transform -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none z-30",
-            isFullscreen ? "left-1/2" : "left-[calc(50%-(132px))] lg:left-[calc(50%-(152px))] xl:left-[calc(50%-(172px))]"
-          )}
-        >
-          {getToolHint()}
-        </div>
       )}
 
       {/* Compare Mode hint */}
