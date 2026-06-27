@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DrawingPath, ShapeType } from "@/lib/fabric";
 import type { MediaType } from "@/lib/media-type";
 import { AISuggestion } from "./comments-panel";
+import { bboxToPercentRect } from "@/lib/ai-suggestion-display";
 import { CreativeMediaDisplay } from "./creative-media-display";
 import type { PdfPageViewerReadyPayload } from "./pdf-page-viewer";
 
@@ -772,29 +773,88 @@ export function CanvasArea({
               </div>
             )}
 
-            {/* AI Visual Annotations */}
+            {/* AI Visual Annotations — bbox from API pixel coords → % of analyzed image */}
             {viewMode === "ai" && !aiAnalysisActive && aiSuggestions.length > 0 && (
               <div className="absolute inset-0 pointer-events-none z-15">
                 {aiSuggestions.map((suggestion, index) => {
-                  const severityColor = suggestion.severity === "error"
-                    ? "border-red-500 bg-red-500"
-                    : suggestion.severity === "warning"
-                      ? "border-amber-500 bg-amber-500"
-                      : "border-blue-500 bg-blue-500";
+                  const severityStyles =
+                    suggestion.severity === "error"
+                      ? {
+                          border: "border-red-500",
+                          fill: "bg-red-500/25",
+                          badge: "bg-red-500",
+                        }
+                      : suggestion.severity === "warning"
+                        ? {
+                            border: "border-amber-500",
+                            fill: "bg-amber-500/25",
+                            badge: "bg-amber-500",
+                          }
+                        : {
+                            border: "border-blue-500",
+                            fill: "bg-blue-500/25",
+                            badge: "bg-blue-500",
+                          };
+
+                  const hasBboxOverlay =
+                    suggestion.bbox &&
+                    suggestion.imageWidth &&
+                    suggestion.imageHeight &&
+                    suggestion.imageWidth > 0 &&
+                    suggestion.imageHeight > 0;
+
+                  const bboxPercent = hasBboxOverlay
+                    ? bboxToPercentRect(
+                        suggestion.bbox!,
+                        suggestion.imageWidth!,
+                        suggestion.imageHeight!
+                      )
+                    : null;
+
                   return (
                     <div
                       key={suggestion.id}
                       className="absolute animate-in fade-in zoom-in duration-300"
-                      style={{
-                        left: `${suggestion.location?.x || 50}%`,
-                        top: `${suggestion.location?.y || 50}%`,
-                        transform: "translate(-50%, -50%)",
-                        animationDelay: `${index * 100}ms`,
-                      }}
+                      style={
+                        bboxPercent
+                          ? {
+                              left: `${bboxPercent.left}%`,
+                              top: `${bboxPercent.top}%`,
+                              width: `${bboxPercent.width}%`,
+                              height: `${bboxPercent.height}%`,
+                              animationDelay: `${index * 100}ms`,
+                            }
+                          : {
+                              left: `${suggestion.location?.x || 50}%`,
+                              top: `${suggestion.location?.y || 50}%`,
+                              transform: "translate(-50%, -50%)",
+                              animationDelay: `${index * 100}ms`,
+                            }
+                      }
                     >
-                      <div className={cn("w-16 h-12 border-2 border-dashed rounded-md relative", severityColor.split(" ")[0])}>
-                        <div className={cn("absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md", severityColor.split(" ")[1])}>
-                          {index + 1}
+                      <div
+                        className={cn(
+                          "relative h-full w-full border rounded-[2px]",
+                          severityStyles.border,
+                          severityStyles.fill,
+                          !bboxPercent && "w-16 h-12"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "absolute -top-[10px] left-0 h-[10px] px-0.5 rounded-t-[2px] flex items-center gap-0.5 text-white text-[6px] font-bold leading-none shadow-sm whitespace-nowrap",
+                            severityStyles.badge
+                          )}
+                        >
+                          <span>{index + 1}</span>
+                          {suggestion.title && (
+                            <>
+                              <span className="opacity-70">|</span>
+                              <span className="font-medium">
+                                {suggestion.title}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

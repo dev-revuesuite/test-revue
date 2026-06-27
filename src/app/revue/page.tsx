@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server"
 import { RevueCanvas } from "@/components/communication/communication-canvas"
 import { resolveIterationMediaType } from "@/lib/media-type"
 import { getUserRole } from "@/lib/get-user-role"
+import {
+  buildAiSuggestionMap,
+  type AiSuggestionRow,
+} from "@/lib/map-ai-suggestion-rows"
 
 interface RevuePageProps {
   searchParams: Promise<{ projectId?: string; creativeId?: string }>
@@ -88,6 +92,27 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
         .select("id, iteration_id, type, data, color, stroke_width, created_by, page_number, created_at")
         .in("iteration_id", iterationIds)
     : { data: [] }
+
+  // Fetch AI suggestions for all iterations (Phase 1 persistence)
+  const { data: aiSuggestionsRaw, error: aiSuggestionsError } =
+    iterationIds.length > 0
+      ? await supabase
+          .from("ai_suggestions")
+          .select(
+            "id, run_id, iteration_id, page_number, analysis_type, label, description, bbox_x1, bbox_y1, bbox_x2, bbox_y2, severity, sort_order, ignored, created_at, ai_analysis_runs(image_width, image_height)"
+          )
+          .in("iteration_id", iterationIds)
+          .eq("ignored", false)
+          .order("sort_order", { ascending: true })
+      : { data: [], error: null }
+
+  if (aiSuggestionsError) {
+    console.error("Failed to load AI suggestions:", aiSuggestionsError.message)
+  }
+
+  const aiSuggestionMap = buildAiSuggestionMap(
+    (aiSuggestionsRaw || []) as AiSuggestionRow[]
+  )
 
   // Fetch user profiles for all user_ids involved
   const allUserIds = new Set<string>()
@@ -231,7 +256,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
           pageNumber: d.page_number ?? 1,
         }
       }),
-      aiSuggestions: [],
+      aiSuggestions: aiSuggestionMap[iter.id] || [],
     }
   })
 

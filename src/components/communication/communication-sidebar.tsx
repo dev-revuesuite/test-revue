@@ -67,7 +67,12 @@ const shapeOptions: { type: ShapeType; icon: React.ReactNode; label: string }[] 
   { type: "arrow", icon: <ArrowRight className="w-4 h-4" />, label: "Arrow" },
 ];
 
-// AI Analysis options
+const LIVE_AI_ANALYSIS_TYPES: AIAnalysisType[] = ["spacing", "spelling"];
+
+function isLiveAiAnalysisType(type: AIAnalysisType): type is "spacing" | "spelling" {
+  return LIVE_AI_ANALYSIS_TYPES.includes(type);
+}
+
 const aiAnalysisOptions: { type: AIAnalysisType; label: string; icon: React.ReactNode; description: string }[] = [
   { type: "complete", label: "Full Design Review", icon: <ScanLine className="w-4 h-4" />, description: "Comprehensive analysis" },
   { type: "typography", label: "Typography Check", icon: <Type className="w-4 h-4" />, description: "Line height & fonts" },
@@ -95,6 +100,7 @@ interface CommunicationSidebarProps {
   onShowAIOptionsChange?: (show: boolean) => void;
   // Role-based
   canAddFeedback?: boolean;
+  canRunAiAnalysis?: boolean;
   /** Multi-page PDF: show “current page only” note in AI panel */
   isPdfCreative?: boolean;
   currentPage?: number;
@@ -115,6 +121,7 @@ export function CommunicationSidebar({
   showAIOptions: externalShowAIOptions,
   onShowAIOptionsChange,
   canAddFeedback = true,
+  canRunAiAnalysis = false,
   isPdfCreative = false,
   currentPage = 1,
   pageCount = 1,
@@ -136,6 +143,7 @@ export function CommunicationSidebar({
   const toolsDisabled = aiAnalysisActive || viewMode === "ai";
 
   const handleAIAnalysis = (type: AIAnalysisType) => {
+    if (!canRunAiAnalysis || !isLiveAiAnalysisType(type)) return;
     setShowAIOptions(false);
     onStartAIAnalysis?.(type);
   };
@@ -151,8 +159,8 @@ export function CommunicationSidebar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => setShowAIOptions(!showAIOptions)}
-                  disabled={aiAnalysisActive}
+                  onClick={() => canRunAiAnalysis && setShowAIOptions(!showAIOptions)}
+                  disabled={aiAnalysisActive || !canRunAiAnalysis}
                   className={cn(
                     "relative h-10 w-10 rounded-lg flex items-center justify-center transition-all overflow-hidden group",
                     showAIOptions || aiAnalysisActive
@@ -166,7 +174,11 @@ export function CommunicationSidebar({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>AI Analyse {aiAnalysisActive && "(Analyzing...)"}</p>
+                <p>
+                  {canRunAiAnalysis
+                    ? `AI Analyse ${aiAnalysisActive ? "(Analyzing...)" : ""}`
+                    : "AI Analyse (team only)"}
+                </p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -250,7 +262,7 @@ export function CommunicationSidebar({
         )}
 
         {/* AI Analysis Options Panel */}
-        {showAIOptions && !aiAnalysisActive && (
+        {showAIOptions && !aiAnalysisActive && canRunAiAnalysis && (
           <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-xl border border-gray-200 dark:border-[#444] p-3 w-[220px] animate-in fade-in slide-in-from-left-2 duration-200">
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
@@ -276,25 +288,40 @@ export function CommunicationSidebar({
 
             {/* Analysis Options */}
             <div className="space-y-1">
-              {aiAnalysisOptions.map((option) => (
+              {aiAnalysisOptions.map((option) => {
+                const isLive = isLiveAiAnalysisType(option.type);
+                return (
                 <button
                   key={option.type}
+                  type="button"
+                  disabled={!isLive}
                   onClick={() => handleAIAnalysis(option.type)}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-900/20 dark:hover:to-pink-900/20 transition-all group"
+                  className={cn(
+                    "w-full flex items-center gap-3 p-2 rounded-lg transition-all group",
+                    isLive
+                      ? "hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 dark:hover:from-purple-900/20 dark:hover:to-pink-900/20"
+                      : "opacity-50 cursor-not-allowed"
+                  )}
                 >
-                  <div className="p-1.5 rounded-md bg-gray-100 dark:bg-[#333] group-hover:bg-gradient-to-br group-hover:from-purple-500 group-hover:to-pink-500 group-hover:text-white transition-all">
+                  <div className={cn(
+                    "p-1.5 rounded-md bg-gray-100 dark:bg-[#333] transition-all",
+                    isLive && "group-hover:bg-gradient-to-br group-hover:from-purple-500 group-hover:to-pink-500 group-hover:text-white"
+                  )}>
                     {option.icon}
                   </div>
                   <div className="text-left flex-1">
-                    <p className="text-xs font-medium text-gray-800 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-300">
+                    <p className={cn(
+                      "text-xs font-medium text-gray-800 dark:text-white",
+                      isLive && "group-hover:text-purple-700 dark:group-hover:text-purple-300"
+                    )}>
                       {option.label}
                     </p>
                     <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                      {option.description}
+                      {isLive ? option.description : "Coming soon"}
                     </p>
                   </div>
                 </button>
-              ))}
+              )})}
             </div>
           </div>
         )}

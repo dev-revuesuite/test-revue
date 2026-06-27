@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { CommunicationHeader } from "./communication-header";
 import { CommunicationSidebar } from "./communication-sidebar";
@@ -14,7 +16,8 @@ import { NewIterationDialog } from "./new-iteration-dialog";
 import { ShapeType, DrawingPath } from "@/lib/fabric";
 import { getMediaTypeFromFile, getMediaTypeFromUrl, type MediaType } from "@/lib/media-type";
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
-import { captureCreativeMediaSnapshot } from "@/lib/capture-creative-media";
+import { captureCreativeMediaForAnalysis } from "@/lib/capture-creative-media";
+import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
 import { PdfPagePager } from "./pdf-page-pager";
 
 function feedbackPageNumber(f: Feedback): number {
@@ -23,6 +26,10 @@ function feedbackPageNumber(f: Feedback): number {
 
 function drawingPageNumber(d: DrawingPath): number {
   return d.pageNumber ?? 1;
+}
+
+function aiSuggestionPageNumber(s: AISuggestion): number {
+  return s.pageNumber ?? 1;
 }
 
 function normalizeIteration(iter: Iteration): Iteration {
@@ -37,6 +44,10 @@ function normalizeIteration(iter: Iteration): Iteration {
     drawings: iter.drawings.map((d) => ({
       ...d,
       pageNumber: d.pageNumber ?? 1,
+    })),
+    aiSuggestions: iter.aiSuggestions.map((s) => ({
+      ...s,
+      pageNumber: s.pageNumber ?? 1,
     })),
   };
 }
@@ -108,6 +119,8 @@ export function RevueCanvas({
     userRole === "admin" ||
     userRole === "client" ||
     userRole === "designer";
+  const canRunAiAnalysis =
+    userRole === "owner" || userRole === "admin" || userRole === "designer";
   const canUseSidebar = true; // everyone can view
 
   const [zoom, setZoom] = useState(100);
@@ -152,9 +165,25 @@ export function RevueCanvas({
   // AI Analysis state
   const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
   const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
-  const aiSnapshotRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
+
+  // Bottom-left toast notification
+  const [toast, setToast] = useState<{ message: string; tone: "info" | "error" } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback(
+    (message: string, tone: "info" | "error" = "info") => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setToast({ message, tone });
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+    },
+    []
+  );
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Profile cache for resolving user names from realtime events
   const profileCacheRef = useRef<Record<string, { name: string; avatar: string; color: string }>>({});
@@ -338,6 +367,11 @@ export function RevueCanvas({
   const allDrawings = currentIteration?.drawings || [];
   const currentAiSuggestions = currentIteration?.aiSuggestions || [];
   const isPdfIteration = currentIteration?.mediaType === "pdf";
+  const pageFilteredAiSuggestions = isPdfIteration
+    ? currentAiSuggestions.filter(
+        (s) => aiSuggestionPageNumber(s) === currentPage
+      )
+    : currentAiSuggestions;
   const effectivePageCount = Math.max(
     1,
     currentIteration?.pageCount ?? 1
@@ -719,83 +753,168 @@ export function RevueCanvas({
     // Dialog closes itself when onUpload resolves; no need to close here.
   };
 
-  // Handle AI Analysis — rasterize visible creative (PDF page canvas or image) then run pipeline
+  // Handle AI Analysis — images from storage, PDFs from browser canvas snapshot
   const handleStartAIAnalysis = useCallback(async (type: AIAnalysisType) => {
+    if (!canRunAiAnalysis) return;
+    if (type !== "spacing" && type !== "spelling") return;
+
+    const iteration = iterations.find((item) => item.id === activeIterationId);
+    const isPdf = iteration?.mediaType === "pdf";
+    let clientImage: ClientAnalysisImageInput | undefined;
+
+    if (isPdf) {
+      if (rotation !== 0) {
+        showToast("Reset rotation to 0° before running AI analysis on a PDF.", "error");
+        return;
+      }
+
+      const captured = await captureCreativeMediaForAnalysis(
+        "primary",
+        currentPage
+      );
+      if (!captured.ok) {
+        showToast(captured.error, "error");
+        return;
+      }
+      clientImage = captured.capture;
+    }
+
     setAiAnalysisType(type);
     setAiAnalysisActive(true);
     setViewMode("ai");
 
+    console.log("[AI Analysis] Starting", {
+      analysisType: type,
+      iterationId: activeIterationId,
+      pageNumber: currentPage,
+      source: isPdf ? "client-canvas" : "storage-download",
+      clientImageWidth: clientImage?.width,
+      clientImageHeight: clientImage?.height,
+    });
+
+    try {
+      const response = await fetch("/api/ai/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          iterationId: activeIterationId,
+          analysisType: type,
+          pageNumber: currentPage,
+          ...(clientImage ? { clientImage } : {}),
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        suggestions?: AISuggestion[];
+        empty?: boolean;
+        pageNumber?: number;
+        analysisType?: AIAnalysisType;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        console.error("[AI Analysis] Failed", {
+          status: response.status,
+          error: payload.error,
+        });
+        throw new Error(payload.error || "AI analysis failed");
+      }
+
+      const resultPage = payload.pageNumber ?? currentPage;
+      const resultType = payload.analysisType ?? type;
+      const newSuggestions = payload.suggestions ?? [];
+
+      console.log("[AI Analysis] Success", {
+        analysisType: resultType,
+        pageNumber: resultPage,
+        empty: payload.empty ?? newSuggestions.length === 0,
+        suggestionCount: newSuggestions.length,
+        suggestions: newSuggestions,
+      });
+
+      setIterations((prev) =>
+        prev.map((iteration) => {
+          if (iteration.id !== activeIterationId) return iteration;
+
+          const retained = iteration.aiSuggestions.filter(
+            (suggestion) =>
+              !(
+                (suggestion.pageNumber ?? 1) === resultPage &&
+                suggestion.type === resultType
+              )
+          );
+
+          return {
+            ...iteration,
+            aiSuggestions: [...retained, ...newSuggestions],
+          };
+        })
+      );
+
+      if (payload.empty) {
+        showToast("No error found", "info");
+      }
+    } catch (error) {
+      console.error("[AI Analysis] Error", error);
+      showToast(
+        error instanceof Error ? error.message : "AI analysis failed",
+        "error"
+      );
+    } finally {
+      setAiAnalysisActive(false);
+    }
+  }, [activeIterationId, canRunAiAnalysis, currentPage, iterations, rotation, showToast]);
+
+  // Handle ignoring an AI suggestion - persisted in Supabase
+  const handleIgnoreAISuggestion = useCallback(async (id: string) => {
+    let removedSuggestion: AISuggestion | undefined;
+
     setIterations((prev) =>
-      prev.map((iteration) =>
-        iteration.id === activeIterationId
-          ? { ...iteration, aiSuggestions: [] }
-          : iteration
-      )
+      prev.map((iteration) => {
+        if (iteration.id !== activeIterationId) return iteration;
+        removedSuggestion = iteration.aiSuggestions.find(
+          (suggestion) => suggestion.id === id
+        );
+        return {
+          ...iteration,
+          aiSuggestions: iteration.aiSuggestions.filter(
+            (suggestion) => suggestion.id !== id
+          ),
+        };
+      })
     );
 
-    const snapshot = await captureCreativeMediaSnapshot("primary");
-    aiSnapshotRef.current = snapshot;
+    try {
+      const response = await fetch(`/api/ai/suggestions/${id}/ignore`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ignored: true }),
+      });
 
-    if (!snapshot) {
-      console.warn(
-        "AI analysis: could not capture creative snapshot; using mock results only."
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to ignore suggestion");
+      }
+    } catch (error) {
+      if (removedSuggestion) {
+        setIterations((prev) =>
+          prev.map((iteration) =>
+            iteration.id === activeIterationId
+              ? {
+                  ...iteration,
+                  aiSuggestions: [...iteration.aiSuggestions, removedSuggestion!],
+                }
+              : iteration
+          )
+        );
+      }
+
+      showToast(
+        error instanceof Error ? error.message : "Failed to ignore suggestion",
+        "error"
       );
     }
-
-    // TODO: send `snapshot` (PNG data URL) to image AI API when backend is wired
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    const mockSuggestions: AISuggestion[] = getMockSuggestions(type);
-    setIterations((prev) =>
-      prev.map((iteration) =>
-        iteration.id === activeIterationId
-          ? { ...iteration, aiSuggestions: mockSuggestions }
-          : iteration
-      )
-    );
-    setAiAnalysisActive(false);
-  }, [activeIterationId]);
-
-  // Handle ignoring an AI suggestion - updates the current iteration
-  const handleIgnoreAISuggestion = useCallback((id: string) => {
-    setIterations(prev => prev.map(iteration =>
-      iteration.id === activeIterationId
-        ? { ...iteration, aiSuggestions: iteration.aiSuggestions.filter(s => s.id !== id) }
-        : iteration
-    ));
-  }, [activeIterationId]);
-
-  // Generate mock AI suggestions based on analysis type
-  const getMockSuggestions = (type: AIAnalysisType): AISuggestion[] => {
-    const suggestions: Record<AIAnalysisType, AISuggestion[]> = {
-      complete: [
-        { id: "1", type: "complete", title: "Improve button contrast", description: "The primary CTA button has a contrast ratio of 3.2:1. Consider increasing to 4.5:1 for better accessibility.", severity: "warning", location: { x: 50, y: 70 } },
-        { id: "2", type: "complete", title: "Inconsistent spacing", description: "The gap between form elements varies from 12px to 20px. Standardize to 16px for visual consistency.", severity: "info", location: { x: 50, y: 45 } },
-        { id: "3", type: "complete", title: "Missing focus states", description: "Input fields lack visible focus indicators, which may affect keyboard navigation.", severity: "error", location: { x: 50, y: 40 } },
-      ],
-      typography: [
-        { id: "1", type: "typography", title: "Line height too tight", description: "Body text has a line height of 1.2. Consider increasing to 1.5-1.6 for better readability.", severity: "warning", location: { x: 40, y: 35 } },
-        { id: "2", type: "typography", title: "Font size hierarchy", description: "The heading and body text sizes are too similar. Increase heading size for better visual hierarchy.", severity: "info", location: { x: 50, y: 20 } },
-      ],
-      spacing: [
-        { id: "1", type: "spacing", title: "Uneven margins", description: "Left margin is 24px while right margin is 32px. Align both to maintain symmetry.", severity: "warning", location: { x: 10, y: 50 } },
-        { id: "2", type: "spacing", title: "Crowded elements", description: "The social login buttons are too close together. Add 12px gap between them.", severity: "info", location: { x: 50, y: 80 } },
-      ],
-      spelling: [
-        { id: "1", type: "spelling", title: "Typo detected", description: "\"Pasword\" should be \"Password\" in the input label.", severity: "error", location: { x: 30, y: 45 } },
-        { id: "2", type: "spelling", title: "Inconsistent capitalization", description: "\"Sign in\" vs \"Sign In\" - choose one style for consistency.", severity: "info", location: { x: 50, y: 75 } },
-      ],
-      alignment: [
-        { id: "1", type: "alignment", title: "Off-center logo", description: "The logo appears to be 4px off-center. Align to the horizontal center of the container.", severity: "warning", location: { x: 48, y: 10 } },
-        { id: "2", type: "alignment", title: "Form field misalignment", description: "The email and password fields have different left edges. Align to the same starting point.", severity: "info", location: { x: 35, y: 40 } },
-      ],
-      contrast: [
-        { id: "1", type: "contrast", title: "Low contrast text", description: "The placeholder text (#999) on white background has only 2.8:1 contrast ratio. WCAG AA requires 4.5:1.", severity: "error", location: { x: 50, y: 38 } },
-        { id: "2", type: "contrast", title: "Link visibility", description: "The \"Forgot password\" link color is too similar to body text. Use a distinct color for links.", severity: "warning", location: { x: 65, y: 55 } },
-      ],
-    };
-    return suggestions[type] || [];
-  };
+  }, [activeIterationId, showToast]);
 
   // Role filter: panel shows all pages; canvas shows current page only for PDFs
   const roleFilteredFeedbacks =
@@ -885,7 +1004,7 @@ export function RevueCanvas({
         aiAnalysisActive={aiAnalysisActive}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        aiSuggestions={currentAiSuggestions}
+        aiSuggestions={pageFilteredAiSuggestions}
         onShowAIAnalysisOptions={() => setShowAIAnalysisOptions(true)}
       />
 
@@ -926,6 +1045,7 @@ export function RevueCanvas({
           showAIOptions={showAIAnalysisOptions}
           onShowAIOptionsChange={setShowAIAnalysisOptions}
           canAddFeedback={canAddFeedback}
+          canRunAiAnalysis={canRunAiAnalysis}
           isPdfCreative={isPdfIteration}
           currentPage={currentPage}
           pageCount={effectivePageCount}
@@ -986,6 +1106,37 @@ export function RevueCanvas({
         isFirstIteration={iterations.length === 0}
         allowedMediaType={currentIteration?.mediaType}
       />
+
+      {/* Bottom-left toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 left-6 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div
+            className={cn(
+              "flex items-center gap-2.5 rounded-lg px-4 py-3 shadow-xl border text-sm font-medium",
+              toast.tone === "error"
+                ? "bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300"
+                : "bg-white dark:bg-[#2a2a2a] border-gray-200 dark:border-[#444] text-gray-800 dark:text-gray-100"
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className={cn(
+                "inline-flex h-2 w-2 rounded-full shrink-0",
+                toast.tone === "error" ? "bg-red-500" : "bg-emerald-500"
+              )}
+            />
+            <span>{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              aria-label="Dismiss notification"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

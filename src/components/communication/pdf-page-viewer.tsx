@@ -96,6 +96,8 @@ export function PdfPageViewer({
 
   const [renderPage, setRenderPage] = useState(page)
 
+  const [displayedPage, setDisplayedPage] = useState(page)
+
 
 
   onReadyRef.current = onReady
@@ -312,6 +314,8 @@ export function PdfPageViewer({
 
         if (!cancelled) {
 
+          setDisplayedPage(safePage)
+
           setLoading(false)
 
           onPageRenderedRef.current?.()
@@ -476,7 +480,12 @@ export function PdfPageViewer({
 
   return (
 
-    <div className={cn("relative inline-block", className)} data-creative-media>
+    <div
+      className={cn("relative inline-block", className)}
+      data-creative-media
+      data-creative-media-ready={loading ? "false" : "true"}
+      data-creative-media-page={displayedPage}
+    >
 
       {loading && (
 
@@ -504,7 +513,7 @@ export function PdfPageViewer({
 
         className="max-w-none select-none block"
 
-        aria-label={`PDF page ${renderPage}`}
+        aria-label={`PDF page ${displayedPage}`}
 
         data-creative-media
 

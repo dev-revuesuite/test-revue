@@ -52,12 +52,25 @@ export type AIAnalysisType =
   | "alignment"
   | "contrast";
 
+export interface AISuggestionBBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 export interface AISuggestion {
   id: string;
   type: AIAnalysisType;
   title: string;
   description: string;
   severity: "info" | "warning" | "error";
+  pageNumber?: number;
+  ignored?: boolean;
+  bbox?: AISuggestionBBox;
+  imageWidth?: number;
+  imageHeight?: number;
+  /** Center point in % — used by canvas overlay until full bbox UI lands */
   location?: { x: number; y: number };
 }
 
