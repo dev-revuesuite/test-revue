@@ -1,3 +1,5 @@
+import { publicPath } from "@/lib/base-path"
+
 let workerConfigured = false
 
 /** Call once before getDocument (client only). */
@@ -7,7 +9,7 @@ export function configurePdfWorker(
   if (typeof window === "undefined") return
   if (workerConfigured) return
 
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs"
+  pdfjs.GlobalWorkerOptions.workerSrc = publicPath("/pdf.worker.min.mjs")
   workerConfigured = true
 }
 

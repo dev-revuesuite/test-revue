@@ -1,5 +1,7 @@
 "use client"
 
+import { publicPath } from "@/lib/base-path"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -605,7 +607,7 @@ export function OnboardingForm({
       {/* Top bar with logo + step indicator */}
       <div className="w-full flex items-center justify-between px-8 pt-8 relative z-10">
         <Image
-          src="/Logo/Artboard 8 copy@2x.png"
+          src={publicPath("/Logo/Artboard 8 copy@2x.png")}
           alt="Revue"
           width={120}
           height={37}

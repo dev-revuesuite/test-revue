@@ -1,6 +1,6 @@
 "use client"
 
-import { withBasePath } from "@/lib/base-path"
+import { withBasePath, publicPath } from "@/lib/base-path"
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -58,7 +58,7 @@ export function ForgotPasswordForm({
         {/* Logo */}
         <div className="flex justify-center">
           <Image
-            src="/Logo/Artboard 8@2x.png"
+            src={publicPath("/Logo/Artboard 8@2x.png")}
             alt="Revue"
             width={160}
             height={49}
@@ -66,7 +66,7 @@ export function ForgotPasswordForm({
             className="dark:hidden"
           />
           <Image
-            src="/Logo/Artboard 8 copy@2x.png"
+            src={publicPath("/Logo/Artboard 8 copy@2x.png")}
             alt="Revue"
             width={160}
             height={49}
@@ -120,7 +120,7 @@ export function ForgotPasswordForm({
       {/* Logo */}
       <div className="flex justify-center">
         <Image
-          src="/Logo/Artboard 8@2x.png"
+          src={publicPath("/Logo/Artboard 8@2x.png")}
           alt="Revue"
           width={160}
           height={49}
@@ -128,7 +128,7 @@ export function ForgotPasswordForm({
           className="dark:hidden"
         />
         <Image
-          src="/Logo/Artboard 8 copy@2x.png"
+          src={publicPath("/Logo/Artboard 8 copy@2x.png")}
           alt="Revue"
           width={160}
           height={49}

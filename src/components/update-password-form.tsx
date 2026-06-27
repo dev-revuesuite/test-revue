@@ -1,5 +1,7 @@
 "use client"
 
+import { publicPath } from "@/lib/base-path"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -92,7 +94,7 @@ export function UpdatePasswordForm({
         {/* Logo */}
         <div className="flex justify-center">
           <Image
-            src="/Logo/Artboard 8@2x.png"
+            src={publicPath("/Logo/Artboard 8@2x.png")}
             alt="Revue"
             width={160}
             height={49}
@@ -100,7 +102,7 @@ export function UpdatePasswordForm({
             className="dark:hidden"
           />
           <Image
-            src="/Logo/Artboard 8 copy@2x.png"
+            src={publicPath("/Logo/Artboard 8 copy@2x.png")}
             alt="Revue"
             width={160}
             height={49}
@@ -147,7 +149,7 @@ export function UpdatePasswordForm({
         {/* Logo */}
         <div className="flex justify-center">
           <Image
-            src="/Logo/Artboard 8@2x.png"
+            src={publicPath("/Logo/Artboard 8@2x.png")}
             alt="Revue"
             width={160}
             height={49}
@@ -155,7 +157,7 @@ export function UpdatePasswordForm({
             className="dark:hidden"
           />
           <Image
-            src="/Logo/Artboard 8 copy@2x.png"
+            src={publicPath("/Logo/Artboard 8 copy@2x.png")}
             alt="Revue"
             width={160}
             height={49}
@@ -191,7 +193,7 @@ export function UpdatePasswordForm({
       {/* Logo */}
       <div className="flex justify-center">
         <Image
-          src="/Logo/Artboard 8@2x.png"
+          src={publicPath("/Logo/Artboard 8@2x.png")}
           alt="Revue"
           width={160}
           height={49}
@@ -199,7 +201,7 @@ export function UpdatePasswordForm({
           className="dark:hidden"
         />
         <Image
-          src="/Logo/Artboard 8 copy@2x.png"
+          src={publicPath("/Logo/Artboard 8 copy@2x.png")}
           alt="Revue"
           width={160}
           height={49}

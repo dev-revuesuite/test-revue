@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { publicPath } from "@/lib/base-path";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -18,8 +19,8 @@ export const metadata: Metadata = {
   title: "Revue - Design Review Tool",
   description: "Collaborative design review and feedback tool",
   icons: {
-    icon: "/Logo/Artboard 7@2x.png",
-    apple: "/Logo/Artboard 7@2x.png",
+    icon: publicPath("/Logo/Artboard 7@2x.png"),
+    apple: publicPath("/Logo/Artboard 7@2x.png"),
   },
 };
 
