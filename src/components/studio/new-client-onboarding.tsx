@@ -1,5 +1,7 @@
 "use client"
 
+import { publicPath } from "@/lib/base-path"
+
 import * as React from "react"
 import { useState, useRef, useEffect } from "react"
 import { ChevronDown, Check, Plus, Upload, X, Image as ImageIcon, Pencil, Trash2, ArrowRight, Loader2 } from "lucide-react"
@@ -773,8 +775,8 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
         <div className="flex items-center justify-between">
           {/* Revue Logo */}
           <div className="flex items-center">
-            <img src="/Logo/Artboard 8@2x.png" alt="Revue" width={120} height={37} className="dark:hidden" />
-            <img src="/Logo/Artboard 8 copy@2x.png" alt="Revue" width={120} height={37} className="hidden dark:block" />
+            <img src={publicPath("/Logo/Artboard 8@2x.png")} alt="Revue" width={120} height={37} className="dark:hidden" />
+            <img src={publicPath("/Logo/Artboard 8 copy@2x.png")} alt="Revue" width={120} height={37} className="hidden dark:block" />
           </div>
 
           {/* Steps Indicator */}

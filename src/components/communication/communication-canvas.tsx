@@ -17,6 +17,7 @@ import { ShapeType, DrawingPath } from "@/lib/fabric";
 import { getMediaTypeFromFile, getMediaTypeFromUrl, type MediaType } from "@/lib/media-type";
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
 import { captureCreativeMediaForAnalysis } from "@/lib/capture-creative-media";
+import { apiPath } from "@/lib/base-path";
 import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
 import { PdfPagePager } from "./pdf-page-pager";
 
@@ -793,7 +794,7 @@ export function RevueCanvas({
     });
 
     try {
-      const response = await fetch("/api/ai/analyze", {
+      const response = await fetch(apiPath("/api/ai/analyze"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -885,7 +886,7 @@ export function RevueCanvas({
     );
 
     try {
-      const response = await fetch(`/api/ai/suggestions/${id}/ignore`, {
+      const response = await fetch(apiPath(`/api/ai/suggestions/${id}/ignore`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ignored: true }),

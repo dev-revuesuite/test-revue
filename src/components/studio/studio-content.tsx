@@ -1,5 +1,7 @@
 "use client"
 
+import { publicPath } from "@/lib/base-path"
+
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X } from "lucide-react"
@@ -219,8 +221,8 @@ export function StudioContent({ user, clients, onAddClient, userRole = "admin" }
             </button>
 
             <div className="flex justify-center mb-5">
-              <img src="/Logo/Artboard 8@2x.png" alt="Revue" width={140} height={43} className="dark:hidden" />
-              <img src="/Logo/Artboard 8 copy@2x.png" alt="Revue" width={140} height={43} className="hidden dark:block" />
+              <img src={publicPath("/Logo/Artboard 8@2x.png")} alt="Revue" width={140} height={43} className="dark:hidden" />
+              <img src={publicPath("/Logo/Artboard 8 copy@2x.png")} alt="Revue" width={140} height={43} className="hidden dark:block" />
             </div>
 
             <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-white mb-2">

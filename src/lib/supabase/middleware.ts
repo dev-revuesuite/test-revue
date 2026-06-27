@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { withBasePath } from '@/lib/base-path'
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -49,14 +51,14 @@ export async function updateSession(request: NextRequest) {
   // Redirect unauthenticated users to login
   if (isProtectedRoute && !user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
+    url.pathname = withBasePath('/login')
     return NextResponse.redirect(url)
   }
 
   // Redirect authenticated users away from auth pages
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/studio'
+    url.pathname = withBasePath('/studio')
     return NextResponse.redirect(url)
   }
 

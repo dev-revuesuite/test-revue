@@ -1,5 +1,7 @@
 "use client"
 
+import { publicPath } from "@/lib/base-path"
+
 import * as React from "react"
 import { useState, useRef, useEffect, useCallback } from "react"
 import {
@@ -598,8 +600,8 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <img src="/Logo/Artboard 8@2x.png" alt="Revue" width={120} height={37} className="dark:hidden" />
-                <img src="/Logo/Artboard 8 copy@2x.png" alt="Revue" width={120} height={37} className="hidden dark:block" />
+                <img src={publicPath("/Logo/Artboard 8@2x.png")} alt="Revue" width={120} height={37} className="dark:hidden" />
+                <img src={publicPath("/Logo/Artboard 8 copy@2x.png")} alt="Revue" width={120} height={37} className="hidden dark:block" />
               </div>
 
               <div className="flex items-center gap-6">

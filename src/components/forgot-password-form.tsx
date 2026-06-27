@@ -1,5 +1,7 @@
 "use client"
 
+import { withBasePath } from "@/lib/base-path"
+
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -31,7 +33,7 @@ export function ForgotPasswordForm({
     try {
       const supabase = createClient()
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
+        redirectTo: `${window.location.origin}${withBasePath("/auth/callback?next=/update-password")}`,
       })
 
       if (error) {
