@@ -1,5 +1,5 @@
-/** App subpath on revuesuite.com — must match `basePath` in next.config.ts */
-export const APP_BASE_PATH = "/QC-Tool"
+/** App subpath on revuesuite.com — must match `basePath` in next.config.ts (Vercel lowercases path domains). */
+export const APP_BASE_PATH = "/qc-tool"
 
 /** Prefix an app route or API path with the configured basePath. */
 export function withBasePath(path: string): string {
