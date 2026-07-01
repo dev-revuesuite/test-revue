@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { AppSidebar } from "@/components/app-sidebar"
-import { StudioHeader } from "@/components/studio-header"
-import { StudioContent } from "@/components/studio/studio-content"
+import { StudioPageShell } from "@/components/studio/studio-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 
@@ -99,22 +97,17 @@ export default async function StudioPage() {
       })) ?? []
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
-        user={userData}
-        organizationId={organization?.id ?? null}
-        organizationName={organization?.name ?? ""}
-        organizationLogoUrl={organization?.logo_url ?? null}
-        currentOrgId={organization?.id}
-        organizations={allOrganizations}
-        clientDirectory={clientDirectory}
-        teamMembers={teamMembers}
-        userRole={userRole}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} userRole={userRole} />
-        <StudioContent user={userData} clients={clientsData} userRole={userRole} />
-      </div>
-    </div>
+    <StudioPageShell
+      user={userData}
+      organizationId={organization?.id ?? null}
+      organizationName={organization?.name ?? ""}
+      organizationLogoUrl={organization?.logo_url ?? null}
+      currentOrgId={organization?.id}
+      organizations={allOrganizations}
+      clientDirectory={clientDirectory}
+      teamMembers={teamMembers}
+      userRole={userRole}
+      clients={clientsData}
+    />
   )
 }

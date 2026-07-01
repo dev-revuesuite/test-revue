@@ -126,6 +126,8 @@ interface StudioHeaderProps {
   clientDirectory: { id: string; name: string; logoUrl?: string }[]
   teamMembers?: OrgMember[]
   userRole?: "admin" | "designer" | "client"
+  /** Called after a new client is saved — parent runs router.refresh with loading UI */
+  onClientsRefresh?: () => void
 }
 
 const searchPlaceholders = [
@@ -158,6 +160,7 @@ export function StudioHeader({
   clientDirectory,
   teamMembers = [],
   userRole = "admin",
+  onClientsRefresh,
 }: StudioHeaderProps) {
   const router = useRouter()
   const [notificationDialogOpen, setNotificationDialogOpen] = React.useState(false)
@@ -1009,7 +1012,11 @@ export function StudioHeader({
           }
 
           setNewClientDialogOpen(false)
-          router.refresh()
+          if (onClientsRefresh) {
+            onClientsRefresh()
+          } else {
+            router.refresh()
+          }
         }}
       />
 

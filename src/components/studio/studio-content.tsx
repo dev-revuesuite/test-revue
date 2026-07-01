@@ -4,7 +4,8 @@ import { publicPath } from "@/lib/base-path"
 
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
-import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X } from "lucide-react"
+import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { ClientCard } from "./client-card"
 
 interface StudioContentProps {
@@ -16,6 +17,7 @@ interface StudioContentProps {
   clients: StudioClient[]
   onAddClient?: () => void
   userRole?: "admin" | "designer" | "client"
+  isRefreshingClients?: boolean
 }
 
 interface StudioClient {
@@ -118,7 +120,13 @@ const formatDate = (value?: string | null) => {
   }
 }
 
-export function StudioContent({ user, clients, onAddClient, userRole = "admin" }: StudioContentProps) {
+export function StudioContent({
+  user,
+  clients,
+  onAddClient,
+  userRole = "admin",
+  isRefreshingClients = false,
+}: StudioContentProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [showWelcome, setShowWelcome] = useState(false)
 
@@ -180,11 +188,16 @@ export function StudioContent({ user, clients, onAddClient, userRole = "admin" }
         </div>
 
         {/* All Clients Section */}
-        <div>
+        <div className="relative">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-foreground">All Clients</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div
+            className={cn(
+              "relative grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 transition-opacity duration-200",
+              isRefreshingClients && "opacity-50 pointer-events-none"
+            )}
+          >
             {isLoading ? (
               <>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -192,7 +205,7 @@ export function StudioContent({ user, clients, onAddClient, userRole = "admin" }
                 ))}
               </>
             ) : (
-              clients.map((client, index) => (
+              clients.map((client) => (
                 <div key={client.id}>
                   <ClientCard
                     client={{
@@ -206,6 +219,13 @@ export function StudioContent({ user, clients, onAddClient, userRole = "admin" }
               ))
             )}
           </div>
+
+          {isRefreshingClients && (
+            <div className="absolute inset-0 top-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-background/40 backdrop-blur-[1px]">
+              <Loader2 className="h-8 w-8 animate-spin text-[#5C6ECD]" />
+              <p className="text-sm font-medium text-foreground/80">Updating clients...</p>
+            </div>
+          )}
         </div>
       </div>
 
