@@ -1,9 +1,11 @@
 "use client"
 
-import { FolderOpen, MessageSquare, CalendarDays, Users, ArrowRight } from "lucide-react"
+import { useTransition } from "react"
+import { FolderOpen, MessageSquare, CalendarDays, Users, ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
 
 interface TeamMember {
   avatar: string
@@ -28,6 +30,14 @@ interface ClientCardProps {
 
 export function ClientCard({ client }: ClientCardProps) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  const handleViewProjects = () => {
+    if (isPending) return
+    startTransition(() => {
+      router.push(`/room?client=${client.id}`)
+    })
+  }
 
   return (
     <div className="group rounded-xl border border-black/10 dark:border-white/10 bg-card p-5 flex flex-col hover:border-[#5C6ECD]/60 hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-white/5 transition-all duration-300 hover:-translate-y-1">
@@ -102,11 +112,24 @@ export function ClientCard({ client }: ClientCardProps) {
       {/* Action Button */}
       <Button
         variant="outline"
-        className="group w-full h-10 rounded-lg border-black/20 dark:border-white/20 hover:bg-black hover:text-white hover:border-black dark:hover:bg-white dark:hover:text-black dark:hover:border-white transition-all duration-300 font-semibold text-sm"
-        onClick={() => router.push(`/room?client=${client.id}`)}
+        disabled={isPending}
+        className={cn(
+          "group w-full h-10 rounded-lg border-black/20 dark:border-white/20 hover:bg-black hover:text-white hover:border-black dark:hover:bg-white dark:hover:text-black dark:hover:border-white transition-all duration-300 font-semibold text-sm",
+          isPending && "cursor-wait opacity-80"
+        )}
+        onClick={handleViewProjects}
       >
-        VIEW PROJECTS
-        <ArrowRight className="w-4 h-4 btn-arrow" />
+        {isPending ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Opening...
+          </>
+        ) : (
+          <>
+            VIEW PROJECTS
+            <ArrowRight className="w-4 h-4 btn-arrow" />
+          </>
+        )}
       </Button>
     </div>
   )

@@ -144,6 +144,186 @@ const platformPrefixes: Record<string, string> = {
   Dribbble: "dribbble.com/",
 }
 
+function stopDropdownScrollChain(event: React.WheelEvent<HTMLDivElement>) {
+  const target = event.currentTarget
+  const { scrollTop, scrollHeight, clientHeight } = target
+  const scrollingUp = event.deltaY < 0
+  const scrollingDown = event.deltaY > 0
+  const atTop = scrollTop <= 0
+  const atBottom = scrollTop + clientHeight >= scrollHeight - 1
+
+  if ((scrollingUp && atTop) || (scrollingDown && atBottom)) {
+    event.preventDefault()
+  }
+
+  event.stopPropagation()
+}
+
+interface ClientFormDropdownProps {
+  id: string
+  value: string
+  options: string[]
+  placeholder: string
+  onChange: (value: string) => void
+  openId: string | null
+  onOpenIdChange: (id: string | null) => void
+  disabled?: boolean
+  borderless?: boolean
+  actionLabel?: string
+  onAction?: () => void
+  customFonts?: CustomFont[]
+  googleFonts?: string[]
+}
+
+function ClientFormDropdown({
+  id,
+  value,
+  options,
+  placeholder,
+  onChange,
+  openId,
+  onOpenIdChange,
+  disabled = false,
+  borderless = false,
+  actionLabel,
+  onAction,
+  customFonts = [],
+  googleFonts = fonts,
+}: ClientFormDropdownProps) {
+  const isOpen = openId === id
+
+  return (
+    <div className="relative dropdown-container" style={{ zIndex: isOpen ? 9999 : 30 }}>
+      <button
+        type="button"
+        onClick={() => !disabled && onOpenIdChange(isOpen ? null : id)}
+        disabled={disabled}
+        className={cn(
+          "w-full flex items-center justify-between px-4 py-3 text-left transition-colors",
+          borderless
+            ? "border-none bg-transparent"
+            : "border",
+          !borderless && (disabled
+            ? "bg-[#f5f5f5] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#444] cursor-not-allowed"
+            : isOpen
+            ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-[#1a1a1a]"
+            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]/50"),
+          borderless && disabled && "cursor-not-allowed opacity-50"
+        )}
+      >
+        <span className={value ? "text-[#1a1a1a] dark:text-white" : "text-[#999]"}>
+          {value || placeholder}
+        </span>
+        <ChevronDown className={cn(
+          "w-5 h-5 text-[#999] transition-transform",
+          isOpen && "rotate-180 text-[#5C6ECD]"
+        )} />
+      </button>
+      {isOpen && !actionLabel && (
+        <div
+          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-2xl max-h-48 overflow-auto overscroll-contain"
+          style={{ zIndex: 99999 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={stopDropdownScrollChain}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => {
+                onChange(opt)
+                onOpenIdChange(null)
+              }}
+              className={cn(
+                "w-full px-4 py-2.5 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
+                value === opt && "bg-[#5C6ECD]/10 text-[#5C6ECD]"
+              )}
+            >
+              <span className={value === opt ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{opt}</span>
+              {value === opt && <Check className="w-4 h-4 text-[#5C6ECD]" />}
+            </button>
+          ))}
+        </div>
+      )}
+      {isOpen && actionLabel && onAction && (
+        <div
+          className="absolute top-full left-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-xl shadow-2xl flex"
+          style={{ zIndex: 99999, minWidth: "420px" }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            className="flex-1 max-h-56 overflow-auto overscroll-contain py-1"
+            onWheel={stopDropdownScrollChain}
+          >
+            {customFonts.length > 0 && (
+              <>
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[#999] uppercase tracking-wider">My Fonts</p>
+                {customFonts.map((f) => (
+                  <button
+                    key={f.name}
+                    type="button"
+                    onClick={() => {
+                      onChange(f.name)
+                      onOpenIdChange(null)
+                    }}
+                    className={cn(
+                      "w-full px-3 py-2 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
+                      value === f.name && "bg-[#5C6ECD]/10"
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#5C6ECD] shrink-0" />
+                      <span className={value === f.name ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{f.name}</span>
+                    </span>
+                    {value === f.name && <Check className="w-3.5 h-3.5 text-[#5C6ECD]" />}
+                  </button>
+                ))}
+                <div className="border-t border-[#e5e5e5] dark:border-[#333] my-1 mx-3" />
+              </>
+            )}
+            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[#999] uppercase tracking-wider">Google Fonts</p>
+            {googleFonts.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt)
+                  onOpenIdChange(null)
+                }}
+                className={cn(
+                  "w-full px-3 py-2 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
+                  value === opt && "bg-[#5C6ECD]/10"
+                )}
+              >
+                <span className={value === opt ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{opt}</span>
+                {value === opt && <Check className="w-3.5 h-3.5 text-[#5C6ECD]" />}
+              </button>
+            ))}
+          </div>
+          <div className="w-[140px] border-l border-[#e5e5e5] dark:border-[#333] flex flex-col items-center justify-center p-4 bg-[#fafafa] dark:bg-[#111] rounded-r-xl">
+            <button
+              type="button"
+              onClick={() => {
+                onAction()
+                onOpenIdChange(null)
+              }}
+              className="flex flex-col items-center gap-2.5 text-center group/upload"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[#5C6ECD]/10 flex items-center justify-center group-hover/upload:bg-[#5C6ECD]/20 transition-colors">
+                <Upload className="w-5 h-5 text-[#5C6ECD]" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a1a1a] dark:text-white">Upload</p>
+                <p className="text-[10px] text-[#999] mt-0.5">.TTF .OTF</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface NewClientOnboardingProps {
   open: boolean
   onClose: () => void
@@ -621,150 +801,6 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     }
   }
 
-  // Custom Dropdown Component
-  const CustomDropdown = ({
-    id,
-    value,
-    options,
-    placeholder,
-    onChange,
-    disabled = false,
-    borderless = false,
-    actionLabel,
-    onAction,
-  }: {
-    id: string
-    value: string
-    options: string[]
-    placeholder: string
-    onChange: (value: string) => void
-    disabled?: boolean
-    borderless?: boolean
-    actionLabel?: string
-    onAction?: () => void
-  }) => (
-    <div className="relative dropdown-container" style={{ zIndex: dropdownOpen === id ? 9999 : 30 }}>
-      <button
-        type="button"
-        onClick={() => !disabled && setDropdownOpen(dropdownOpen === id ? null : id)}
-        disabled={disabled}
-        className={cn(
-          "w-full flex items-center justify-between px-4 py-3 text-left transition-colors",
-          borderless
-            ? "border-none bg-transparent"
-            : "border",
-          !borderless && (disabled
-            ? "bg-[#f5f5f5] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#444] cursor-not-allowed"
-            : dropdownOpen === id
-            ? "border-[#5C6ECD] ring-2 ring-[#5C6ECD]/20 bg-white dark:bg-[#1a1a1a]"
-            : "border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-[#1a1a1a] hover:border-[#5C6ECD]/50"),
-          borderless && disabled && "cursor-not-allowed opacity-50"
-        )}
-      >
-        <span className={value ? "text-[#1a1a1a] dark:text-white" : "text-[#999]"}>
-          {value || placeholder}
-        </span>
-        <ChevronDown className={cn(
-          "w-5 h-5 text-[#999] transition-transform",
-          dropdownOpen === id && "rotate-180 text-[#5C6ECD]"
-        )} />
-      </button>
-      {dropdownOpen === id && !actionLabel && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-lg shadow-2xl max-h-48 overflow-auto" style={{ zIndex: 99999 }} onMouseDown={(e) => e.stopPropagation()}>
-          {options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => {
-                onChange(opt)
-                setDropdownOpen(null)
-              }}
-              className={cn(
-                "w-full px-4 py-2.5 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
-                value === opt && "bg-[#5C6ECD]/10 text-[#5C6ECD]"
-              )}
-            >
-              <span className={value === opt ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{opt}</span>
-              {value === opt && <Check className="w-4 h-4 text-[#5C6ECD]" />}
-            </button>
-          ))}
-        </div>
-      )}
-      {dropdownOpen === id && actionLabel && onAction && (
-        <div className="absolute top-full left-0 mt-1 bg-white dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#444] rounded-xl shadow-2xl flex" style={{ zIndex: 99999, minWidth: '420px' }} onMouseDown={(e) => e.stopPropagation()}>
-          {/* Left: Font List */}
-          <div className="flex-1 max-h-56 overflow-auto py-1">
-            {/* Custom/Uploaded Fonts */}
-            {formData.customFonts.length > 0 && (
-              <>
-                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[#999] uppercase tracking-wider">My Fonts</p>
-                {formData.customFonts.map((f) => (
-                  <button
-                    key={f.name}
-                    type="button"
-                    onClick={() => {
-                      onChange(f.name)
-                      setDropdownOpen(null)
-                    }}
-                    className={cn(
-                      "w-full px-3 py-2 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
-                      value === f.name && "bg-[#5C6ECD]/10"
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#5C6ECD] shrink-0" />
-                      <span className={value === f.name ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{f.name}</span>
-                    </span>
-                    {value === f.name && <Check className="w-3.5 h-3.5 text-[#5C6ECD]" />}
-                  </button>
-                ))}
-                <div className="border-t border-[#e5e5e5] dark:border-[#333] my-1 mx-3" />
-              </>
-            )}
-            {/* Google Fonts */}
-            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-[#999] uppercase tracking-wider">Google Fonts</p>
-            {fonts.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  onChange(opt)
-                  setDropdownOpen(null)
-                }}
-                className={cn(
-                  "w-full px-3 py-2 text-left text-sm hover:bg-[#5C6ECD]/10 transition-colors flex items-center justify-between",
-                  value === opt && "bg-[#5C6ECD]/10"
-                )}
-              >
-                <span className={value === opt ? "text-[#5C6ECD] font-medium" : "text-[#1a1a1a] dark:text-white"}>{opt}</span>
-                {value === opt && <Check className="w-3.5 h-3.5 text-[#5C6ECD]" />}
-              </button>
-            ))}
-          </div>
-          {/* Right: Upload Section */}
-          <div className="w-[140px] border-l border-[#e5e5e5] dark:border-[#333] flex flex-col items-center justify-center p-4 bg-[#fafafa] dark:bg-[#111] rounded-r-xl">
-            <button
-              type="button"
-              onClick={() => {
-                onAction()
-                setDropdownOpen(null)
-              }}
-              className="flex flex-col items-center gap-2.5 text-center group/upload"
-            >
-              <div className="w-12 h-12 rounded-xl bg-[#5C6ECD]/10 flex items-center justify-center group-hover/upload:bg-[#5C6ECD]/20 transition-colors">
-                <Upload className="w-5 h-5 text-[#5C6ECD]" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1a1a1a] dark:text-white">Upload</p>
-                <p className="text-[10px] text-[#999] mt-0.5">.TTF .OTF</p>
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-
   if (!open) return null
 
   return (
@@ -882,11 +918,13 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                     <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                       Industry <span className="text-[#5C6ECD] font-normal">*</span>
                     </label>
-                    <CustomDropdown
+                    <ClientFormDropdown
                       id="industry"
                       value={formData.industry}
                       options={industries}
                       placeholder="Select industry"
+                      openId={dropdownOpen}
+                      onOpenIdChange={setDropdownOpen}
                       onChange={(value) => {
                         setFormData(prev => ({ ...prev, industry: value }))
                         clearError('industry')
@@ -1164,12 +1202,14 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                           : "border-[#e5e5e5] dark:border-[#444] focus-within:border-[#5C6ECD] focus-within:ring-2 focus-within:ring-[#5C6ECD]/20"
                       )}>
                         <div className="w-[120px] shrink-0">
-                          <CustomDropdown
+                          <ClientFormDropdown
                             id={`countryCode-${contact.id}`}
                             value={countryCodes.find(c => c.code === contact.countryCode)?.flag + " " + contact.countryCode || contact.countryCode}
                             options={countryCodes.map(c => `${c.flag} ${c.code}`)}
                             placeholder="Code"
                             borderless
+                            openId={dropdownOpen}
+                            onOpenIdChange={setDropdownOpen}
                             onChange={(value) => {
                               const code = value.split(" ").pop() || "+91"
                               updateContact(contact.id, 'countryCode', code)
@@ -1342,11 +1382,14 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-[#666] dark:text-[#999] mb-1.5">Font</label>
-                            <CustomDropdown
+                            <ClientFormDropdown
                               id="font-popover-select"
                               value={fontPopover.font}
                               options={getAllFonts()}
                               placeholder="Select or upload font"
+                              openId={dropdownOpen}
+                              onOpenIdChange={setDropdownOpen}
+                              customFonts={formData.customFonts}
                               onChange={(value) => setFontPopover(prev => ({ ...prev, font: value }))}
                               actionLabel="Upload Custom Font (.TTF, .OTF)"
                               onAction={() => fontUploadRef.current?.click()}

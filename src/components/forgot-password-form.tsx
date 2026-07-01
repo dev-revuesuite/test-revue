@@ -103,7 +103,7 @@ export function ForgotPasswordForm({
         {/* Back to login */}
         <div className="flex justify-center">
           <a
-            href="/login"
+            href={withBasePath("/login")}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -183,7 +183,7 @@ export function ForgotPasswordForm({
         <p className="text-center text-base text-muted-foreground">
           Remember your password?{" "}
           <a
-            href="/login"
+            href={withBasePath("/login")}
             className="underline underline-offset-4 hover:text-primary"
           >
             Sign in

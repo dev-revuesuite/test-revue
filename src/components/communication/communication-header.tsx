@@ -1,6 +1,6 @@
 "use client";
 
-import { publicPath } from "@/lib/base-path";
+import { publicPath, appRoute } from "@/lib/base-path";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -148,7 +148,7 @@ export function CommunicationHeader({
       <div className="absolute top-3 left-3 z-10">
         <div className="flex items-center gap-2 bg-white dark:bg-[#2a2a2a] rounded-lg shadow-sm border border-gray-200 dark:border-[#444] px-4 py-2.5">
           {/* Revue Logo - Links to homepage */}
-          <Link href="/" className="hover:opacity-80 transition-opacity">
+          <Link href={appRoute("/")} className="hover:opacity-80 transition-opacity">
             <img src={publicPath("/Logo/Artboard 5@2x.png")} alt="Revue" width={28} height={28} />
           </Link>
 

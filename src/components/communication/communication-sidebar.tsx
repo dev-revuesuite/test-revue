@@ -18,6 +18,7 @@ import {
   SpellCheck,
   AlignLeft,
   Contrast,
+  Eye,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,9 @@ interface CommunicationSidebarProps {
   isPdfCreative?: boolean;
   currentPage?: number;
   pageCount?: number;
+  /** Hold eye button to temporarily hide canvas overlays */
+  overlaysPeekHidden?: boolean;
+  onPeekOverlaysStart?: () => void;
 }
 
 export function CommunicationSidebar({
@@ -125,6 +129,8 @@ export function CommunicationSidebar({
   isPdfCreative = false,
   currentPage = 1,
   pageCount = 1,
+  overlaysPeekHidden = false,
+  onPeekOverlaysStart,
 }: CommunicationSidebarProps) {
   const [internalShowAIOptions, setInternalShowAIOptions] = useState(false);
 
@@ -224,6 +230,42 @@ export function CommunicationSidebar({
                 </Tooltip>
               );
             })}
+          </div>
+
+          {/* Hold to peek — hide overlays while pressed */}
+          <div className="mt-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={aiAnalysisActive}
+                  onPointerDown={(e) => {
+                    if (aiAnalysisActive) return;
+                    e.preventDefault();
+                    onPeekOverlaysStart?.();
+                  }}
+                  className={cn(
+                    "h-10 w-10 rounded-lg flex items-center justify-center transition-all select-none touch-none",
+                    aiAnalysisActive
+                      ? "opacity-40 cursor-not-allowed text-gray-400"
+                      : overlaysPeekHidden
+                        ? "bg-gray-800 dark:bg-white text-white dark:text-gray-900 shadow-md"
+                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#333]"
+                  )}
+                  aria-pressed={overlaysPeekHidden}
+                  aria-label="Hold to hide overlays on the creative"
+                >
+                  <Eye className="w-5 h-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>
+                  {aiAnalysisActive
+                    ? "Wait for analysis to finish"
+                    : "Hold to hide overlays"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Compare Mode Indicator */}

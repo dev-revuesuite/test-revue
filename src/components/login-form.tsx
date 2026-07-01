@@ -191,7 +191,7 @@ export function LoginForm({
         {/* Forgot password link */}
         <div className="flex justify-end -mt-1">
           <a
-            href="/forgot-password"
+            href={withBasePath("/forgot-password")}
             className="text-sm text-muted-foreground underline underline-offset-4 hover:text-primary"
           >
             Forgot password?
@@ -250,7 +250,7 @@ export function LoginForm({
         {/* Footer link */}
         <p className="text-center text-base text-muted-foreground">
           Don&apos;t have an account yet?{" "}
-          <a href="/signup" className="underline underline-offset-4 hover:text-primary">
+          <a href={withBasePath("/signup")} className="underline underline-offset-4 hover:text-primary">
             Create new
           </a>
         </p>

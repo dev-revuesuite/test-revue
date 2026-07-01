@@ -1,6 +1,6 @@
 "use client"
 
-import { publicPath } from "@/lib/base-path"
+import { withBasePath, publicPath } from "@/lib/base-path"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -132,7 +132,7 @@ export function UpdatePasswordForm({
         <p className="text-center text-base text-muted-foreground">
           Remember your password?{" "}
           <a
-            href="/login"
+            href={withBasePath("/login")}
             className="underline underline-offset-4 hover:text-primary"
           >
             Sign in

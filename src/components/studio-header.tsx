@@ -340,14 +340,31 @@ export function StudioHeader({
               organizations={organizations}
             />
           ) : (
-            <img
-              src={
-                organizationLogoUrl ||
-                "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg"
-              }
-              alt="Organization logo"
-              className="h-6 w-[72px] object-contain"
-            />
+            <div className="flex items-center gap-2">
+              {organizationLogoUrl ? (
+                <img
+                  src={organizationLogoUrl}
+                  alt={organizationName || "Organization logo"}
+                  className="h-6 w-6 rounded-md object-cover"
+                />
+              ) : (
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#5C6ECD] text-[10px] font-semibold text-white">
+                  {organizationName
+                    ? organizationName
+                        .split(" ")
+                        .map((word) => word[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)
+                    : "?"}
+                </div>
+              )}
+              {organizationName ? (
+                <span className="max-w-[140px] truncate text-sm font-semibold text-[#1a1a1a] dark:text-white">
+                  {organizationName}
+                </span>
+              ) : null}
+            </div>
           )}
         </div>
       </div>

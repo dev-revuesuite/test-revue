@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-import { withBasePath } from '@/lib/base-path'
+import { appRoute, stripBasePath } from '@/lib/base-path'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -37,28 +37,30 @@ export async function updateSession(request: NextRequest) {
     // If Supabase is unreachable, allow the request through
   }
 
+  const pathname = stripBasePath(request.nextUrl.pathname)
+
   // Protected routes
   const protectedRoutes = ['/studio', '/creative-zone', '/productive-zone']
   const authRoutes = ['/login', '/signup']
 
-  const isProtectedRoute = protectedRoutes.some(route =>
-    request.nextUrl.pathname.startsWith(route)
+  const isProtectedRoute = protectedRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
   )
-  const isAuthRoute = authRoutes.some(route =>
-    request.nextUrl.pathname.startsWith(route)
+  const isAuthRoute = authRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
   )
 
   // Redirect unauthenticated users to login
   if (isProtectedRoute && !user) {
     const url = request.nextUrl.clone()
-    url.pathname = withBasePath('/login')
+    url.pathname = appRoute('/login')
     return NextResponse.redirect(url)
   }
 
   // Redirect authenticated users away from auth pages
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone()
-    url.pathname = withBasePath('/studio')
+    url.pathname = appRoute('/studio')
     return NextResponse.redirect(url)
   }
 

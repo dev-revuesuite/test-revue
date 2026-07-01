@@ -259,7 +259,7 @@ export function SignupForm({
 
         <p className="text-center text-base text-muted-foreground">
           Already have an account?{" "}
-          <a href="/login" className="underline underline-offset-4 hover:text-primary">
+          <a href={withBasePath("/login")} className="underline underline-offset-4 hover:text-primary">
             Sign in
           </a>
         </p>

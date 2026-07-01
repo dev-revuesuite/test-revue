@@ -169,6 +169,21 @@ export function RevueCanvas({
   const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
 
+  // Hold eye button — temporarily hide canvas overlays
+  const [overlaysPeekHidden, setOverlaysPeekHidden] = useState(false);
+
+  useEffect(() => {
+    if (!overlaysPeekHidden) return;
+
+    const endPeek = () => setOverlaysPeekHidden(false);
+    window.addEventListener("pointerup", endPeek);
+    window.addEventListener("pointercancel", endPeek);
+    return () => {
+      window.removeEventListener("pointerup", endPeek);
+      window.removeEventListener("pointercancel", endPeek);
+    };
+  }, [overlaysPeekHidden]);
+
   // Bottom-left toast notification
   const [toast, setToast] = useState<{ message: string; tone: "info" | "error" } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1006,7 +1021,8 @@ export function RevueCanvas({
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         aiSuggestions={pageFilteredAiSuggestions}
-        onShowAIAnalysisOptions={() => setShowAIAnalysisOptions(true)}
+        onShowAIAnalysisOptions={() => setShowAIAnalysisOptions((open) => !open)}
+        overlaysPeekHidden={overlaysPeekHidden}
       />
 
       {/* Floating Header - Left and Right sections (hidden in fullscreen) */}
@@ -1050,6 +1066,8 @@ export function RevueCanvas({
           isPdfCreative={isPdfIteration}
           currentPage={currentPage}
           pageCount={effectivePageCount}
+          overlaysPeekHidden={overlaysPeekHidden}
+          onPeekOverlaysStart={() => setOverlaysPeekHidden(true)}
         />
       )}
 

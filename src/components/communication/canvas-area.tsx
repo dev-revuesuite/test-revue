@@ -95,6 +95,8 @@ interface CanvasAreaProps {
   onViewModeChange?: (mode: "view" | "comments" | "ai") => void;
   aiSuggestions?: AISuggestion[];
   onShowAIAnalysisOptions?: () => void;
+  /** While true, temporarily hide mode-specific canvas overlays (hold eye button) */
+  overlaysPeekHidden?: boolean;
 }
 
 // Helper: build SVG path "d" attribute from pointer points using quadratic smoothing
@@ -154,6 +156,7 @@ export function CanvasArea({
   onViewModeChange,
   aiSuggestions = [],
   onShowAIAnalysisOptions,
+  overlaysPeekHidden = false,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -186,6 +189,12 @@ export function CanvasArea({
   const drawings = externalDrawings;
   const markers = externalMarkers || [];
   const localFeedbackCount = feedbackCount;
+
+  const hideDrawings = overlaysPeekHidden;
+  const hideCommentMarkers =
+    overlaysPeekHidden && viewMode === "comments";
+  const hideAiOverlays =
+    overlaysPeekHidden && viewMode === "ai";
 
   // Compare dropdown state
   const [showCompareDropdown, setShowCompareDropdown] = useState(false);
@@ -730,10 +739,11 @@ export function CanvasArea({
               onPointerUp={handleSvgPointerUp}
             >
               {/* Existing drawings */}
-              {drawings.map(d => renderDrawing(d, d.id === highlightDrawingId))}
+              {!hideDrawings &&
+                drawings.map((d) => renderDrawing(d, d.id === highlightDrawingId))}
 
               {/* In-progress drawing */}
-              {renderActiveDrawing()}
+              {!hideDrawings && renderActiveDrawing()}
             </svg>
 
             {/* AI Analysis Scanning Animation */}
@@ -774,7 +784,7 @@ export function CanvasArea({
             )}
 
             {/* AI Visual Annotations — bbox from API pixel coords → % of analyzed image */}
-            {viewMode === "ai" && !aiAnalysisActive && aiSuggestions.length > 0 && (
+            {viewMode === "ai" && !aiAnalysisActive && !hideAiOverlays && aiSuggestions.length > 0 && (
               <div className="absolute inset-0 pointer-events-none z-15">
                 {aiSuggestions.map((suggestion, index) => {
                   const severityStyles =
@@ -864,7 +874,7 @@ export function CanvasArea({
             )}
 
             {/* Feedback Markers */}
-            {viewMode === "comments" && markers.map((marker) => (
+            {viewMode === "comments" && !hideCommentMarkers && markers.map((marker) => (
               <div
                 key={marker.id}
                 className={cn(

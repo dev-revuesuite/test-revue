@@ -366,6 +366,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
 
   // Dropdown state for CustomDropdown
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null)
+  const [startDateOpen, setStartDateOpen] = useState(false)
+  const [endDateOpen, setEndDateOpen] = useState(false)
+  const [deliverableDateOpen, setDeliverableDateOpen] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -373,6 +376,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       setStep(1)
       setErrors({})
       setIsCreating(false)
+      setStartDateOpen(false)
+      setEndDateOpen(false)
+      setDeliverableDateOpen(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -786,7 +792,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                         <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                           Start Date <span className="text-[#5C6ECD] font-normal">*</span>
                         </label>
-                        <Popover>
+                        <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -804,7 +810,11 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                             <Calendar
                               mode="single"
                               selected={formData.startDate ? new Date(formData.startDate) : undefined}
-                              onSelect={(date) => { setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" })); clearError('startDate') }}
+                              onSelect={(date) => {
+                                setFormData(prev => ({ ...prev, startDate: date ? format(date, "yyyy-MM-dd") : "" }))
+                                clearError("startDate")
+                                if (date) setStartDateOpen(false)
+                              }}
                               initialFocus
                             />
                           </PopoverContent>
@@ -815,7 +825,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                         <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-2">
                           End Date <span className="text-[#5C6ECD] font-normal">*</span>
                         </label>
-                        <Popover>
+                        <Popover open={endDateOpen} onOpenChange={setEndDateOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -833,7 +843,11 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                             <Calendar
                               mode="single"
                               selected={formData.endDate ? new Date(formData.endDate) : undefined}
-                              onSelect={(date) => { setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" })); clearError('endDate') }}
+                              onSelect={(date) => {
+                                setFormData(prev => ({ ...prev, endDate: date ? format(date, "yyyy-MM-dd") : "" }))
+                                clearError("endDate")
+                                if (date) setEndDateOpen(false)
+                              }}
                               disabled={(date) => formData.startDate ? date < new Date(formData.startDate) : false}
                               initialFocus
                             />
@@ -1302,7 +1316,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           </div>
           <div>
             <label className="block text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5">Due Date <span className="text-[#999] font-normal">(optional)</span></label>
-            <Popover>
+            <Popover open={deliverableDateOpen} onOpenChange={setDeliverableDateOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -1321,7 +1335,10 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                 <Calendar
                   mode="single"
                   selected={newDeliverableDate ? new Date(newDeliverableDate) : undefined}
-                  onSelect={(date) => setNewDeliverableDate(date ? format(date, "yyyy-MM-dd") : "")}
+                  onSelect={(date) => {
+                    setNewDeliverableDate(date ? format(date, "yyyy-MM-dd") : "")
+                    if (date) setDeliverableDateOpen(false)
+                  }}
                   disabled={(date) => {
                     if (formData.startDate && date < new Date(formData.startDate)) return true
                     if (formData.endDate && date > new Date(formData.endDate)) return true

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useTransition } from "react"
 import {
   Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare,
   Check, CheckCircle, ArrowLeft, Plus,
@@ -488,6 +488,8 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
   const [newCreative, setNewCreative] = useState({ name: "", type: "image" as Creative["type"], file: null as File | null, filePreview: "" })
   const creativeFileInputRef = useRef<HTMLInputElement>(null)
   const [isAddingCreative, setIsAddingCreative] = useState(false)
+  const [openingCreativeId, setOpeningCreativeId] = useState<string | null>(null)
+  const [, startCreativeNavigation] = useTransition()
 
   // Reference preview state
   const [previewRef, setPreviewRef] = useState<Reference | null>(null)
@@ -570,7 +572,11 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
   }
 
   const handleCreativeClick = (creative: Creative) => {
-    if (selectedProject) router.push(`/revue?projectId=${selectedProject.id}&creativeId=${creative.id}`)
+    if (!selectedProject || openingCreativeId) return
+    setOpeningCreativeId(creative.id)
+    startCreativeNavigation(() => {
+      router.push(`/revue?projectId=${selectedProject.id}&creativeId=${creative.id}`)
+    })
   }
 
   // Deliverable handlers
@@ -1032,7 +1038,12 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                         <p className="text-xs text-muted-foreground">{getDeliverableStats(data.deliverables).completed}/{getDeliverableStats(data.deliverables).total} completed</p>
                       </div>
                     </div>
-                    {userRole === "admin" && <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}><Plus className="w-4 h-4 mr-2" />Add</Button>}
+                    {userRole === "admin" && (
+                      <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Deliverable
+                      </Button>
+                    )}
                   </div>
                   <div className="space-y-2">
                     {data.deliverables.map((deliverable) => (
@@ -1065,7 +1076,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                     ))}
                     {data.deliverables.length === 0 && (
                       <div className="text-center py-6 text-muted-foreground text-sm">
-                        No deliverables yet. Click "Add" to create one.
+                        No deliverables yet. Click &quot;Add Deliverable&quot; to create one.
                       </div>
                     )}
                   </div>
@@ -1078,7 +1089,16 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                       <h3 className="text-base font-semibold text-foreground">Creatives</h3>
                       <span className="text-sm text-muted-foreground">({data.creatives.length})</span>
                     </div>
-                    {userRole !== "client" && <Button size="sm" variant="outline" onClick={() => setAddCreativeOpen(true)}><Plus className="w-4 h-4 mr-2" />Add</Button>}
+                    {userRole !== "client" && (
+                      <Button
+                        size="sm"
+                        className="bg-[#5C6ECD] hover:bg-[#4a5bb8] text-white shadow-md shadow-[#5C6ECD]/20"
+                        onClick={() => setAddCreativeOpen(true)}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Creative
+                      </Button>
+                    )}
                   </div>
 
                   {data.creatives.length > 0 ? (
@@ -1093,12 +1113,15 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                         .map((creative) => {
                         const TypeIcon = creativeTypeIcons[creative.type]
                         const isInProgress = creative.status === "in_progress"
+                        const isOpening = openingCreativeId === creative.id
                         return (
                           <div
                             key={creative.id}
                             onClick={() => handleCreativeClick(creative)}
                             className={cn(
                               "bg-card rounded-2xl border overflow-hidden transition-all group cursor-pointer",
+                              isOpening && "cursor-wait",
+                              openingCreativeId && !isOpening && "pointer-events-none opacity-60",
                               isInProgress
                                 ? "border-[#5C6ECD]/30 hover:border-[#5C6ECD] hover:shadow-lg hover:shadow-[#5C6ECD]/10"
                                 : "border-border hover:border-[#5C6ECD]/50 hover:shadow-md"
@@ -1127,11 +1150,25 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
                               )}>
                                 {isInProgress ? "In Progress" : "Completed"}
                               </div>
-                              {/* Open in Revue overlay on hover */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10">
+                              {/* Open in Revue overlay on hover / while navigating */}
+                              <div
+                                className={cn(
+                                  "absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-opacity duration-300 flex items-center justify-center z-10",
+                                  isOpening ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                )}
+                              >
                                 <span className="text-white font-medium text-sm flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
-                                  <ExternalLink className="w-4 h-4" />
-                                  Open in Revue
+                                  {isOpening ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      Opening...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ExternalLink className="w-4 h-4" />
+                                      Open in Revue
+                                    </>
+                                  )}
                                 </span>
                               </div>
                             </div>

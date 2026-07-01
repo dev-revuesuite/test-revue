@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { withBasePath } from '@/lib/base-path'
+import { absoluteAppUrl } from '@/lib/base-path'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const tokenHash = searchParams.get('token_hash')
   const type = searchParams.get('type')
-  const next = withBasePath(searchParams.get('next') ?? '/studio')
+  const next = absoluteAppUrl(origin, searchParams.get('next') ?? '/studio')
 
   if (type === 'recovery' && tokenHash) {
     const supabase = await createClient()
@@ -17,10 +17,12 @@ export async function GET(request: Request) {
     })
 
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(next)
     }
 
-    return NextResponse.redirect(`${origin}${withBasePath('/forgot-password?error=link_expired')}`)
+    return NextResponse.redirect(
+      absoluteAppUrl(origin, '/forgot-password?error=link_expired')
+    )
   }
 
   if (code) {
@@ -66,7 +68,7 @@ export async function GET(request: Request) {
           .single()
 
         if (!profile || !profile.onboarded) {
-          return NextResponse.redirect(`${origin}${withBasePath('/onboarding')}`)
+          return NextResponse.redirect(absoluteAppUrl(origin, '/onboarding'))
         }
 
         // Role-based routing: check if user is a linked member (designer/client)
@@ -80,16 +82,18 @@ export async function GET(request: Request) {
         if (membership) {
           const role = membership.role
           if (role === 'client') {
-            return NextResponse.redirect(`${origin}${withBasePath('/client-portal')}`)
+            return NextResponse.redirect(absoluteAppUrl(origin, '/client-portal'))
           }
           // admin/owner/designer goes to studio (default)
         }
       }
 
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(next)
     }
   }
 
   // Return the user to an error page with some instructions
-  return NextResponse.redirect(`${origin}${withBasePath('/login?error=auth_callback_error')}`)
+  return NextResponse.redirect(
+    absoluteAppUrl(origin, '/login?error=auth_callback_error')
+  )
 }
