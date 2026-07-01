@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { AppSidebar } from "@/components/app-sidebar"
-import { StudioHeader } from "@/components/studio-header"
-import { RoomContent } from "@/components/room/room-content"
+import { RoomPageShell } from "@/components/room/room-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { resolveIterationMediaType } from "@/lib/media-type"
@@ -448,22 +446,19 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   }
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
-        user={userData}
-        organizationId={organization?.id ?? null}
-        organizationName={organization?.name ?? ""}
-        organizationLogoUrl={organization?.logo_url ?? null}
-        currentOrgId={organization?.id}
-        organizations={allOrganizations}
-        clientDirectory={clientDirectory}
-        teamMembers={teamMembers}
-        userRole={userRole}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} userRole={userRole} clientId={userClientId} />
-        <RoomContent clientData={clientData} orgMembers={teamMembers} clientEditData={clientEditData} organizationId={organization?.id ?? null} userRole={userRole} />
-      </div>
-    </div>
+    <RoomPageShell
+      user={userData}
+      organizationId={organization?.id ?? null}
+      organizationName={organization?.name ?? ""}
+      organizationLogoUrl={organization?.logo_url ?? null}
+      currentOrgId={organization?.id}
+      organizations={allOrganizations}
+      clientDirectory={clientDirectory}
+      teamMembers={teamMembers}
+      userRole={userRole}
+      userClientId={userClientId}
+      clientData={clientData}
+      clientEditData={clientEditData}
+    />
   )
 }

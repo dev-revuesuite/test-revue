@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
-import { StudioContent } from "@/components/studio/studio-content"
+import { RoomContent } from "@/components/room/room-content"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
 
@@ -16,19 +16,7 @@ interface OrgMember {
   role: string
 }
 
-interface StudioClient {
-  id: string
-  name: string
-  logoUrl?: string
-  createdAt?: string | null
-  interactionDate?: string | null
-  feedbackDate?: string | null
-  activeProjects: number
-  team: { avatar: string; name: string }[]
-  additionalMembers: number
-}
-
-interface StudioPageShellProps {
+interface RoomPageShellProps {
   user: {
     name: string
     email: string
@@ -42,10 +30,12 @@ interface StudioPageShellProps {
   clientDirectory: { id: string; name: string; logoUrl?: string }[]
   teamMembers: OrgMember[]
   userRole: "admin" | "designer" | "client"
-  clients: StudioClient[]
+  userClientId?: string | null
+  clientData: Parameters<typeof RoomContent>[0]["clientData"]
+  clientEditData: Record<string, unknown>
 }
 
-export function StudioPageShell({
+export function RoomPageShell({
   user,
   organizationId,
   organizationName,
@@ -55,14 +45,15 @@ export function StudioPageShell({
   clientDirectory,
   teamMembers,
   userRole,
-  clients,
-}: StudioPageShellProps) {
+  userClientId,
+  clientData,
+  clientEditData,
+}: RoomPageShellProps) {
   const router = useRouter()
-  const [isRefreshingPage, startRefresh] = useTransition()
-  const [refreshOverlayMessage, setRefreshOverlayMessage] = useState("Updating clients...")
+  const [isRefreshingProjects, startRefresh] = useTransition()
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingToastMessageRef = useRef<string | null>(null)
+  const pendingSuccessToastRef = useRef(false)
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -77,22 +68,18 @@ export function StudioPageShell({
   }, [])
 
   useEffect(() => {
-    if (!isRefreshingPage && pendingToastMessageRef.current) {
-      showToast(pendingToastMessageRef.current)
-      pendingToastMessageRef.current = null
+    if (!isRefreshingProjects && pendingSuccessToastRef.current) {
+      pendingSuccessToastRef.current = false
+      showToast("Project created successfully")
     }
-  }, [isRefreshingPage, showToast])
+  }, [isRefreshingProjects, showToast])
 
-  const handlePageRefresh = useCallback(
-    (successMessage: string, overlayMessage: string) => {
-      setRefreshOverlayMessage(overlayMessage)
-      pendingToastMessageRef.current = successMessage
-      startRefresh(() => {
-        router.refresh()
-      })
-    },
-    [router]
-  )
+  const handleProjectsRefresh = useCallback(() => {
+    pendingSuccessToastRef.current = true
+    startRefresh(() => {
+      router.refresh()
+    })
+  }, [router])
 
   return (
     <div className="flex flex-col h-svh">
@@ -106,21 +93,17 @@ export function StudioPageShell({
         clientDirectory={clientDirectory}
         teamMembers={teamMembers}
         userRole={userRole}
-        onClientsRefresh={() =>
-          handlePageRefresh("Client added successfully", "Updating clients...")
-        }
-        onProjectsRefresh={() =>
-          handlePageRefresh("Project created successfully", "Updating studio...")
-        }
+        onProjectsRefresh={handleProjectsRefresh}
       />
       <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={user} userRole={userRole} />
-        <StudioContent
-          user={user}
-          clients={clients}
+        <AppSidebar user={user} userRole={userRole} clientId={userClientId} />
+        <RoomContent
+          clientData={clientData}
+          orgMembers={teamMembers}
+          clientEditData={clientEditData}
+          organizationId={organizationId}
           userRole={userRole}
-          isRefreshingClients={isRefreshingPage}
-          refreshOverlayMessage={refreshOverlayMessage}
+          isRefreshingProjects={isRefreshingProjects}
         />
       </div>
 

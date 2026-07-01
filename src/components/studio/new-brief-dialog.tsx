@@ -301,7 +301,7 @@ function MiniModal({
 interface NewBriefDialogProps {
   open: boolean
   onClose: () => void
-  onComplete: (data: BriefFormData) => void
+  onComplete: (data: BriefFormData) => void | Promise<void>
   clientDirectory?: { id: string; name: string; logoUrl?: string }[]
   teamMembers?: { id: string; name: string; email: string; avatar: string; role: string }[]
   organizationId?: string | null
@@ -490,7 +490,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     return newErrors
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const stepErrors = validateStep(step)
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors)
@@ -501,10 +501,11 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       setStep(step + 1)
     } else {
       setIsCreating(true)
-      // Small delay to show animation before calling onComplete
-      setTimeout(() => {
-        onComplete(formData)
-      }, 100)
+      try {
+        await onComplete(formData)
+      } finally {
+        setIsCreating(false)
+      }
     }
   }
 

@@ -18,6 +18,7 @@ interface StudioContentProps {
   onAddClient?: () => void
   userRole?: "admin" | "designer" | "client"
   isRefreshingClients?: boolean
+  refreshOverlayMessage?: string
 }
 
 interface StudioClient {
@@ -126,6 +127,7 @@ export function StudioContent({
   onAddClient,
   userRole = "admin",
   isRefreshingClients = false,
+  refreshOverlayMessage = "Updating clients...",
 }: StudioContentProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [showWelcome, setShowWelcome] = useState(false)
@@ -223,7 +225,7 @@ export function StudioContent({
           {isRefreshingClients && (
             <div className="absolute inset-0 top-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-background/40 backdrop-blur-[1px]">
               <Loader2 className="h-8 w-8 animate-spin text-[#5C6ECD]" />
-              <p className="text-sm font-medium text-foreground/80">Updating clients...</p>
+              <p className="text-sm font-medium text-foreground/80">{refreshOverlayMessage}</p>
             </div>
           )}
         </div>

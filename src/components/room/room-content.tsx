@@ -462,9 +462,17 @@ interface RoomContentProps {
   clientEditData?: Record<string, unknown>
   organizationId?: string | null
   userRole?: "admin" | "designer" | "client"
+  isRefreshingProjects?: boolean
 }
 
-export function RoomContent({ clientData, orgMembers = [], clientEditData, organizationId, userRole = "admin" }: RoomContentProps) {
+export function RoomContent({
+  clientData,
+  orgMembers = [],
+  clientEditData,
+  organizationId,
+  userRole = "admin",
+  isRefreshingProjects = false,
+}: RoomContentProps) {
   const router = useRouter()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
     clientData.projects.length > 0 ? clientData.projects[0] : null
@@ -913,7 +921,7 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Projects List */}
-        <div className="w-[320px] min-w-[320px] border-r border-border flex flex-col bg-card h-full">
+        <div className="relative w-[320px] min-w-[320px] border-r border-border flex flex-col bg-card h-full">
           <div className="p-3 border-b border-border space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -921,7 +929,12 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
             </div>
             <FilterTags selectedFilter={statusFilter} onFilterChange={setStatusFilter} projectCounts={projectCounts} />
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div
+            className={cn(
+              "flex-1 overflow-y-auto transition-opacity duration-200",
+              isRefreshingProjects && "opacity-50 pointer-events-none"
+            )}
+          >
             <div className="p-3 space-y-3">
               {filteredProjects.map((project) => (
                 <ProjectCard key={project.id} project={project} isSelected={selectedProject?.id === project.id} onClick={() => handleProjectSelect(project)} clientLogo={client.logoUrl} />
@@ -947,6 +960,13 @@ export function RoomContent({ clientData, orgMembers = [], clientEditData, organ
               )}
             </div>
           </div>
+
+          {isRefreshingProjects && (
+            <div className="absolute inset-0 top-[88px] flex flex-col items-center justify-center gap-3 bg-card/50 backdrop-blur-[1px]">
+              <Loader2 className="h-7 w-7 animate-spin text-[#5C6ECD]" />
+              <p className="text-sm font-medium text-foreground/80">Updating projects...</p>
+            </div>
+          )}
         </div>
 
         {/* Center Panel - Empty State */}
