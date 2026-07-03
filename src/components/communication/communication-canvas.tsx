@@ -18,6 +18,7 @@ import { getMediaTypeFromFile, getMediaTypeFromUrl, type MediaType } from "@/lib
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
 import { captureCreativeMediaForAnalysis } from "@/lib/capture-creative-media";
 import { apiPath } from "@/lib/base-path";
+import { downloadCreativeInBrowser } from "@/lib/download-creative-client";
 import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
 import { PdfPagePager } from "./pdf-page-pager";
 
@@ -407,6 +408,28 @@ export function RevueCanvas({
   const pageFilteredDrawings = isPdfIteration
     ? allDrawings.filter((d) => drawingPageNumber(d) === currentPage)
     : allDrawings;
+
+  const handleDownloadCreative = useCallback(async () => {
+    const iteration = iterations.find((item) => item.id === activeIterationId) ?? currentIteration
+    if (!iteration?.imageUrl) {
+      showToast("No file available to download", "error")
+      return
+    }
+
+    try {
+      await downloadCreativeInBrowser(iteration.imageUrl, {
+        creativeName: creativeName || iteration.name,
+        version: iteration.version,
+        mediaType: iteration.mediaType,
+      })
+    } catch (error) {
+      console.error("Failed to download creative:", error)
+      showToast(
+        error instanceof Error ? error.message : "Failed to download creative",
+        "error"
+      )
+    }
+  }, [activeIterationId, creativeName, currentIteration, iterations, showToast])
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
@@ -1038,6 +1061,8 @@ export function RevueCanvas({
           onIterationChange={handleIterationChange}
           onNewIteration={canUploadIterations ? () => setShowNewIterationDialog(true) : undefined}
           onShare={() => setShowShareDialog(true)}
+          onDownload={handleDownloadCreative}
+          downloadDisabled={!currentIteration?.imageUrl}
           clientId={clientId}
           clientName={clientName}
           clientLogo={clientLogo}

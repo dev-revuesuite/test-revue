@@ -21,6 +21,7 @@ import {
   Contrast,
   HelpCircle,
   LogOut,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -50,6 +51,8 @@ interface CommunicationHeaderProps {
   onIterationChange?: (id: string) => void;
   onNewIteration?: () => void;
   onShare?: () => void;
+  onDownload?: () => void | Promise<void>;
+  downloadDisabled?: boolean;
   clientId?: string;
   clientName?: string;
   clientLogo?: string;
@@ -63,6 +66,8 @@ export function CommunicationHeader({
   onIterationChange,
   onNewIteration,
   onShare,
+  onDownload,
+  downloadDisabled = false,
   clientId = "",
   clientName = "",
   clientLogo = "",
@@ -74,6 +79,17 @@ export function CommunicationHeader({
   const [isEditing, setIsEditing] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [currentUser, setCurrentUser] = useState({ name: "", email: "", avatar: "" });
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!onDownload || downloadDisabled || isDownloading) return
+    setIsDownloading(true)
+    try {
+      await onDownload()
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -273,9 +289,17 @@ export function CommunicationHeader({
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-[#444] hover:bg-gray-50 dark:hover:bg-[#333]"
+            disabled={downloadDisabled || isDownloading || !onDownload}
+            onClick={handleDownload}
+            aria-label="Download creative"
+            title="Download creative"
+            className="h-9 w-9 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-[#444] hover:bg-gray-50 dark:hover:bg-[#333] disabled:opacity-50"
           >
-            <Download className="w-4 h-4" />
+            {isDownloading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
           </Button>
 
           {/* Share Button */}
