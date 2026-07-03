@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
   Grid3X3,
@@ -19,6 +19,7 @@ import {
   HardDrive,
   ExternalLink,
   Layers,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -187,6 +188,8 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
   const [sortBy, setSortBy] = useState<SortBy>("name")
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc")
   const [showFilterMenu, setShowFilterMenu] = useState(false)
+  const [openingCreativeId, setOpeningCreativeId] = useState<string | null>(null)
+  const [, startCreativeNavigation] = useTransition()
   const filterMenuRef = useRef<HTMLDivElement>(null)
 
   // Close filter menu when clicking outside
@@ -248,10 +251,17 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
     }
   }
 
+  const openInRevue = (item: FolderItem) => {
+    if (item.type !== "creative" || !item.projectId || openingCreativeId) return
+    setOpeningCreativeId(item.id)
+    startCreativeNavigation(() => {
+      router.push(`/revue?projectId=${item.projectId}&creativeId=${item.id}`)
+    })
+  }
+
   const navigateToFolder = (item: FolderItem) => {
     if (item.type === "creative") {
-      // Navigate to Revue communication page
-      router.push(`/revue?projectId=${item.projectId}&creativeId=${item.id}`)
+      openInRevue(item)
       return
     }
 
@@ -485,7 +495,9 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
                   key={item.id}
                   item={item}
                   index={index}
-                  onClick={() => navigateToFolder(item)}
+                  onClick={() => openInRevue(item)}
+                  isOpening={openingCreativeId === item.id}
+                  isBlocked={openingCreativeId !== null && openingCreativeId !== item.id}
                 />
               ))}
             </div>
@@ -623,10 +635,14 @@ function CreativeCard({
   item,
   index,
   onClick,
+  isOpening = false,
+  isBlocked = false,
 }: {
   item: FolderItem
   index: number
   onClick: () => void
+  isOpening?: boolean
+  isBlocked?: boolean
 }) {
   const statusLabel = statusLabels[item.status || ""] || item.status || "In Progress"
   const statusDot = statusColors[item.status || ""] || "bg-blue-500"
@@ -634,7 +650,11 @@ function CreativeCard({
   return (
     <div
       onClick={onClick}
-      className="group rounded-xl border border-border bg-card overflow-hidden hover:border-[#5C6ECD]/30 hover:shadow-lg hover:shadow-[#5C6ECD]/5 transition-all duration-200 animate-in fade-in slide-in-from-bottom-4 cursor-pointer"
+      className={cn(
+        "group rounded-xl border border-border bg-card overflow-hidden hover:border-[#5C6ECD]/30 hover:shadow-lg hover:shadow-[#5C6ECD]/5 transition-all duration-200 animate-in fade-in slide-in-from-bottom-4 cursor-pointer",
+        isOpening && "cursor-wait",
+        isBlocked && "pointer-events-none opacity-60"
+      )}
       style={{ animationDelay: `${index * 50}ms`, animationFillMode: "backwards" }}
     >
       {/* Preview Area */}
@@ -652,10 +672,24 @@ function CreativeCard({
         )}
 
         {/* Hover Overlay */}
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+        <div
+          className={cn(
+            "absolute inset-0 bg-black/50 transition-opacity flex items-center justify-center gap-2",
+            isOpening ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}
+        >
           <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 text-white text-sm font-medium">
-            <ExternalLink className="w-4 h-4" />
-            Open in Revue
+            {isOpening ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Opening...
+              </>
+            ) : (
+              <>
+                <ExternalLink className="w-4 h-4" />
+                Open in Revue
+              </>
+            )}
           </div>
         </div>
 
@@ -697,10 +731,23 @@ function CreativeCard({
 
         <Button
           variant="outline"
-          className="w-full border-[#5C6ECD]/30 text-[#5C6ECD] hover:bg-[#5C6ECD] hover:text-white hover:border-[#5C6ECD] transition-all font-medium"
+          disabled={isOpening}
+          className={cn(
+            "w-full border-[#5C6ECD]/30 text-[#5C6ECD] hover:bg-[#5C6ECD] hover:text-white hover:border-[#5C6ECD] transition-all font-medium",
+            isOpening && "cursor-wait"
+          )}
         >
-          <ExternalLink className="w-3.5 h-3.5 mr-2" />
-          OPEN IN REVUE
+          {isOpening ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+              OPENING...
+            </>
+          ) : (
+            <>
+              <ExternalLink className="w-3.5 h-3.5 mr-2" />
+              OPEN IN REVUE
+            </>
+          )}
         </Button>
       </div>
     </div>

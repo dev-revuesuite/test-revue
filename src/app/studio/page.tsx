@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { StudioPageShell } from "@/components/studio/studio-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
+import { getStudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 
 export default async function StudioPage() {
   const supabase = await createClient()
@@ -96,6 +97,9 @@ export default async function StudioPage() {
         role: m.role || "",
       })) ?? []
 
+  const clientIds = clientsData.map((client) => client.id)
+  const dashboardStats = await getStudioDashboardStats(supabase, clientIds)
+
   return (
     <StudioPageShell
       user={userData}
@@ -108,6 +112,7 @@ export default async function StudioPage() {
       teamMembers={teamMembers}
       userRole={userRole}
       clients={clientsData}
+      dashboardStats={dashboardStats}
     />
   )
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioContent } from "@/components/studio/studio-content"
+import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
 
@@ -43,6 +44,7 @@ interface StudioPageShellProps {
   teamMembers: OrgMember[]
   userRole: "admin" | "designer" | "client"
   clients: StudioClient[]
+  dashboardStats: StudioDashboardStats
 }
 
 export function StudioPageShell({
@@ -56,6 +58,7 @@ export function StudioPageShell({
   teamMembers,
   userRole,
   clients,
+  dashboardStats,
 }: StudioPageShellProps) {
   const router = useRouter()
   const [isRefreshingPage, startRefresh] = useTransition()
@@ -118,6 +121,7 @@ export function StudioPageShell({
         <StudioContent
           user={user}
           clients={clients}
+          dashboardStats={dashboardStats}
           userRole={userRole}
           isRefreshingClients={isRefreshingPage}
           refreshOverlayMessage={refreshOverlayMessage}

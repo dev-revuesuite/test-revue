@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ClientCard } from "./client-card"
+import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 
 interface StudioContentProps {
   user: {
@@ -15,6 +16,7 @@ interface StudioContentProps {
     avatar: string
   }
   clients: StudioClient[]
+  dashboardStats: StudioDashboardStats
   onAddClient?: () => void
   userRole?: "admin" | "designer" | "client"
   isRefreshingClients?: boolean
@@ -70,11 +72,9 @@ function ClientCardSkeleton() {
   )
 }
 
-// Stats will be computed from clients data
-const getStats = (clientsData: StudioClient[]) => {
+const getStats = (clientsData: StudioClient[], dashboardStats: StudioDashboardStats) => {
   const totalClients = clientsData.length
   const activeProjects = clientsData.reduce((sum, c) => sum + c.activeProjects, 0)
-  const totalTeamMembers = clientsData.reduce((sum, c) => sum + c.team.length + c.additionalMembers, 0)
 
   return [
     {
@@ -89,17 +89,17 @@ const getStats = (clientsData: StudioClient[]) => {
     },
     {
       label: "Feedback",
-      value: "24",
+      value: String(dashboardStats.feedback),
       icon: MessageSquare,
     },
     {
       label: "QC Pending",
-      value: "3",
+      value: String(dashboardStats.qcPending),
       icon: AlertCircle,
     },
     {
       label: "Iterations",
-      value: String(activeProjects * 4),
+      value: String(dashboardStats.iterations),
       icon: RefreshCw,
     },
   ]
@@ -124,6 +124,7 @@ const formatDate = (value?: string | null) => {
 export function StudioContent({
   user,
   clients,
+  dashboardStats,
   onAddClient,
   userRole = "admin",
   isRefreshingClients = false,
@@ -167,7 +168,7 @@ export function StudioContent({
               ))}
             </>
           ) : (
-            getStats(clients).map((stat, index) => (
+            getStats(clients, dashboardStats).map((stat, index) => (
               <div
                 key={index}
                 className="group flex items-center justify-between p-4 rounded-xl border border-black/10 dark:border-white/10 bg-card hover:border-[#5C6ECD]/50 hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-white/5 transition-all duration-200 cursor-pointer"
