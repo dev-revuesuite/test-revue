@@ -1,11 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioContent } from "@/components/studio/studio-content"
 import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
+import { getCurrentNavigationPath } from "@/components/navigation-path-tracker"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
 
@@ -61,6 +62,7 @@ export function StudioPageShell({
   dashboardStats,
 }: StudioPageShellProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const [isRefreshingPage, startRefresh] = useTransition()
   const [refreshOverlayMessage, setRefreshOverlayMessage] = useState("Updating clients...")
   const [toast, setToast] = useState<string | null>(null)
@@ -85,6 +87,15 @@ export function StudioPageShell({
       pendingToastMessageRef.current = null
     }
   }, [isRefreshingPage, showToast])
+
+  // Refetch server data when navigating back to Studio (sidebar, back button, etc.)
+  useLayoutEffect(() => {
+    const fromPath = getCurrentNavigationPath()
+
+    if (pathname === "/studio" && fromPath !== null && fromPath !== "/studio") {
+      router.refresh()
+    }
+  }, [pathname, router])
 
   const handlePageRefresh = useCallback(
     (successMessage: string, overlayMessage: string) => {

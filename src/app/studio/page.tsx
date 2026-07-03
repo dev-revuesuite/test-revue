@@ -5,6 +5,8 @@ import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { getStudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 
+export const dynamic = "force-dynamic"
+
 export default async function StudioPage() {
   const supabase = await createClient()
 
