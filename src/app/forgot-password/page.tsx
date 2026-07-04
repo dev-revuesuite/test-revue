@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { ForgotPasswordForm } from "@/components/forgot-password-form"
 import { DotLottieReact } from "@lottiefiles/dotlottie-react"
 
@@ -17,7 +18,15 @@ export default function ForgotPasswordPage() {
       </div>
       <div className="flex w-full lg:w-1/2 items-center justify-center p-6 md:p-10 min-h-svh">
         <div className="w-full max-w-md">
-          <ForgotPasswordForm />
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-12">
+                <div className="w-10 h-10 border-4 border-muted border-t-foreground rounded-full animate-spin" />
+              </div>
+            }
+          >
+            <ForgotPasswordForm />
+          </Suspense>
         </div>
       </div>
     </div>
