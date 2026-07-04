@@ -40,10 +40,26 @@ export function UpdatePasswordForm({
 
       const code = searchParams.get("code")
       if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (error) {
+        const { error: codeError } = await supabase.auth.exchangeCodeForSession(code)
+        if (codeError) {
           if (!cancelled) setHasSession(false)
           return
+        }
+      } else {
+        const tokenHash =
+          searchParams.get("token_hash") ?? searchParams.get("token")
+        const type = searchParams.get("type")
+
+        if (type === "recovery" && tokenHash) {
+          const { error: otpError } = await supabase.auth.verifyOtp({
+            type: "recovery",
+            token_hash: tokenHash,
+          })
+
+          if (otpError) {
+            if (!cancelled) setHasSession(false)
+            return
+          }
         }
       }
 
@@ -53,6 +69,14 @@ export function UpdatePasswordForm({
 
       if (!cancelled) {
         setHasSession(!!user)
+        if (
+          user &&
+          (searchParams.get("token_hash") ||
+            searchParams.get("token") ||
+            searchParams.get("code"))
+        ) {
+          router.replace("/update-password")
+        }
       }
     }
 
@@ -61,7 +85,7 @@ export function UpdatePasswordForm({
     return () => {
       cancelled = true
     }
-  }, [linkExpiredFromUrl, searchParams])
+  }, [linkExpiredFromUrl, router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

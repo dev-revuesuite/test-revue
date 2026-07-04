@@ -1,6 +1,11 @@
 /** App subpath on revuesuite.com — must match `basePath` in next.config.ts (Vercel lowercases path domains). */
 export const APP_BASE_PATH = "/qc-tool"
 
+/** Public production origin for auth emails and canonical redirects. */
+export const CANONICAL_APP_ORIGIN = "https://revuesuite.com"
+export const CANONICAL_APP_HOST = "revuesuite.com"
+export const VERCEL_PREVIEW_HOST = "test-revue.vercel.app"
+
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path : `/${path}`
 }
@@ -72,20 +77,27 @@ export function withBasePath(path: string): string {
  * links always use the public domain, not a Vercel preview URL.
  */
 export function getConfiguredAppOrigin(fallbackOrigin?: string): string {
+  const fallback =
+    fallbackOrigin?.replace(/\/$/, "") ??
+    (typeof window !== "undefined" ? window.location.origin : "")
+
+  if (
+    fallback.includes("localhost") ||
+    fallback.includes("127.0.0.1")
+  ) {
+    return fallback
+  }
+
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "")
   if (configured) {
     return configured
   }
 
-  if (fallbackOrigin) {
-    return fallbackOrigin.replace(/\/$/, "")
+  if (fallback && !fallback.includes(VERCEL_PREVIEW_HOST)) {
+    return fallback
   }
 
-  if (typeof window !== "undefined") {
-    return window.location.origin
-  }
-
-  return ""
+  return CANONICAL_APP_ORIGIN
 }
 
 /** Full URL for Supabase auth redirectTo (includes basePath). */
