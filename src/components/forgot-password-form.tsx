@@ -1,8 +1,9 @@
 "use client"
 
-import { withBasePath, publicPath } from "@/lib/base-path"
+import { authRedirectUrl, withBasePath, publicPath } from "@/lib/base-path"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,10 +16,17 @@ export function ForgotPasswordForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get("error") === "link_expired") {
+      setError("This reset link has expired or is invalid. Please request a new one.")
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,7 +41,10 @@ export function ForgotPasswordForm({
     try {
       const supabase = createClient()
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${withBasePath("/auth/callback?next=/update-password")}`,
+        redirectTo: authRedirectUrl(
+          "/auth/callback?next=/update-password",
+          window.location.origin
+        ),
       })
 
       if (error) {

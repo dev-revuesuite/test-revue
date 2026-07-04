@@ -1,6 +1,6 @@
 "use client"
 
-import { withBasePath, publicPath } from "@/lib/base-path"
+import { authRedirectUrl, withBasePath, publicPath } from "@/lib/base-path"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -116,7 +116,7 @@ export function LoginForm({
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}${withBasePath("/auth/callback")}`,
+        redirectTo: authRedirectUrl("/auth/callback", window.location.origin),
       },
     })
 

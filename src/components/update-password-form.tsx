@@ -3,7 +3,7 @@
 import { withBasePath, publicPath } from "@/lib/base-path"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,6 +17,8 @@ export function UpdatePasswordForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const linkExpiredFromUrl = searchParams.get("error") === "link_expired"
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -26,15 +28,40 @@ export function UpdatePasswordForm({
 
   // Check if user has a valid session (from the reset email link)
   useEffect(() => {
-    const checkSession = async () => {
+    let cancelled = false
+
+    const verifyResetSession = async () => {
       const supabase = createClient()
+
+      if (linkExpiredFromUrl) {
+        setHasSession(false)
+        return
+      }
+
+      const code = searchParams.get("code")
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) {
+          if (!cancelled) setHasSession(false)
+          return
+        }
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      setHasSession(!!user)
+
+      if (!cancelled) {
+        setHasSession(!!user)
+      }
     }
-    checkSession()
-  }, [])
+
+    void verifyResetSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [linkExpiredFromUrl, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

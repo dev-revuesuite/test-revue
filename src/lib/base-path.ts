@@ -66,9 +66,38 @@ export function withBasePath(path: string): string {
   return `${APP_BASE_PATH}${normalized}`
 }
 
+/**
+ * Canonical app origin for auth emails and callbacks.
+ * Set NEXT_PUBLIC_APP_URL=https://revuesuite.com in production so reset/OAuth
+ * links always use the public domain, not a Vercel preview URL.
+ */
+export function getConfiguredAppOrigin(fallbackOrigin?: string): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "")
+  if (configured) {
+    return configured
+  }
+
+  if (fallbackOrigin) {
+    return fallbackOrigin.replace(/\/$/, "")
+  }
+
+  if (typeof window !== "undefined") {
+    return window.location.origin
+  }
+
+  return ""
+}
+
+/** Full URL for Supabase auth redirectTo (includes basePath). */
+export function authRedirectUrl(path: string, fallbackOrigin?: string): string {
+  const origin = getConfiguredAppOrigin(fallbackOrigin)
+  return `${origin}${withBasePath(normalizePath(path))}`
+}
+
 /** Build an absolute redirect URL for Route Handlers (OAuth callback, etc.). */
 export function absoluteAppUrl(origin: string, path: string): string {
-  return `${origin}${withBasePath(appRoute(path))}`
+  const resolvedOrigin = getConfiguredAppOrigin(origin) || origin
+  return `${resolvedOrigin}${withBasePath(appRoute(path))}`
 }
 
 /** Path for files in `public/` (not auto-prefixed on raw `<img>` tags). */
