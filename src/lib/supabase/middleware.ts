@@ -1,26 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-import { appRoute, stripBasePath, VERCEL_PREVIEW_HOST, CANONICAL_APP_HOST } from '@/lib/base-path'
-
-const authRedirectPaths = ['/auth/callback', '/update-password', '/forgot-password']
+import { appRoute, stripBasePath } from '@/lib/base-path'
 
 export async function updateSession(request: NextRequest) {
-  const pathname = stripBasePath(request.nextUrl.pathname)
-
-  if (request.nextUrl.hostname === VERCEL_PREVIEW_HOST) {
-    const isAuthRedirectPath = authRedirectPaths.some(
-      (route) => pathname === route || pathname.startsWith(`${route}/`)
-    )
-
-    if (isAuthRedirectPath) {
-      const url = request.nextUrl.clone()
-      url.hostname = CANONICAL_APP_HOST
-      url.protocol = 'https:'
-      return NextResponse.redirect(url)
-    }
-  }
-
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -53,6 +36,8 @@ export async function updateSession(request: NextRequest) {
   } catch {
     // If Supabase is unreachable, allow the request through
   }
+
+  const pathname = stripBasePath(request.nextUrl.pathname)
 
   // Protected routes
   const protectedRoutes = ['/studio', '/creative-zone', '/productive-zone']
