@@ -6,8 +6,8 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordInput } from "@/components/password-input"
 import { createClient } from "@/lib/supabase/client"
 import Image from "next/image"
 import { Lock, CheckCircle2, AlertTriangle } from "lucide-react"
@@ -283,9 +283,8 @@ export function UpdatePasswordForm({
           <Label htmlFor="new-password" className="w-24 shrink-0 text-base">
             Password
           </Label>
-          <Input
+          <PasswordInput
             id="new-password"
-            type="password"
             placeholder="Min. 6 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -299,9 +298,8 @@ export function UpdatePasswordForm({
           <Label htmlFor="confirm-password" className="w-24 shrink-0 text-base">
             Confirm
           </Label>
-          <Input
+          <PasswordInput
             id="confirm-password"
-            type="password"
             placeholder="Re-enter password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
