@@ -43,7 +43,17 @@ import { createClient } from "@/lib/supabase/client"
 import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
 import { getMediaTypeFromFile, isPdfFile } from "@/lib/media-type"
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count"
+import { requestCreativePreview } from "@/lib/request-creative-preview"
+import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
+import { downloadReference, downloadAllReferences } from "@/lib/download-references"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
+import {
+  BrandColorSwatch,
+  BRAND_COLOR_COUNT,
+  DEFAULT_BRAND_COLORS,
+  toValidHex,
+  type BrandColor,
+} from "@/components/shared/brand-color-swatch"
 import type { MediaType } from "@/lib/media-type"
 
 // Types
@@ -59,6 +69,7 @@ interface Creative {
   name: string
   type: "image" | "video" | "document" | "design"
   thumbnailUrl: string
+  previewUrl?: string
   mediaType?: MediaType
   pageCount?: number | null
   updatedAt: string
@@ -106,6 +117,7 @@ interface Project {
   externalLinks?: ExternalLinkItem[]
   budget?: string
   deliverables: Deliverable[]
+  brandColors?: BrandColor[]
   creatives: Creative[]
 }
 
@@ -478,6 +490,21 @@ export function RoomContent({
     clientData.projects.length > 0 ? clientData.projects[0] : null
   )
   const [isLoading] = useState(false)
+
+  // Render previews for PDFs uploaded before preview_url existed. Clients cannot
+  // trigger a render (the route is team-only), so don't ask on their behalf.
+  usePreviewBackfill(
+    userRole === "client"
+      ? []
+      : (selectedProject?.creatives ?? [])
+          .filter(
+            (creative) =>
+              !creative.previewUrl &&
+              (creative.mediaType === "pdf" || creative.type === "document")
+          )
+          .map((creative) => creative.id)
+  )
+
   const [assetsDrawerOpen, setAssetsDrawerOpen] = useState(false)
   const [teamModalOpen, setTeamModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -490,6 +517,8 @@ export function RoomContent({
   // Deliverable modal state
   const [addDeliverableOpen, setAddDeliverableOpen] = useState(false)
   const [newDeliverable, setNewDeliverable] = useState({ name: "", dueDate: "" })
+  const [editColorsOpen, setEditColorsOpen] = useState(false)
+  const [draftColors, setDraftColors] = useState<BrandColor[]>(DEFAULT_BRAND_COLORS.map((c) => ({ ...c })))
 
   // Creative modal state
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
@@ -501,6 +530,11 @@ export function RoomContent({
 
   // Reference preview state
   const [previewRef, setPreviewRef] = useState<Reference | null>(null)
+
+  // Reference download state
+  const [downloadingRefId, setDownloadingRefId] = useState<string | null>(null)
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   // Add team member state
   const [addTeamMemberOpen, setAddTeamMemberOpen] = useState(false)
@@ -550,6 +584,26 @@ export function RoomContent({
     await supabase.from("projects").update({ project_deliverables: deliverables }).eq("id", projectId)
   }
 
+  // Brand (Pantone) colors — fixed at BRAND_COLOR_COUNT rows
+  const openBrandColorsEditor = () => {
+    const existing = selectedProject?.brandColors ?? []
+    const seeded = Array.from({ length: BRAND_COLOR_COUNT }, (_, i) =>
+      existing[i] ? { ...existing[i] } : { ...DEFAULT_BRAND_COLORS[i] }
+    )
+    setDraftColors(seeded)
+    setEditColorsOpen(true)
+  }
+
+  const handleSaveBrandColors = async () => {
+    if (!selectedProject) return
+    const cleaned = draftColors.map((c) => ({ hex: toValidHex(c.hex), label: c.label.trim() }))
+    const updatedProject = { ...selectedProject, brandColors: cleaned }
+    setSelectedProject(updatedProject)
+    setEditData(updatedProject)
+    setEditColorsOpen(false)
+    await supabase.from("projects").update({ brand_colors: cleaned }).eq("id", selectedProject.id)
+  }
+
   const deriveBriefStatus = (creatives: Creative[]): StatusKey => {
     if (creatives.length === 0) return "brief_received"
     if (creatives.every((c) => c.status === "completed")) return "completed"
@@ -577,6 +631,41 @@ export function RoomContent({
   const handleCancel = () => {
     setEditData(selectedProject)
     setIsEditing(false)
+  }
+
+  // Reference download handlers
+  const handleDownloadReference = async (ref: Reference) => {
+    if (downloadingRefId) return
+    setDownloadingRefId(ref.id)
+    setDownloadError(null)
+    try {
+      await downloadReference(ref)
+    } catch (error) {
+      console.error("Reference download failed:", error)
+      setDownloadError(`Could not download "${ref.name}".`)
+    } finally {
+      setDownloadingRefId(null)
+    }
+  }
+
+  const handleDownloadAllReferences = async () => {
+    if (!selectedProject || isDownloadingAll) return
+    setIsDownloadingAll(true)
+    setDownloadError(null)
+    try {
+      const { failed } = await downloadAllReferences(
+        selectedProject.references ?? [],
+        selectedProject.name
+      )
+      if (failed.length > 0) {
+        setDownloadError(`Skipped ${failed.length} file${failed.length === 1 ? "" : "s"} that failed to download.`)
+      }
+    } catch (error) {
+      console.error("Download all references failed:", error)
+      setDownloadError("Could not download the reference files.")
+    } finally {
+      setIsDownloadingAll(false)
+    }
   }
 
   const handleCreativeClick = (creative: Creative) => {
@@ -703,6 +792,13 @@ export function RoomContent({
             .update({ page_count: pageCount })
             .eq("id", iterationRow.id)
         }
+
+        // Render the card preview in the background. Never block the upload on
+        // it -- requestCreativePreview swallows its own failures. Refresh once
+        // it lands so the card swaps the placeholder for the rendered page.
+        void requestCreativePreview(inserted.id).then((previewUrl) => {
+          if (previewUrl) router.refresh()
+        })
       }
     }
 
@@ -1102,6 +1198,84 @@ export function RoomContent({
                   </div>
                 </div>
 
+                {/* Brand Colors */}
+                <div className="bg-card rounded-xl border border-border p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                        <Palette className="w-4 h-4 text-[#5C6ECD]" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-foreground">Brand Colors</h3>
+                        <p className="text-xs text-muted-foreground">Pantone reference for this brief</p>
+                      </div>
+                    </div>
+                    {userRole !== "client" && (
+                      <Button variant="outline" size="sm" onClick={openBrandColorsEditor}>
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit Colors
+                      </Button>
+                    )}
+                  </div>
+                  {(data.brandColors ?? []).length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(data.brandColors ?? []).map((color, i) => (
+                        <BrandColorSwatch key={i} color={color} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground text-sm">
+                      No brand colors set.{userRole !== "client" ? " Click “Edit Colors” to add them." : ""}
+                    </div>
+                  )}
+                </div>
+
+                {/* Brand Colors Edit Dialog */}
+                <Dialog open={editColorsOpen} onOpenChange={setEditColorsOpen}>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+                          <Palette className="w-4 h-4 text-[#5C6ECD]" />
+                        </div>
+                        Brand Colors
+                      </DialogTitle>
+                      <DialogDescription>Pick {BRAND_COLOR_COUNT} colors and label each with its Pantone name.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 mt-2">
+                      {draftColors.map((color, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 border border-border rounded-xl bg-muted/30">
+                          <input
+                            type="color"
+                            value={toValidHex(color.hex)}
+                            onChange={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, hex: e.target.value } : c)))}
+                            className="w-10 h-10 rounded-lg border border-border bg-transparent cursor-pointer shrink-0"
+                            aria-label={`Color ${i + 1}`}
+                          />
+                          <Input
+                            value={color.label}
+                            onChange={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, label: e.target.value } : c)))}
+                            placeholder={`Pantone name (color ${i + 1})`}
+                            className="flex-1"
+                          />
+                          <Input
+                            value={color.hex}
+                            onChange={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, hex: e.target.value } : c)))}
+                            onBlur={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, hex: toValidHex(e.target.value) } : c)))}
+                            placeholder="#000000"
+                            className="w-24 shrink-0 text-xs uppercase font-mono"
+                            aria-label={`Hex for color ${i + 1}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end gap-3 mt-4">
+                      <Button variant="outline" onClick={() => setEditColorsOpen(false)}>Cancel</Button>
+                      <Button onClick={handleSaveBrandColors} className="bg-[#5C6ECD] hover:bg-[#4a5bb8]">Save Colors</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Creatives */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
@@ -1152,6 +1326,7 @@ export function RoomContent({
                                 name={creative.name}
                                 type={creative.type}
                                 thumbnailUrl={creative.thumbnailUrl}
+                                previewUrl={creative.previewUrl}
                                 mediaType={creative.mediaType}
                                 pageCount={creative.pageCount}
                                 typeIcon={TypeIcon}
@@ -1294,10 +1469,30 @@ export function RoomContent({
               {/* References Section */}
               {selectedProject.references && selectedProject.references.length > 0 && (
                 <div className="p-4 border-b border-border">
-                  <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm mb-3">
-                    <FolderOpen className="w-4 h-4 text-[#5C6ECD]" />
-                    References
-                  </h3>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+                      <FolderOpen className="w-4 h-4 text-[#5C6ECD]" />
+                      References
+                    </h3>
+                    {selectedProject.references.filter((r) => r.url).length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#5C6ECD]/10"
+                        disabled={isDownloadingAll}
+                        onClick={handleDownloadAllReferences}
+                      >
+                        {isDownloadingAll ? (
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Zipping...</>
+                        ) : (
+                          <><Download className="w-3 h-3 mr-1" />Download All</>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  {downloadError && (
+                    <p className="text-[10px] text-destructive mb-2">{downloadError}</p>
+                  )}
                   <div className="space-y-2">
                     {selectedProject.references.map((ref, index) => (
                       <div
@@ -1307,9 +1502,23 @@ export function RoomContent({
                       >
                         <div className="w-6 h-6 rounded bg-foreground text-background flex items-center justify-center text-[10px] font-bold flex-shrink-0">{index + 1}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground truncate">{ref.name}</p>
+                          <p className="text-xs font-medium text-foreground truncate" title={ref.name}>{ref.name}</p>
                           {ref.size && <p className="text-[10px] text-muted-foreground">{ref.size}</p>}
                         </div>
+                        {ref.url && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title={`Download ${ref.name}`}
+                            disabled={downloadingRefId === ref.id}
+                            onClick={(e) => { e.stopPropagation(); handleDownloadReference(ref) }}
+                          >
+                            {downloadingRefId === ref.id
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Download className="w-3 h-3" />}
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); ref.url && setPreviewRef(ref) }}><Eye className="w-3 h-3" /></Button>
                       </div>
                     ))}
@@ -1318,14 +1527,14 @@ export function RoomContent({
               )}
 
               {/* External Links Section */}
-              {selectedProject.externalLinks && selectedProject.externalLinks.length > 0 && (
+              {selectedProject.externalLinks && selectedProject.externalLinks.some((l) => l.url) && (
                 <div className="p-4 border-b border-border">
                   <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm mb-3">
                     <Link className="w-4 h-4 text-[#5C6ECD]" />
                     External Links
                   </h3>
                   <div className="space-y-2">
-                    {selectedProject.externalLinks.map((link) => (
+                    {selectedProject.externalLinks.filter((l) => l.url).map((link) => (
                       <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/50 hover:border-[#5C6ECD]/30 transition-colors group">
                         <div className="w-6 h-6 rounded bg-[#5C6ECD]/10 flex items-center justify-center flex-shrink-0"><ExternalLink className="w-3 h-3 text-[#5C6ECD]" /></div>
                         <span className="text-xs font-medium text-foreground truncate flex-1">{link.name}</span>
@@ -1427,7 +1636,9 @@ export function RoomContent({
             </DialogTitle>
             <DialogDescription>Upload a new creative asset for this project</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          {/* min-w-0: DialogContent is a grid, whose children default to
+              min-width:auto and would otherwise stretch to fit a long filename. */}
+          <div className="space-y-4 mt-4 min-w-0">
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">Creative Name *</label>
               <Input
@@ -1497,12 +1708,18 @@ export function RoomContent({
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{newCreative.file.name}</p>
+                    <p
+                      className="text-sm font-medium text-foreground truncate"
+                      title={newCreative.file.name}
+                    >
+                      {newCreative.file.name}
+                    </p>
                     <p className="text-xs text-muted-foreground">{(newCreative.file.size / 1024 / 1024).toFixed(2)} MB</p>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="shrink-0"
                     onClick={() => {
                       if (newCreative.filePreview) URL.revokeObjectURL(newCreative.filePreview)
                       setNewCreative((prev) => ({ ...prev, file: null, filePreview: "" }))
@@ -1594,11 +1811,17 @@ export function RoomContent({
           )}
           <div className="flex justify-end gap-3 mt-2">
             {previewRef?.url && (
-              <Button asChild variant="outline" size="sm">
-                <a href={previewRef.url} download>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download
-                </a>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloadingRefId === previewRef.id}
+                onClick={() => handleDownloadReference(previewRef)}
+              >
+                {downloadingRefId === previewRef.id ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Downloading...</>
+                ) : (
+                  <><Download className="w-4 h-4 mr-2" />Download</>
+                )}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPreviewRef(null)}>Close</Button>

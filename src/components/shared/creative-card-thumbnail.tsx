@@ -9,6 +9,8 @@ export interface CreativeCardThumbnailProps {
   name: string
   type: "image" | "video" | "document" | "design"
   thumbnailUrl?: string
+  /** Rendered preview image. Required for PDFs -- their thumbnailUrl is a .pdf. */
+  previewUrl?: string
   mediaType?: MediaType
   pageCount?: number | null
   typeIcon?: ComponentType<{ className?: string }>
@@ -21,6 +23,7 @@ export function CreativeCardThumbnail({
   name,
   type,
   thumbnailUrl = "",
+  previewUrl = "",
   mediaType,
   pageCount,
   typeIcon: TypeIcon = FileText,
@@ -33,15 +36,22 @@ export function CreativeCardThumbnail({
     type === "document" ||
     (thumbnailUrl ? isPdfUrl(thumbnailUrl) : false)
 
-  const showImage =
-    thumbnailUrl && !isPdf && (type === "image" || type === "video" || type === "design")
+  // A rendered preview is always displayable. Otherwise only non-PDF originals
+  // can go straight into an <img>.
+  const imageUrl =
+    previewUrl ||
+    (!isPdf && (type === "image" || type === "video" || type === "design")
+      ? thumbnailUrl
+      : "")
+
+  const showImage = Boolean(imageUrl)
 
   return (
     <div className={cn("relative overflow-hidden bg-muted", className)}>
       {showImage ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
-          src={thumbnailUrl}
+          src={imageUrl}
           alt={name}
           className={cn(
             "w-full h-full object-cover group-hover:scale-105 transition-transform duration-500",

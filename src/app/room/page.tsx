@@ -4,6 +4,8 @@ import { RoomPageShell } from "@/components/room/room-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { resolveIterationMediaType } from "@/lib/media-type"
+import { normalizeExternalUrl } from "@/lib/external-link"
+import type { BrandColor } from "@/components/shared/brand-color-swatch"
 
 export const dynamic = "force-dynamic"
 
@@ -125,6 +127,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     external_links: unknown
     budget: number | null
     project_deliverables: unknown
+    brand_colors: unknown
   }
 
   let projects: ProjectData[] | null = null
@@ -145,7 +148,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     const { data: allProjectsData } = await supabase
       .from("projects")
       .select(
-        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables"
+        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
       )
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
@@ -193,7 +196,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     const { data: projectsData } = await supabase
       .from("projects")
       .select(
-        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables"
+        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
       )
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
@@ -336,7 +339,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
         ).map((l, i) => ({
           id: `el${i}`,
           name: l.name || "",
-          url: l.name || undefined,
+          // Older rows stored only `name`, so fall back to it — but normalize,
+          // otherwise a bare hostname becomes a relative link to this app.
+          url: normalizeExternalUrl(l.url ?? l.name) ?? undefined,
         })),
         budget: p.budget ? String(p.budget) : undefined,
         deliverables: (
@@ -349,6 +354,10 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
             | "in_progress"
             | "completed",
           dueDate: d.dueDate || undefined,
+        })),
+        brandColors: ((p.brand_colors as BrandColor[]) || []).map((c) => ({
+          hex: c?.hex || "#000000",
+          label: c?.label || "",
         })),
         creatives: (creativesByProject[p.id] || []).map((c) => {
           const thumb = c.thumbnail_url || ""
@@ -367,6 +376,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
               | "document"
               | "design",
             thumbnailUrl: thumb,
+            previewUrl: c.preview_url || undefined,
             mediaType,
             pageCount: meta?.pageCount ?? null,
             updatedAt: c.updated_at

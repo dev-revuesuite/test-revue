@@ -244,8 +244,8 @@ export function StudioContent({
             </button>
 
             <div className="flex justify-center mb-5">
-              <img src={publicPath("/Logo/Artboard 8@2x.png")} alt="Revue" width={140} height={43} className="dark:hidden" />
-              <img src={publicPath("/Logo/Artboard 8 copy@2x.png")} alt="Revue" width={140} height={43} className="hidden dark:block" />
+              <img src={publicPath("/Logo/Artboard_5.png")} alt="Revue" width={140} height={43} className="dark:hidden" />
+              <img src={publicPath("/Logo/Artboard_1.png")} alt="Revue" width={140} height={43} className="hidden dark:block" />
             </div>
 
             <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-white mb-2">

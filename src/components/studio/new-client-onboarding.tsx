@@ -811,8 +811,8 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
         <div className="flex items-center justify-between">
           {/* Revue Logo */}
           <div className="flex items-center">
-            <img src={publicPath("/Logo/Artboard 8@2x.png")} alt="Revue" width={120} height={37} className="dark:hidden" />
-            <img src={publicPath("/Logo/Artboard 8 copy@2x.png")} alt="Revue" width={120} height={37} className="hidden dark:block" />
+            <img src={publicPath("/Logo/Artboard_5.png")} alt="Revue" width={120} height={37} className="dark:hidden" />
+            <img src={publicPath("/Logo/Artboard_1.png")} alt="Revue" width={120} height={37} className="hidden dark:block" />
           </div>
 
           {/* Steps Indicator */}

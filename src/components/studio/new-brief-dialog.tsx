@@ -19,13 +19,22 @@ import {
   CalendarIcon,
   ExternalLink as LinkIcon,
   Globe,
-  FileText
+  FileText,
+  Palette
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { normalizeExternalUrl } from "@/lib/external-link"
+import {
+  BrandColorSwatch,
+  BRAND_COLOR_COUNT,
+  DEFAULT_BRAND_COLORS,
+  toValidHex,
+  type BrandColor,
+} from "@/components/shared/brand-color-swatch"
 
 // Types
 interface DeliverableItem {
@@ -38,6 +47,8 @@ interface Reference {
   id: string
   name: string
   type: "file" | "link"
+  /** Absolute http(s) URL — only set when `type` is "link". */
+  url?: string
   files?: File[]
 }
 
@@ -66,6 +77,7 @@ interface BriefFormData {
   // Step 4: Resources
   references: Reference[]
   namingColumns: NamingColumn[]
+  brandColors: BrandColor[]
   otherDescription: string
 }
 
@@ -341,6 +353,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       { id: "3", value: "Date" },
       { id: "4", value: "Version" },
     ],
+    brandColors: DEFAULT_BRAND_COLORS.map((c) => ({ ...c })),
     otherDescription: "",
   }
 
@@ -361,6 +374,8 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   const [newLinkUrl, setNewLinkUrl] = useState("")
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [pendingLinks, setPendingLinks] = useState<{ name: string; url: string }[]>([])
+  const [addColorsOpen, setAddColorsOpen] = useState(false)
+  const [draftColors, setDraftColors] = useState<BrandColor[]>(DEFAULT_BRAND_COLORS.map((c) => ({ ...c })))
 
   const [isCreating, setIsCreating] = useState(false)
 
@@ -607,8 +622,8 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           <header className="px-8 py-5 shrink-0 border-b border-[#e5e5e5] dark:border-[#333]">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <img src={publicPath("/Logo/Artboard 8@2x.png")} alt="Revue" width={120} height={37} className="dark:hidden" />
-                <img src={publicPath("/Logo/Artboard 8 copy@2x.png")} alt="Revue" width={120} height={37} className="hidden dark:block" />
+                <img src={publicPath("/Logo/Artboard_5.png")} alt="Revue" width={120} height={37} className="dark:hidden" />
+                <img src={publicPath("/Logo/Artboard_1.png")} alt="Revue" width={120} height={37} className="hidden dark:block" />
               </div>
 
               <div className="flex items-center gap-6">
@@ -1231,6 +1246,25 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       </button>
                     </div>
 
+                    {/* Brand Colors */}
+                    <div className="pt-5 border-t border-[#e5e5e5] dark:border-[#333]">
+                      <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-1">Brand Colors</h3>
+                      <p className="text-xs text-[#999] mb-3">Pick {BRAND_COLOR_COUNT} brand colors and label each with its Pantone name</p>
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        {formData.brandColors.map((color, i) => (
+                          <BrandColorSwatch key={i} color={color} />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setDraftColors(formData.brandColors.map((c) => ({ ...c }))); setAddColorsOpen(true) }}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border border-dashed border-[#ccc] dark:border-[#444] rounded-xl text-[#666] dark:text-[#999] hover:border-[#5C6ECD] hover:text-[#5C6ECD] transition-colors"
+                      >
+                        <Palette className="w-4 h-4" />
+                        Edit brand colors
+                      </button>
+                    </div>
+
                     {/* Naming Convention */}
                     <div className="pt-5 border-t border-[#e5e5e5] dark:border-[#333]">
                       <h3 className="text-sm font-semibold text-[#1a1a1a] dark:text-white mb-1">Naming Convention</h3>
@@ -1536,6 +1570,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                     name: l.name,
                     type: "link" as const,
+                    url: normalizeExternalUrl(l.url) ?? undefined,
                   }))
                   setFormData(prev => ({ ...prev, references: [...prev.references, ...newRefs] }))
                   setPendingLinks([]); setNewLinkName(""); setNewLinkUrl(""); setAddResourceOpen(false)
@@ -1551,6 +1586,52 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
               </button>
             </div>
           )}
+        </div>
+      </MiniModal>
+
+      {/* ── Brand Colors Modal ── */}
+      <MiniModal open={addColorsOpen} onClose={() => setAddColorsOpen(false)} title="Brand Colors" width="max-w-lg">
+        <div className="space-y-4">
+          <p className="text-xs text-[#999]">Pick a color and type its Pantone name (e.g. &quot;Pantone 186 C&quot;).</p>
+          <div className="space-y-3">
+            {draftColors.map((color, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 border border-[#e5e5e5] dark:border-[#333] rounded-xl bg-[#fafafa] dark:bg-[#111]">
+                <input
+                  type="color"
+                  value={toValidHex(color.hex)}
+                  onChange={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, hex: e.target.value } : c)))}
+                  className="w-10 h-10 rounded-lg border border-[#e5e5e5] dark:border-[#444] bg-transparent cursor-pointer shrink-0"
+                  aria-label={`Color ${i + 1}`}
+                />
+                <input
+                  type="text"
+                  value={color.label}
+                  onChange={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, label: e.target.value } : c)))}
+                  placeholder={`Pantone name (color ${i + 1})`}
+                  className="flex-1 min-w-0 px-4 py-2.5 rounded-lg text-sm border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={color.hex}
+                  onChange={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, hex: e.target.value } : c)))}
+                  onBlur={(e) => setDraftColors((prev) => prev.map((c, j) => (j === i ? { ...c, hex: toValidHex(e.target.value) } : c)))}
+                  placeholder="#000000"
+                  className="w-24 shrink-0 px-2 py-2.5 rounded-lg text-xs uppercase font-mono border border-[#e5e5e5] dark:border-[#444] bg-white dark:bg-transparent text-[#1a1a1a] dark:text-white placeholder:text-[#999] outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 transition-colors"
+                  aria-label={`Hex for color ${i + 1}`}
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFormData((prev) => ({ ...prev, brandColors: draftColors.map((c) => ({ hex: toValidHex(c.hex), label: c.label.trim() })) }))
+              setAddColorsOpen(false)
+            }}
+            className="w-full py-3 rounded-xl text-sm font-semibold bg-[#5C6ECD] text-white hover:bg-[#4A5BC7] shadow-lg shadow-[#5C6ECD]/25 transition-all"
+          >
+            Save Colors
+          </button>
         </div>
       </MiniModal>
     </>

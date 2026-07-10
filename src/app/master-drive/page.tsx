@@ -68,7 +68,7 @@ export default async function MasterDrivePage() {
   const { data: allCreatives } = projectIds.length > 0
     ? await supabase
         .from("creatives")
-        .select("id,name,project_id,type,thumbnail_url,status,iteration,created_at")
+        .select("id,name,project_id,type,thumbnail_url,preview_url,status,iteration,created_at")
         .in("project_id", projectIds)
         .order("created_at", { ascending: false })
     : { data: [] }
@@ -96,6 +96,7 @@ export default async function MasterDrivePage() {
     projectId: c.project_id,
     type: c.type || "design",
     thumbnailUrl: c.thumbnail_url || undefined,
+    previewUrl: c.preview_url || undefined,
     status: c.status || "in_progress",
     iteration: c.iteration || 1,
     createdAt: c.created_at,

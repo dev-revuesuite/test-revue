@@ -133,7 +133,7 @@ export function SignupForm({
       {/* Logo */}
       <div className="flex justify-center">
         <Image
-          src={publicPath("/Logo/Artboard 8@2x.png")}
+          src={publicPath("/Logo/Artboard_5.png")}
           alt="Revue"
           width={160}
           height={49}
@@ -141,7 +141,7 @@ export function SignupForm({
           className="dark:hidden"
         />
         <Image
-          src={publicPath("/Logo/Artboard 8 copy@2x.png")}
+          src={publicPath("/Logo/Artboard_1.png")}
           alt="Revue"
           width={160}
           height={49}

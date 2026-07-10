@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   title: "Revue - Design Review Tool",
   description: "Collaborative design review and feedback tool",
   icons: {
-    icon: publicPath("/Logo/Artboard 7@2x.png"),
-    apple: publicPath("/Logo/Artboard 7@2x.png"),
+    icon: publicPath("/Logo/Artboard_4.png"),
+    apple: publicPath("/Logo/Artboard_4.png"),
   },
 };
 

@@ -332,8 +332,8 @@ export function StudioHeader({
       <div className="flex items-center h-full">
         {/* Logo - aligned with sidebar width */}
         <div className="relative flex items-center justify-center w-16 h-full -ml-5">
-          <img src={publicPath("/Logo/Artboard 6@2x.png")} alt="Revue" width={28} height={28} className="dark:hidden" />
-          <img src={publicPath("/Logo/Artboard 5@2x.png")} alt="Revue" width={28} height={28} className="hidden dark:block" />
+          <img src={publicPath("/Logo/Artboard_3.png")} alt="Revue" width={28} height={28} className="dark:hidden" />
+          <img src={publicPath("/Logo/Artboard_2.png")} alt="Revue" width={28} height={28} className="hidden dark:block" />
           <div className="absolute right-0 top-1/2 h-6 w-px -translate-y-1/2 bg-[#e6e6e6] dark:bg-[#333]" />
         </div>
         {/* Organisation Switcher */}
@@ -1102,8 +1102,9 @@ export function StudioHeader({
             references_data: referencesJson,
             external_links: data.references
               .filter((r) => r.type === "link" && r.name.trim())
-              .map((r) => ({ name: r.name.trim() })),
+              .map((r) => ({ name: r.name.trim(), url: r.url?.trim() || null })),
             naming_columns: data.namingColumns.map((c) => c.value),
+            brand_colors: data.brandColors ?? [],
           }).select("id").single()
 
           if (error || !newProject) {

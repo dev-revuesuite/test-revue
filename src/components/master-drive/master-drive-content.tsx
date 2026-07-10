@@ -23,6 +23,8 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
+import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 
 // Data types from server
 export interface DriveClient {
@@ -47,6 +49,7 @@ export interface DriveCreative {
   projectId: string
   type: string
   thumbnailUrl?: string
+  previewUrl?: string
   status: string
   iteration: number
   createdAt: string
@@ -86,6 +89,7 @@ interface FolderItem {
   projectType?: string
   // Creative-specific
   thumbnailUrl?: string
+  previewUrl?: string
   status?: string
   iteration?: number
   creativeType?: string
@@ -104,6 +108,21 @@ const statusColors: Record<string, string> = {
   completed: "bg-green-500",
   pending: "bg-amber-500",
   review: "bg-purple-500",
+}
+
+type CreativeType = "image" | "video" | "document" | "design"
+
+const creativeTypeIcons: Record<CreativeType, React.ComponentType<{ className?: string }>> = {
+  image: ImageIcon,
+  video: Film,
+  document: FileText,
+  design: File,
+}
+
+function toCreativeType(value: string | undefined): CreativeType {
+  return value === "image" || value === "video" || value === "document"
+    ? value
+    : "design"
 }
 
 // macOS Style Folder Icon Component
@@ -241,6 +260,7 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
             type: "creative" as const,
             createdAt: c.createdAt,
             thumbnailUrl: c.thumbnailUrl,
+            previewUrl: c.previewUrl,
             status: c.status,
             iteration: c.iteration,
             creativeType: c.type,
@@ -315,10 +335,25 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
     return [...folders.sort(sortFn), ...creativesItems.sort(sortFn)]
   }
 
+  const currentItems = getCurrentItems()
+
   const filteredItems = sortItems(
-    getCurrentItems().filter((item) =>
+    currentItems.filter((item) =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
+  )
+
+  // Render previews for PDFs uploaded before preview_url existed. Keyed off the
+  // whole folder, not the search results, so typing doesn't retrigger it.
+  usePreviewBackfill(
+    currentItems
+      .filter(
+        (item) =>
+          item.type === "creative" &&
+          !item.previewUrl &&
+          toCreativeType(item.creativeType) === "document"
+      )
+      .map((item) => item.id)
   )
 
   return (
@@ -646,6 +681,7 @@ function CreativeCard({
 }) {
   const statusLabel = statusLabels[item.status || ""] || item.status || "In Progress"
   const statusDot = statusColors[item.status || ""] || "bg-blue-500"
+  const creativeType = toCreativeType(item.creativeType)
 
   return (
     <div
@@ -659,17 +695,15 @@ function CreativeCard({
     >
       {/* Preview Area */}
       <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-        {item.thumbnailUrl ? (
-          <img
-            src={item.thumbnailUrl}
-            alt={item.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#5C6ECD]/5 to-[#5C6ECD]/10">
-            <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
-          </div>
-        )}
+        <CreativeCardThumbnail
+          name={item.name}
+          type={creativeType}
+          thumbnailUrl={item.thumbnailUrl}
+          previewUrl={item.previewUrl}
+          typeIcon={creativeTypeIcons[creativeType]}
+          className="absolute inset-0"
+          showVideoOverlay={false}
+        />
 
         {/* Hover Overlay */}
         <div
