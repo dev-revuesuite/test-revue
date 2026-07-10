@@ -95,6 +95,8 @@ interface CanvasAreaProps {
   onViewModeChange?: (mode: "view" | "comments" | "ai") => void;
   aiSuggestions?: AISuggestion[];
   onShowAIAnalysisOptions?: () => void;
+  /** AI analysis is team-only. Clients never see the Comments / AI Analyse toggle. */
+  canRunAiAnalysis?: boolean;
   /** While true, temporarily hide mode-specific canvas overlays (hold eye button) */
   overlaysPeekHidden?: boolean;
 }
@@ -156,6 +158,7 @@ export function CanvasArea({
   onViewModeChange,
   aiSuggestions = [],
   onShowAIAnalysisOptions,
+  canRunAiAnalysis = false,
   overlaysPeekHidden = false,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -898,8 +901,9 @@ export function CanvasArea({
             </div>
           )}
 
-          {/* View Mode Toggle */}
-          {!compareMode && !isFullscreen && (
+          {/* View Mode Toggle. Hidden from clients: without AI Analyse the only
+              remaining option is Comments, which is already the mode they are in. */}
+          {!compareMode && !isFullscreen && canRunAiAnalysis && (
             <div className="pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-300 z-50">
               <div className="bg-white dark:bg-[#2a2a2a] rounded-full shadow-lg border border-gray-200 dark:border-[#444] p-1 flex items-center gap-1">
                 <button

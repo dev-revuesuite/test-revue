@@ -1045,6 +1045,7 @@ export function RevueCanvas({
         onViewModeChange={setViewMode}
         aiSuggestions={pageFilteredAiSuggestions}
         onShowAIAnalysisOptions={() => setShowAIAnalysisOptions((open) => !open)}
+        canRunAiAnalysis={canRunAiAnalysis}
         overlaysPeekHidden={overlaysPeekHidden}
       />
 

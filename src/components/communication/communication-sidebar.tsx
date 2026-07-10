@@ -160,34 +160,32 @@ export function CommunicationSidebar({
       <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
         {/* Main Toolbar */}
         <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-lg border border-gray-200 dark:border-[#444] flex flex-col items-center py-2.5 px-1.5">
-          {/* AI Analyse Button - Top with gradient effect */}
-          <div className="mb-2 pb-2 border-b border-gray-200 dark:border-[#444]">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => canRunAiAnalysis && setShowAIOptions(!showAIOptions)}
-                  disabled={aiAnalysisActive || !canRunAiAnalysis}
-                  className={cn(
-                    "relative h-10 w-10 rounded-lg flex items-center justify-center transition-all overflow-hidden group",
-                    showAIOptions || aiAnalysisActive
-                      ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30"
-                      : "bg-gradient-to-br from-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400 hover:from-purple-500 hover:to-pink-500 hover:text-white hover:shadow-lg hover:shadow-purple-500/30"
-                  )}
-                >
-                  {/* Shining effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                  <Sparkles className={cn("w-5 h-5 relative z-10", aiAnalysisActive && "animate-pulse")} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>
-                  {canRunAiAnalysis
-                    ? `AI Analyse ${aiAnalysisActive ? "(Analyzing...)" : ""}`
-                    : "AI Analyse (team only)"}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          {/* AI Analyse Button - team only, hidden entirely from clients */}
+          {canRunAiAnalysis && (
+            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-[#444]">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowAIOptions(!showAIOptions)}
+                    disabled={aiAnalysisActive}
+                    className={cn(
+                      "relative h-10 w-10 rounded-lg flex items-center justify-center transition-all overflow-hidden group",
+                      showAIOptions || aiAnalysisActive
+                        ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30"
+                        : "bg-gradient-to-br from-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400 hover:from-purple-500 hover:to-pink-500 hover:text-white hover:shadow-lg hover:shadow-purple-500/30"
+                    )}
+                  >
+                    {/* Shining effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                    <Sparkles className={cn("w-5 h-5 relative z-10", aiAnalysisActive && "animate-pulse")} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>AI Analyse {aiAnalysisActive ? "(Analyzing...)" : ""}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
 
           {/* Tool Buttons */}
           <div className="flex flex-col items-center gap-0.5">
