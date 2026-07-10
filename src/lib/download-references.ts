@@ -1,5 +1,15 @@
 import JSZip from "jszip"
 
+import {
+  HAS_EXTENSION,
+  fetchBlob,
+  filenameFromUrl,
+  sanitizeFilename,
+  saveBlob,
+  toSlug,
+  uniqueName,
+} from "@/lib/download-utils"
+
 /** A brief reference file. `url` is absent for links / files that never uploaded. */
 export interface DownloadableReference {
   id: string
@@ -13,29 +23,6 @@ export interface DownloadAllResult {
   /** Names of references whose file could not be fetched. */
   failed: string[]
 }
-
-const ILLEGAL_FILENAME_CHARS = /[<>:"/\\|?*]/g
-
-/** Strip characters that are illegal in filenames on Windows/macOS. */
-function sanitizeFilename(value: string): string {
-  return value
-    .trim()
-    .replace(ILLEGAL_FILENAME_CHARS, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 100)
-}
-
-function filenameFromUrl(url: string): string {
-  try {
-    const segment = new URL(url).pathname.split("/").pop() || ""
-    return decodeURIComponent(segment.split("?")[0])
-  } catch {
-    return ""
-  }
-}
-
-const HAS_EXTENSION = /\.[a-z0-9]{1,8}$/i
 
 /**
  * Best filename for a reference. Prefers the reference's own name (the original
@@ -52,27 +39,6 @@ export function referenceFilename(ref: DownloadableReference): string {
   return fromName || fromUrl || "reference"
 }
 
-function saveBlob(blob: Blob, filename: string): void {
-  const objectUrl = URL.createObjectURL(blob)
-  const anchor = document.createElement("a")
-  anchor.href = objectUrl
-  anchor.download = filename
-  anchor.rel = "noopener"
-  anchor.style.display = "none"
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
-  URL.revokeObjectURL(objectUrl)
-}
-
-async function fetchBlob(url: string): Promise<Blob> {
-  const response = await fetch(url, { cache: "no-store" })
-  if (!response.ok) throw new Error(`Download failed (${response.status})`)
-  const blob = await response.blob()
-  if (blob.size === 0) throw new Error("Downloaded file is empty")
-  return blob
-}
-
 /**
  * Download one reference file. Fetches as a blob rather than relying on the
  * `download` attribute, which browsers ignore for cross-origin URLs.
@@ -82,29 +48,8 @@ export async function downloadReference(ref: DownloadableReference): Promise<voi
   saveBlob(await fetchBlob(ref.url), referenceFilename(ref))
 }
 
-/** Make `name` unique within `used`, appending `-2`, `-3`, … before the extension. */
-function uniqueName(name: string, used: Set<string>): string {
-  if (!used.has(name)) {
-    used.add(name)
-    return name
-  }
-  const dot = name.lastIndexOf(".")
-  const base = dot > 0 ? name.slice(0, dot) : name
-  const ext = dot > 0 ? name.slice(dot) : ""
-
-  let counter = 2
-  let candidate = `${base}-${counter}${ext}`
-  while (used.has(candidate)) {
-    counter += 1
-    candidate = `${base}-${counter}${ext}`
-  }
-  used.add(candidate)
-  return candidate
-}
-
 function zipFilename(projectName: string): string {
-  const base = sanitizeFilename(projectName).replace(/\s+/g, "-").replace(/-+/g, "-")
-  return `${base || "references"}-references.zip`
+  return `${toSlug(projectName, "references")}-references.zip`
 }
 
 /**

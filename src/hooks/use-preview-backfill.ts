@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 import { requestCreativePreview } from "@/lib/request-creative-preview"
@@ -9,26 +9,36 @@ import { requestCreativePreview } from "@/lib/request-creative-preview"
 const MAX_CONCURRENT = 2
 
 /**
+ * Creatives that can never produce a preview -- oversized, not really a PDF,
+ * not permitted. Module scope, so the answer survives remounts and navigation
+ * between folders. Without this, every visit re-requests a render that is
+ * guaranteed to fail.
+ */
+const permanentlySkipped = new Set<string>()
+
+/** In-flight or completed this page load; prevents duplicate concurrent requests. */
+const alreadyAttempted = new Set<string>()
+
+/**
  * Backfills previews for creatives uploaded before `preview_url` existed.
  *
  * New uploads render their preview at upload time. Older PDFs have nothing, so
- * the first team member to view them generates it. Each id is attempted at most
- * once per mount, and a single refresh at the end picks up whatever landed.
+ * the first team member to view them generates it. A single refresh at the end
+ * picks up whatever landed.
  */
 export function usePreviewBackfill(creativeIdsMissingPreview: string[]) {
   const router = useRouter()
-  const attempted = useRef(new Set<string>())
 
   // Depend on contents, not array identity -- the caller rebuilds it each render.
   const key = creativeIdsMissingPreview.join(",")
 
   useEffect(() => {
     const queue = creativeIdsMissingPreview.filter(
-      (id) => !attempted.current.has(id)
+      (id) => !alreadyAttempted.has(id) && !permanentlySkipped.has(id)
     )
     if (queue.length === 0) return
 
-    queue.forEach((id) => attempted.current.add(id))
+    queue.forEach((id) => alreadyAttempted.add(id))
 
     let cancelled = false
 
@@ -37,8 +47,17 @@ export function usePreviewBackfill(creativeIdsMissingPreview: string[]) {
       while (queue.length > 0 && !cancelled) {
         const id = queue.shift()
         if (!id) break
-        const previewUrl = await requestCreativePreview(id)
-        if (previewUrl) generatedAny = true
+
+        const { previewUrl, retryable } = await requestCreativePreview(id)
+
+        if (previewUrl) {
+          generatedAny = true
+        } else if (!retryable) {
+          permanentlySkipped.add(id)
+        } else {
+          // Transient failure: allow a later visit to try again.
+          alreadyAttempted.delete(id)
+        }
       }
       return generatedAny
     }

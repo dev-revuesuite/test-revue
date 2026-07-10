@@ -796,7 +796,7 @@ export function RoomContent({
         // Render the card preview in the background. Never block the upload on
         // it -- requestCreativePreview swallows its own failures. Refresh once
         // it lands so the card swaps the placeholder for the rendered page.
-        void requestCreativePreview(inserted.id).then((previewUrl) => {
+        void requestCreativePreview(inserted.id).then(({ previewUrl }) => {
           if (previewUrl) router.refresh()
         })
       }

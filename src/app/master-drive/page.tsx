@@ -141,6 +141,7 @@ export default async function MasterDrivePage() {
           clients={driveClients}
           projects={driveProjects}
           creatives={driveCreatives}
+          userRole={userRole}
         />
       </div>
     </div>

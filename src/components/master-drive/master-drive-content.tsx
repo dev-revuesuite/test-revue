@@ -25,6 +25,9 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
 import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
+import { useDownloadManifest } from "@/hooks/use-download-manifest"
+import { DownloadAllButton } from "@/components/master-drive/download-all-button"
+import { formatBytes } from "@/lib/download-utils"
 
 // Data types from server
 export interface DriveClient {
@@ -65,6 +68,7 @@ interface MasterDriveContentProps {
   clients: DriveClient[]
   projects: DriveProject[]
   creatives: DriveCreative[]
+  userRole?: "admin" | "designer" | "client"
 }
 
 // Types
@@ -193,7 +197,7 @@ function CreativeCardSkeleton() {
   )
 }
 
-export function MasterDriveContent({ user, organizationName, clients, projects, creatives }: MasterDriveContentProps) {
+export function MasterDriveContent({ user, organizationName, clients, projects, creatives, userRole = "admin" }: MasterDriveContentProps) {
   const router = useRouter()
   const [viewType, setViewType] = useState<ViewType>("grid")
   const [searchQuery, setSearchQuery] = useState("")
@@ -343,6 +347,27 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
     )
   )
 
+  // Clients may browse creatives but not bulk-download them, so don't even ask
+  // for the file list on their behalf -- the route would reject it.
+  const canDownload = userRole !== "client"
+
+  const { manifest, loading: manifestLoading } = useDownloadManifest(
+    currentLevel === "project" ? selectedProjectId : null,
+    canDownload
+  )
+
+  // Total bytes per creative, summed across its iterations.
+  const sizeByCreative = new Map<string, number | null>()
+  for (const creative of manifest?.creatives ?? []) {
+    const known = creative.iterations.filter((i) => i.bytes !== null)
+    sizeByCreative.set(
+      creative.id,
+      known.length === 0
+        ? null
+        : known.reduce((sum, i) => sum + (i.bytes ?? 0), 0)
+    )
+  }
+
   // Render previews for PDFs uploaded before preview_url existed. Keyed off the
   // whole folder, not the search results, so typing doesn't retrigger it.
   usePreviewBackfill(
@@ -471,6 +496,11 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
               />
             </div>
 
+            {/* Download all (team members only, inside a project) */}
+            {canDownload && currentLevel === "project" && (
+              <DownloadAllButton manifest={manifest} loading={manifestLoading} />
+            )}
+
             {/* View Toggle */}
             <div className="flex items-center border border-border rounded-lg p-1 bg-muted/30">
               <button
@@ -504,11 +534,19 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
           {/* Content */}
           {isLoading ? (
             currentLevel === "project" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {[...Array(4)].map((_, i) => (
-                  <CreativeCardSkeleton key={i} />
-                ))}
-              </div>
+              viewType === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[...Array(4)].map((_, i) => (
+                    <CreativeCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  {[...Array(5)].map((_, i) => (
+                    <FolderListSkeleton key={i} />
+                  ))}
+                </div>
+              )
             ) : viewType === "grid" ? (
               <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
                 {[...Array(8)].map((_, i) => (
@@ -523,19 +561,46 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
               </div>
             )
           ) : currentLevel === "project" ? (
-            // Creatives View - Cards that open in Revue
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredItems.map((item, index) => (
-                <CreativeCard
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  onClick={() => openInRevue(item)}
-                  isOpening={openingCreativeId === item.id}
-                  isBlocked={openingCreativeId !== null && openingCreativeId !== item.id}
-                />
-              ))}
-            </div>
+            viewType === "grid" ? (
+              // Creatives View - Cards that open in Revue
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredItems.map((item, index) => (
+                  <CreativeCard
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    onClick={() => openInRevue(item)}
+                    isOpening={openingCreativeId === item.id}
+                    isBlocked={openingCreativeId !== null && openingCreativeId !== item.id}
+                  />
+                ))}
+              </div>
+            ) : (
+              // Creatives List - one row per creative, Drive-style
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-3 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border mb-2">
+                  <div className="w-8" />
+                  <span className="flex-1">Name</span>
+                  <span className="w-28 text-center">Status</span>
+                  <span className="w-24 text-center">Type</span>
+                  <span className="w-20 text-center">Version</span>
+                  <span className="w-24 text-right">Size</span>
+                  <span className="w-32 text-right">Created</span>
+                </div>
+
+                {filteredItems.map((item, index) => (
+                  <CreativeRow
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    sizeBytes={sizeByCreative.get(item.id) ?? null}
+                    onClick={() => openInRevue(item)}
+                    isOpening={openingCreativeId === item.id}
+                    isBlocked={openingCreativeId !== null && openingCreativeId !== item.id}
+                  />
+                ))}
+              </div>
+            )
           ) : viewType === "grid" ? (
             // Grid View
             <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
@@ -661,6 +726,85 @@ function FolderCard({
           {item.itemCount} {item.itemCount === 1 ? "item" : "items"}
         </span>
       )}
+    </div>
+  )
+}
+
+// Creative Row Component (list view inside a project)
+function CreativeRow({
+  item,
+  index,
+  sizeBytes = null,
+  onClick,
+  isOpening = false,
+  isBlocked = false,
+}: {
+  item: FolderItem
+  index: number
+  /** null while the manifest loads, or when storage reported no size. */
+  sizeBytes?: number | null
+  onClick: () => void
+  isOpening?: boolean
+  isBlocked?: boolean
+}) {
+  const creativeType = toCreativeType(item.creativeType)
+  const TypeIcon = creativeTypeIcons[creativeType]
+  const statusLabel = statusLabels[item.status || ""] || item.status || "In Progress"
+  const statusDot = statusColors[item.status || ""] || "bg-blue-500"
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors animate-in fade-in slide-in-from-bottom-2 cursor-pointer",
+        isOpening && "cursor-wait bg-muted/50",
+        isBlocked && "pointer-events-none opacity-60"
+      )}
+      style={{ animationDelay: `${index * 20}ms`, animationFillMode: "backwards" }}
+    >
+      <div className="w-8 shrink-0 flex items-center justify-center">
+        {isOpening ? (
+          <Loader2 className="w-4 h-4 animate-spin text-[#5C6ECD]" />
+        ) : (
+          <div className="w-8 h-8 rounded-lg bg-[#5C6ECD]/10 flex items-center justify-center">
+            <TypeIcon className="w-4 h-4 text-[#5C6ECD]" />
+          </div>
+        )}
+      </div>
+
+      <span
+        className="flex-1 min-w-0 truncate font-medium text-foreground text-sm group-hover:text-[#5C6ECD] transition-colors"
+        title={item.name}
+      >
+        {item.name}
+      </span>
+
+      <span className="w-28 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusDot)} />
+        {statusLabel}
+      </span>
+
+      <span className="w-24 text-center text-xs text-muted-foreground uppercase">
+        {creativeType}
+      </span>
+
+      <span className="w-20 text-center text-xs text-muted-foreground">
+        v{item.iteration ?? 1}
+      </span>
+
+      <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">
+        {sizeBytes === null ? "—" : formatBytes(sizeBytes)}
+      </span>
+
+      <span className="w-32 text-right text-xs text-muted-foreground">
+        {item.createdAt
+          ? new Date(item.createdAt).toLocaleDateString("en-US", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
+          : "—"}
+      </span>
     </div>
   )
 }

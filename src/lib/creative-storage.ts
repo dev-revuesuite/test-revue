@@ -202,4 +202,47 @@ export async function downloadCreativeFile(
   }
 }
 
+const HEAD_TIMEOUT_MS = 10_000
+
+/**
+ * Byte size of a stored creative file, via a HEAD request. Returns null when the
+ * server does not report Content-Length -- callers treat that as "unknown", not
+ * an error, since size is only used for a download-size warning.
+ */
+export async function getCreativeFileSize(
+  imageUrl: string
+): Promise<number | null> {
+  if (!imageUrl?.trim()) return null
+
+  let validatedUrl: URL
+  try {
+    validatedUrl = assertAllowedCreativeUrl(imageUrl)
+  } catch {
+    return null
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), HEAD_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(validatedUrl.href, {
+      method: "HEAD",
+      cache: "no-store",
+      signal: controller.signal,
+    })
+
+    if (!response.ok) return null
+
+    const contentLength = response.headers.get("content-length")
+    if (!contentLength) return null
+
+    const parsed = Number.parseInt(contentLength, 10)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 export { CREATIVES_BUCKET, inferMimeType as inferCreativeMimeType }

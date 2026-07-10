@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { CREATIVES_BUCKET, downloadCreativeFile } from "@/lib/creative-storage"
+import {
+  CREATIVES_BUCKET,
+  CreativeStorageError,
+  downloadCreativeFile,
+} from "@/lib/creative-storage"
 import { isPdfUrl } from "@/lib/media-type"
 import { renderPdfPage } from "@/lib/pdf-render-server"
 
@@ -90,8 +94,12 @@ async function assertCanGeneratePreview(
 
 export interface CreativePreviewResult {
   previewUrl: string | null
-  /** Why no render happened, when previewUrl is null or already present. */
-  reason?: "not-a-pdf" | "already-generated"
+  /**
+   * Why no render happened, when previewUrl is null or already present.
+   * Every reason here is final -- retrying will produce the same answer, so
+   * callers should stop asking.
+   */
+  reason?: "not-a-pdf" | "already-generated" | "too-large"
 }
 
 /**
@@ -113,7 +121,17 @@ export async function generateCreativePreview(
     return { previewUrl: null, reason: "not-a-pdf" }
   }
 
-  const { buffer } = await downloadCreativeFile(sourceUrl)
+  let buffer: Buffer
+  try {
+    ;({ buffer } = await downloadCreativeFile(sourceUrl))
+  } catch (error) {
+    // The 50 MB ceiling is an inference-server limit we inherit. A PDF over it
+    // simply has no preview; that is a final answer, not a failure to retry.
+    if (error instanceof CreativeStorageError && error.status === 413) {
+      return { previewUrl: null, reason: "too-large" }
+    }
+    throw error
+  }
 
   const rendered = await renderPdfPage(buffer, 1, {
     scale: 1,
