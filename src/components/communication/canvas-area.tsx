@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { Send, X, ChevronDown, Sparkles, MessageSquare } from "lucide-react";
+import { Send, X, ChevronDown, Sparkles, MessageSquare, GripVertical } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DrawingPath, ShapeType } from "@/lib/fabric";
@@ -119,6 +119,25 @@ function pointsToSvgPath(points: { x: number; y: number }[]): string {
   return d;
 }
 
+const TOGGLE_OFFSET_STORAGE_KEY = "revue.viewToggleOffset";
+
+/** Saved drag offset for the view-mode toggle. SSR-safe: {0,0} on the server. */
+function readSavedToggleOffset(): { x: number; y: number } {
+  if (typeof window === "undefined") return { x: 0, y: 0 };
+  try {
+    const saved = window.localStorage.getItem(TOGGLE_OFFSET_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed?.x === "number" && typeof parsed?.y === "number") {
+        return { x: parsed.x, y: parsed.y };
+      }
+    }
+  } catch {
+    // Corrupt/blocked storage: fall back to the default position.
+  }
+  return { x: 0, y: 0 };
+}
+
 export function CanvasArea({
   zoom,
   selectedTool,
@@ -188,6 +207,68 @@ export function CanvasArea({
 
   // Current drawing for feedback association
   const [currentDrawing, setCurrentDrawing] = useState<DrawingPath | null>(null);
+
+  // Draggable position of the Comments / AI Analyse toggle. It floats over the
+  // canvas and can cover errors when zoomed, so the user can drag it aside.
+  // Offset is from its default (centered) spot; persisted across sessions.
+  // Starts at {0,0} to match server-rendered HTML; the saved offset is applied
+  // after mount (below) to avoid a hydration mismatch, since localStorage does
+  // not exist on the server.
+  const [toggleDragOffset, setToggleDragOffset] = useState({ x: 0, y: 0 });
+  // Mirrors the offset for reads inside event handlers; updated in handlers
+  // only, never during render.
+  const toggleOffsetRef = useRef(toggleDragOffset);
+  const toggleDragStartRef = useRef<
+    { pointerX: number; pointerY: number; originX: number; originY: number } | null
+  >(null);
+
+  useEffect(() => {
+    const saved = readSavedToggleOffset();
+    if (saved.x !== 0 || saved.y !== 0) {
+      toggleOffsetRef.current = saved;
+      // Load-once sync from localStorage after hydration; not a render loop.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setToggleDragOffset(saved);
+    }
+  }, []);
+
+  const handleToggleDragStart = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    toggleDragStartRef.current = {
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      originX: toggleOffsetRef.current.x,
+      originY: toggleOffsetRef.current.y,
+    };
+  };
+
+  const handleToggleDragMove = (e: React.PointerEvent) => {
+    const start = toggleDragStartRef.current;
+    if (!start) return;
+    e.stopPropagation();
+    const next = {
+      x: start.originX + (e.clientX - start.pointerX),
+      y: start.originY + (e.clientY - start.pointerY),
+    };
+    toggleOffsetRef.current = next;
+    setToggleDragOffset(next);
+  };
+
+  const handleToggleDragEnd = (e: React.PointerEvent) => {
+    if (!toggleDragStartRef.current) return;
+    e.stopPropagation();
+    toggleDragStartRef.current = null;
+    try {
+      localStorage.setItem(
+        TOGGLE_OFFSET_STORAGE_KEY,
+        JSON.stringify(toggleOffsetRef.current)
+      );
+    } catch {
+      // Ignore storage failures; position simply won't persist.
+    }
+  };
 
   const drawings = externalDrawings;
   const markers = externalMarkers || [];
@@ -904,8 +985,28 @@ export function CanvasArea({
           {/* View Mode Toggle. Hidden from clients: without AI Analyse the only
               remaining option is Comments, which is already the mode they are in. */}
           {!compareMode && !isFullscreen && canRunAiAnalysis && (
-            <div className="pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-300 z-50">
+            <div
+              className="pointer-events-auto animate-in fade-in duration-300 z-50"
+              style={{
+                // Cancel the parent's pan so the toggle stays put while the
+                // image pans, then apply the user's drag offset.
+                transform: `translate(${toggleDragOffset.x - panOffset.x}px, ${toggleDragOffset.y - panOffset.y}px)`,
+              }}
+            >
               <div className="bg-white dark:bg-[#2a2a2a] rounded-full shadow-lg border border-gray-200 dark:border-[#444] p-1 flex items-center gap-1">
+                <button
+                  type="button"
+                  onPointerDown={handleToggleDragStart}
+                  onPointerMove={handleToggleDragMove}
+                  onPointerUp={handleToggleDragEnd}
+                  onPointerCancel={handleToggleDragEnd}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="flex items-center px-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing touch-none"
+                  title="Drag to move"
+                  aria-label="Drag toggle"
+                >
+                  <GripVertical className="w-4 h-4" />
+                </button>
                 <button
                   onClick={() => onViewModeChange?.("comments")}
                   className={cn(
