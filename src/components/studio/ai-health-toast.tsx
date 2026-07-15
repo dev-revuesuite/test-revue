@@ -20,13 +20,11 @@ async function fetchAiHealthy(signal?: AbortSignal): Promise<boolean | null> {
     if (!response.ok) return null
 
     const data: unknown = await response.json()
-    const healthy =
-      data &&
-      typeof data === "object" &&
-      "healthy" in data &&
-      (data as { healthy: unknown }).healthy === true
+    if (!data || typeof data !== "object" || !("healthy" in data)) {
+      return false
+    }
 
-    return healthy
+    return (data as { healthy: unknown }).healthy === true
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       return null
