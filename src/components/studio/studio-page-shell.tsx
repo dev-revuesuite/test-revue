@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioContent } from "@/components/studio/studio-content"
+import { AiHealthNotice } from "@/components/studio/ai-health-toast"
 import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 import { getCurrentNavigationPath } from "@/components/navigation-path-tracker"
 import { cn } from "@/lib/utils"
@@ -127,6 +128,7 @@ export function StudioPageShell({
           handlePageRefresh("Project created successfully", "Updating studio...")
         }
       />
+      <AiHealthNotice />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={user} userRole={userRole} />
         <StudioContent
