@@ -41,7 +41,7 @@ export function LoginForm({
 
     const supabase = createClient()
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -52,59 +52,62 @@ export function LoginForm({
       return
     }
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError) {
-      setError(userError.message)
+    const user = signInData.user
+    if (!user) {
+      setError("Login succeeded but no user was returned")
       setLoading(false)
       return
     }
 
-    const userId = userData.user?.id
-    const userEmail = userData.user?.email
-    if (userId) {
-      // Auto-link to organization if email was pre-added as a team member
-      if (userEmail) {
-        await supabase.rpc("link_user_to_org_member", {
-          p_user_id: userId,
-          p_email: userEmail,
+    // Overlap profile fetch with invite linking; membership must wait for link
+    const profilePromise = supabase
+      .from("profiles")
+      .select("onboarded, preferences")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    const linkPromise = user.email
+      ? supabase.rpc("link_user_to_org_member", {
+          p_user_id: user.id,
+          p_email: user.email,
         })
-      }
+      : Promise.resolve({ error: null as null })
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("onboarded, preferences")
-        .eq("id", userId)
-        .single()
+    const [{ data: profile }, linkResult] = await Promise.all([
+      profilePromise,
+      linkPromise,
+    ])
 
-      if (!profile || !profile.onboarded) {
-        router.push("/onboarding")
-        router.refresh()
-        return
-      }
+    if (linkResult.error) {
+      console.error(
+        "link_user_to_org_member failed:",
+        linkResult.error.message
+      )
+    }
 
-      // Apply saved theme preference
-      const savedTheme = (profile.preferences as { theme?: string })?.theme
-      if (savedTheme === "dark" || savedTheme === "light") {
-        setTheme(savedTheme)
-      }
+    if (!profile || !profile.onboarded) {
+      router.push("/onboarding")
+      return
+    }
 
-      // Role-based routing
-      const { data: membership } = await supabase
-        .from("organization_members")
-        .select("role")
-        .eq("user_id", userId)
-        .limit(1)
-        .single()
+    const savedTheme = (profile.preferences as { theme?: string })?.theme
+    if (savedTheme === "dark" || savedTheme === "light") {
+      setTheme(savedTheme)
+    }
 
-      if (membership?.role === "client") {
-        router.push("/client-portal")
-        router.refresh()
-        return
-      }
+    const { data: membership } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle()
+
+    if (membership?.role === "client") {
+      router.push("/client-portal")
+      return
     }
 
     router.push("/studio")
-    router.refresh()
   }
 
   const handleGoogleLogin = async () => {

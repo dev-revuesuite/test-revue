@@ -1,6 +1,6 @@
 "use client"
 
-import { publicPath } from "@/lib/base-path"
+import { publicPath, appRoute } from "@/lib/base-path"
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -62,30 +62,9 @@ import { OrgSwitcher } from "@/components/org-switcher"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
 import { NewOrganizationDialog } from "@/components/studio/new-org-dialog"
-
-const notifications = [
-  {
-    id: 1,
-    title: "New comment on your post",
-    description: "John Doe commented on your recent post",
-    time: "2 min ago",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Project update",
-    description: "The project 'Dashboard' has been updated",
-    time: "1 hour ago",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "New team member",
-    description: "Sarah joined your team",
-    time: "3 hours ago",
-    read: true,
-  },
-]
+import { useNotifications } from "@/hooks/use-notifications"
+import { NotificationList } from "@/components/notifications/notification-list"
+import type { NotificationItem } from "@/types/notifications"
 
 const messages = [
   {
@@ -118,6 +97,7 @@ interface StudioHeaderProps {
     email: string
     avatar: string
   }
+  userId?: string
   organizationId: string | null
   organizationName?: string
   organizationLogoUrl?: string | null
@@ -154,6 +134,7 @@ const recentSearches = [
 
 export function StudioHeader({
   user,
+  userId,
   organizationId,
   organizationName = "",
   organizationLogoUrl,
@@ -166,6 +147,29 @@ export function StudioHeader({
   onProjectsRefresh,
 }: StudioHeaderProps) {
   const router = useRouter()
+  const activeOrganizationId = currentOrgId ?? organizationId
+  const {
+    notifications,
+    unreadCount: unreadNotifications,
+    loading: notificationsLoading,
+    markAsRead,
+    markAllAsRead,
+  } = useNotifications(activeOrganizationId, {
+    previewLimit: 100,
+    userId,
+  })
+
+  const previewNotifications = notifications.slice(0, 20)
+
+  const handleNotificationClick = async (notification: NotificationItem) => {
+    if (!notification.read) {
+      await markAsRead(notification.id)
+    }
+    if (notification.link) {
+      router.push(appRoute(notification.link))
+    }
+  }
+
   const [notificationDialogOpen, setNotificationDialogOpen] = React.useState(false)
   const [messageDialogOpen, setMessageDialogOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState("")
@@ -278,7 +282,6 @@ export function StudioHeader({
       .slice(0, 2)
   }
 
-  const unreadNotifications = notifications.filter(n => !n.read).length
   const unreadMessages = messages.filter(m => !m.read).length
 
   // Add Team Member function
@@ -524,31 +527,31 @@ export function StudioHeader({
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-0" align="end" sideOffset={8}>
-            <div className="p-3 border-b border-[#e6e6e6] dark:border-[#333]">
+            <div className="p-3 border-b border-[#e6e6e6] dark:border-[#333] flex items-center justify-between gap-2">
               <h4 className="font-semibold text-sm text-[#1a1a1a] dark:text-white">Notifications</h4>
+              {unreadNotifications > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void markAllAsRead()}
+                  className="text-[10px] text-[#5C6ECD] hover:underline"
+                >
+                  Mark all read
+                </button>
+              ) : null}
             </div>
             <div className="max-h-64 overflow-auto">
-              {notifications.map((notif) => (
-                <div key={notif.id} className={cn(
-                  "p-3 border-b border-[#e6e6e6] dark:border-[#333] last:border-0 hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] cursor-pointer",
-                  !notif.read && "bg-[#f0f7ff] dark:bg-[#1a2a3a]"
-                )}>
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "w-2 h-2 rounded-full mt-1.5 shrink-0",
-                      !notif.read ? "bg-[#5C6ECD]" : "bg-transparent"
-                    )} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#1a1a1a] dark:text-white">{notif.title}</p>
-                      <p className="text-xs text-[#7a7a7a] dark:text-[#999] truncate">{notif.description}</p>
-                      <span className="text-[10px] text-[#7a7a7a] dark:text-[#999]">{notif.time}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <NotificationList
+                notifications={previewNotifications}
+                loading={notificationsLoading}
+                onNotificationClick={(notification) => void handleNotificationClick(notification)}
+              />
             </div>
             <div className="p-2 border-t border-[#e6e6e6] dark:border-[#333]">
-              <Button variant="ghost" className="w-full text-xs h-8 text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]" onClick={() => setNotificationDialogOpen(true)}>
+              <Button
+                variant="ghost"
+                className="w-full text-xs h-8 text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]"
+                onClick={() => setNotificationDialogOpen(true)}
+              >
                 View all notifications
               </Button>
             </div>
@@ -681,29 +684,28 @@ export function StudioHeader({
       <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Notifications</DialogTitle>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>Notifications</DialogTitle>
+              {unreadNotifications > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void markAllAsRead()}
+                  className="text-xs text-[#5C6ECD] hover:underline"
+                >
+                  Mark all read
+                </button>
+              ) : null}
+            </div>
           </DialogHeader>
           <div className="max-h-96 overflow-auto -mx-6 px-6">
-            {notifications.map((notif) => (
-              <div key={notif.id} className={cn(
-                "p-3 border-b last:border-0 hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] cursor-pointer rounded-lg",
-                !notif.read && "bg-[#f0f7ff] dark:bg-[#1a2a3a]"
-              )}>
-                <div className="flex items-start gap-3">
-                  <div className={cn(
-                    "w-2 h-2 rounded-full mt-2 flex-shrink-0",
-                    !notif.read ? "bg-[#5C6ECD]" : "bg-[#d9d9d9] dark:bg-[#444]"
-                  )} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{notif.title}</p>
-                      <span className="text-[10px] text-[#7a7a7a] dark:text-[#999]">{notif.time}</span>
-                    </div>
-                    <p className="text-sm text-[#7a7a7a] dark:text-[#999] mt-1">{notif.description}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+            <NotificationList
+              notifications={notifications}
+              loading={notificationsLoading}
+              onNotificationClick={(notification) => {
+                void handleNotificationClick(notification)
+                setNotificationDialogOpen(false)
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>

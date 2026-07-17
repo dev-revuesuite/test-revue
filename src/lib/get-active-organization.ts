@@ -17,11 +17,16 @@ export async function getUserOrganizations(
 ): Promise<UserOrganization[]> {
   const orgsMap = new Map<string, UserOrganization>()
 
-  // 1. Orgs the user created (they are the owner)
-  const { data: ownedOrgs } = await supabase
-    .from("organizations")
-    .select("id, name, logo_url")
-    .eq("created_by", userId)
+  const [{ data: ownedOrgs }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("organizations")
+      .select("id, name, logo_url")
+      .eq("created_by", userId),
+    supabase
+      .from("organization_members")
+      .select("role, organizations(id, name, logo_url)")
+      .eq("user_id", userId),
+  ])
 
   for (const org of ownedOrgs || []) {
     orgsMap.set(org.id, {
@@ -31,12 +36,6 @@ export async function getUserOrganizations(
       role: "owner",
     })
   }
-
-  // 2. Orgs the user is a member of (via organization_members)
-  const { data: memberships } = await supabase
-    .from("organization_members")
-    .select("role, organizations(id, name, logo_url)")
-    .eq("user_id", userId)
 
   for (const membership of memberships || []) {
     const org = membership.organizations as unknown as {
@@ -58,42 +57,45 @@ export async function getUserOrganizations(
 }
 
 /**
- * Returns the currently active organization for the user.
- * Priority: cookie → profile column → first owned org → first membership org.
- * Saves the resolved choice back to cookie + profile for persistence.
+ * Resolve active org from a preloaded org list.
+ * Priority: cookie → profile column → first owned/membership org.
  */
-export async function getActiveOrganization(
+export async function resolveActiveOrganization(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  allOrgs: UserOrganization[],
+  profileActiveOrgId?: string | null
 ): Promise<UserOrganization | null> {
-  const allOrgs = await getUserOrganizations(supabase, userId)
-
   if (allOrgs.length === 0) return null
 
   const cookieStore = await cookies()
   const cookieOrgId = cookieStore.get("active_org")?.value
 
-  // 1. Try cookie value
   if (cookieOrgId) {
     const match = allOrgs.find((o) => o.id === cookieOrgId)
     if (match) return match
   }
 
-  // 2. Try profile.active_organization_id
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("active_organization_id")
-    .eq("id", userId)
-    .single()
+  // undefined = caller did not supply profile field → fetch; null/string = use as-is
+  let activeFromProfile: string | null
+  if (profileActiveOrgId === undefined) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("active_organization_id")
+      .eq("id", userId)
+      .maybeSingle()
+    activeFromProfile = profile?.active_organization_id ?? null
+  } else {
+    activeFromProfile = profileActiveOrgId
+  }
 
-  if (profile?.active_organization_id) {
-    const match = allOrgs.find((o) => o.id === profile.active_organization_id)
+  if (activeFromProfile) {
+    const match = allOrgs.find((o) => o.id === activeFromProfile)
     if (match) {
-      // Profile had a valid org but cookie was missing — set the cookie
       try {
         cookieStore.set("active_org", match.id, {
           path: "/",
-          maxAge: 60 * 60 * 24 * 365, // 1 year
+          maxAge: 60 * 60 * 24 * 365,
           sameSite: "lax",
         })
       } catch {
@@ -103,10 +105,8 @@ export async function getActiveOrganization(
     }
   }
 
-  // 3. Fallback — pick the first org (owned orgs come first in the map)
   const fallback = allOrgs[0]
 
-  // Save fallback choice for next time
   try {
     cookieStore.set("active_org", fallback.id, {
       path: "/",
@@ -123,4 +123,16 @@ export async function getActiveOrganization(
     .eq("id", userId)
 
   return fallback
+}
+
+/**
+ * Returns the currently active organization for the user.
+ * Priority: cookie → profile column → first owned org → first membership org.
+ */
+export async function getActiveOrganization(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<UserOrganization | null> {
+  const allOrgs = await getUserOrganizations(supabase, userId)
+  return resolveActiveOrganization(supabase, userId, allOrgs)
 }

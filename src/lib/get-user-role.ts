@@ -1,50 +1,51 @@
 import { SupabaseClient } from "@supabase/supabase-js"
-import { getActiveOrganization } from "./get-active-organization"
+import {
+  getActiveOrganization,
+  type UserOrganization,
+} from "./get-active-organization"
 
 export type UserRole = "admin" | "designer" | "client"
 
+export function mapOrgRoleToUserRole(
+  org: UserOrganization | null
+): UserRole {
+  if (!org) return "admin"
+  if (org.role === "admin" || org.role === "owner") return "admin"
+  if (org.role === "client") return "client"
+  return "designer"
+}
+
 export async function getUserRole(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  activeOrg?: UserOrganization | null
 ): Promise<{ role: UserRole; organizationId: string | null; clientId: string | null }> {
-  // 1. Get the globally resolved active organization
-  const activeOrg = await getActiveOrganization(supabase, userId)
+  const org =
+    activeOrg !== undefined
+      ? activeOrg
+      : await getActiveOrganization(supabase, userId)
 
-  if (!activeOrg) {
-    // Default: new user, will become admin after org creation
+  if (!org) {
     return { role: "admin", organizationId: null, clientId: null }
   }
 
-  // 2. Check if user owns this specific organization
-  const { data: ownedOrg } = await supabase
-    .from("organizations")
-    .select("id")
-    .eq("id", activeOrg.id)
-    .eq("created_by", userId)
-    .single()
+  const role = mapOrgRoleToUserRole(org)
 
-  if (ownedOrg) {
-    return { role: "admin", organizationId: activeOrg.id, clientId: null }
+  // Owners/admins never need client_id; designers usually don't either.
+  if (role !== "client") {
+    return { role, organizationId: org.id, clientId: null }
   }
 
-  // 3. Check their specific membership role in this active organization
   const { data: membership } = await supabase
     .from("organization_members")
-    .select("role, organization_id, client_id")
-    .eq("organization_id", activeOrg.id)
+    .select("client_id")
+    .eq("organization_id", org.id)
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
-  if (membership) {
-    const role: UserRole =
-      membership.role === "admin" || membership.role === "owner"
-        ? "admin"
-        : membership.role === "client"
-        ? "client"
-        : "designer"
-    return { role, organizationId: membership.organization_id, clientId: membership.client_id || null }
+  return {
+    role,
+    organizationId: org.id,
+    clientId: membership?.client_id || null,
   }
-
-  // Fallback
-  return { role: "admin", organizationId: activeOrg.id, clientId: null }
 }

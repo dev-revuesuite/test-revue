@@ -9,29 +9,67 @@ const TOAST_SESSION_KEY = "revue.aiMaintenanceToastShown"
 const MAINTENANCE_MESSAGE = "Our AI is under scheduled maintenance."
 const POLL_INTERVAL_MS = 60_000
 const TOAST_AUTO_DISMISS_MS = 6_000
+const HEALTH_CACHE_MS = 30_000
+const INITIAL_CHECK_DELAY_MS = 1_500
+
+type HealthCache = {
+  value: boolean | null
+  checkedAt: number
+  inflight: Promise<boolean | null> | null
+}
+
+const healthCache: HealthCache = {
+  value: null,
+  checkedAt: 0,
+  inflight: null,
+}
 
 async function fetchAiHealthy(signal?: AbortSignal): Promise<boolean | null> {
-  try {
-    const response = await fetch(apiPath("/api/ai/health"), {
-      method: "GET",
-      cache: "no-store",
-      signal,
-    })
-    if (!response.ok) return null
-
-    const data: unknown = await response.json()
-    if (!data || typeof data !== "object" || !("healthy" in data)) {
-      return false
-    }
-
-    return (data as { healthy: unknown }).healthy === true
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      return null
-    }
-    // Own API unreachable — do not imply AI maintenance.
-    return null
+  const now = Date.now()
+  if (
+    healthCache.inflight == null &&
+    now - healthCache.checkedAt < HEALTH_CACHE_MS &&
+    healthCache.checkedAt > 0
+  ) {
+    return healthCache.value
   }
+
+  if (healthCache.inflight) {
+    return healthCache.inflight
+  }
+
+  const pending = (async () => {
+    try {
+      const response = await fetch(apiPath("/api/ai/health"), {
+        method: "GET",
+        cache: "no-store",
+        signal,
+      })
+      if (!response.ok) return null
+
+      const data: unknown = await response.json()
+      if (!data || typeof data !== "object" || !("healthy" in data)) {
+        return false
+      }
+
+      return (data as { healthy: unknown }).healthy === true
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null
+      }
+      return null
+    } finally {
+      healthCache.inflight = null
+    }
+  })()
+
+  healthCache.inflight = pending
+  const result = await pending
+  if (result !== null) {
+    healthCache.value = result
+    healthCache.checkedAt = Date.now()
+  }
+  return result
 }
 
 function wasToastShown(): boolean {
@@ -60,8 +98,7 @@ function clearToastShown(): void {
 
 /**
  * Non-blocking AI availability check on /studio.
- * Unhealthy: one attention toast per outage session, then a quiet banner that
- * stays until a later check reports healthy again (mount + 60s poll).
+ * Deferred so it does not contend with login → studio bootstrap.
  */
 export function AiHealthNotice() {
   const [bannerVisible, setBannerVisible] = useState(false)
@@ -86,22 +123,24 @@ export function AiHealthNotice() {
 
   useEffect(() => {
     const controller = new AbortController()
+    let intervalId: number | undefined
 
-    void (async () => {
+    const runCheck = async () => {
       const healthy = await fetchAiHealthy(controller.signal)
       if (!controller.signal.aborted) applyHealth(healthy)
-    })()
+    }
 
-    const intervalId = window.setInterval(() => {
-      void (async () => {
-        const healthy = await fetchAiHealthy()
-        applyHealth(healthy)
-      })()
-    }, POLL_INTERVAL_MS)
+    const initialTimer = window.setTimeout(() => {
+      void runCheck()
+      intervalId = window.setInterval(() => {
+        void runCheck()
+      }, POLL_INTERVAL_MS)
+    }, INITIAL_CHECK_DELAY_MS)
 
     return () => {
       controller.abort()
-      window.clearInterval(intervalId)
+      window.clearTimeout(initialTimer)
+      if (intervalId !== undefined) window.clearInterval(intervalId)
     }
   }, [applyHealth])
 
