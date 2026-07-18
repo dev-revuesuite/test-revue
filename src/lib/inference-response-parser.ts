@@ -99,3 +99,30 @@ export function parseWordspaceResponse(
 
   return suggestions
 }
+
+export function parseLineheightResponse(
+  payload: unknown
+): ParsedInferenceSuggestion[] {
+  if (!payload || typeof payload !== "object") return []
+
+  const lineHeightError = (payload as { line_height_error?: unknown })
+    .line_height_error
+  if (!Array.isArray(lineHeightError)) return []
+
+  const suggestions: ParsedInferenceSuggestion[] = []
+
+  for (const bboxValue of lineHeightError) {
+    const bbox = tryNormalizeBBox(bboxValue)
+    if (!bbox) continue
+
+    suggestions.push({
+      label: "Line height issue",
+      description: "Line height issue detected",
+      severity: "info",
+      bbox,
+      sortOrder: suggestions.length,
+    })
+  }
+
+  return suggestions
+}

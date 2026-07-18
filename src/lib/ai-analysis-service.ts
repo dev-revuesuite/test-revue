@@ -14,6 +14,7 @@ import {
 import { downloadCreativeFile, CreativeStorageError } from "@/lib/creative-storage"
 import {
   callGramcheck,
+  callLineheight,
   callWordspace,
   InferenceApiError,
 } from "@/lib/inference-api"
@@ -22,6 +23,7 @@ import {
 } from "@/lib/normalize-analysis-image"
 import {
   parseGramcheckResponse,
+  parseLineheightResponse,
   parseWordspaceResponse,
   type ParsedInferenceSuggestion,
 } from "@/lib/inference-response-parser"
@@ -101,8 +103,10 @@ async function finalizeAnalysisImage(
 
 function analysisTypeToEndpoint(
   analysisType: PersistedAiAnalysisType
-): "gramcheck" | "wordspace" {
-  return analysisType === "spelling" ? "gramcheck" : "wordspace"
+): "gramcheck" | "wordspace" | "lineheight" {
+  if (analysisType === "spelling") return "gramcheck"
+  if (analysisType === "lineheight") return "lineheight"
+  return "wordspace"
 }
 
 async function prepareAnalysisImage(
@@ -155,11 +159,28 @@ async function callAnalysisApi(
     mimeType: image.mimeType,
   }
 
-  if (analysisType === "spelling") {
-    return callGramcheck(image.buffer, options)
+  switch (analysisType) {
+    case "spelling":
+      return callGramcheck(image.buffer, options)
+    case "lineheight":
+      return callLineheight(image.buffer, options)
+    case "spacing":
+      return callWordspace(image.buffer, options)
   }
+}
 
-  return callWordspace(image.buffer, options)
+function parseAnalysisResponse(
+  analysisType: PersistedAiAnalysisType,
+  rawResponse: unknown
+): ParsedInferenceSuggestion[] {
+  switch (analysisType) {
+    case "spelling":
+      return parseGramcheckResponse(rawResponse)
+    case "lineheight":
+      return parseLineheightResponse(rawResponse)
+    case "spacing":
+      return parseWordspaceResponse(rawResponse)
+  }
 }
 
 function mapParsedSuggestionsToRows(
@@ -257,10 +278,7 @@ export async function runAiAnalysis(
     throw error
   }
 
-  const parsed =
-    analysisType === "spelling"
-      ? parseGramcheckResponse(rawResponse)
-      : parseWordspaceResponse(rawResponse)
+  const parsed = parseAnalysisResponse(analysisType, rawResponse)
 
   if (AI_ANALYSIS_DEBUG_LOG) {
     console.log("[AI Analysis] EC2 response", {

@@ -68,15 +68,15 @@ const shapeOptions: { type: ShapeType; icon: React.ReactNode; label: string }[] 
   { type: "arrow", icon: <ArrowRight className="w-4 h-4" />, label: "Arrow" },
 ];
 
-const LIVE_AI_ANALYSIS_TYPES: AIAnalysisType[] = ["spacing", "spelling"];
+const LIVE_AI_ANALYSIS_TYPES: AIAnalysisType[] = ["lineheight", "spacing", "spelling"];
 
-function isLiveAiAnalysisType(type: AIAnalysisType): type is "spacing" | "spelling" {
+function isLiveAiAnalysisType(type: AIAnalysisType): type is "lineheight" | "spacing" | "spelling" {
   return LIVE_AI_ANALYSIS_TYPES.includes(type);
 }
 
 const aiAnalysisOptions: { type: AIAnalysisType; label: string; icon: React.ReactNode; description: string }[] = [
   { type: "complete", label: "Full Design Review", icon: <ScanLine className="w-4 h-4" />, description: "Comprehensive analysis" },
-  { type: "typography", label: "Typography Check", icon: <Type className="w-4 h-4" />, description: "Line height & fonts" },
+  { type: "lineheight", label: "Line height check", icon: <Type className="w-4 h-4" />, description: "Line height issues" },
   { type: "spacing", label: "Spacing Analysis", icon: <LayoutGrid className="w-4 h-4" />, description: "Margins & gaps" },
   { type: "spelling", label: "Text & Spelling", icon: <SpellCheck className="w-4 h-4" />, description: "Typos & grammar" },
   { type: "alignment", label: "Alignment Audit", icon: <AlignLeft className="w-4 h-4" />, description: "Grid consistency" },

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
 function isPersistedAnalysisType(value: unknown): value is PersistedAiAnalysisType {
-  return value === "spacing" || value === "spelling"
+  return value === "spacing" || value === "spelling" || value === "lineheight"
 }
 
 export async function POST(request: Request) {
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
     if (!isPersistedAnalysisType(analysisType)) {
       return Response.json(
-        { error: "analysisType must be 'spacing' or 'spelling'" },
+        { error: "analysisType must be 'spacing', 'spelling', or 'lineheight'" },
         { status: 400 }
       )
     }

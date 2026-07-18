@@ -9,6 +9,7 @@ import {
   Reply,
   MapPin,
   Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ export interface Feedback {
 // AI Analysis types
 export type AIAnalysisType =
   | "complete"
-  | "typography"
+  | "lineheight"
   | "spacing"
   | "spelling"
   | "alignment"
@@ -74,6 +75,30 @@ export interface AISuggestion {
   location?: { x: number; y: number };
 }
 
+export interface AiAnalysisEmptyResult {
+  analysisType: AIAnalysisType;
+  pageNumber: number;
+}
+
+export function getAiAnalysisEmptyMessage(
+  analysisType: AIAnalysisType,
+  pageNumber: number,
+  showPageLabel = false
+): string {
+  const pageSuffix = showPageLabel ? ` on page ${pageNumber}` : "";
+
+  switch (analysisType) {
+    case "lineheight":
+      return `No line height issues detected${pageSuffix}.`;
+    case "spacing":
+      return `No spacing issues detected${pageSuffix}.`;
+    case "spelling":
+      return `No spelling issues detected${pageSuffix}.`;
+    default:
+      return `No issues detected${pageSuffix}.`;
+  }
+}
+
 interface CommentsPanelProps {
   feedbacks?: Feedback[];
   onAddReply?: (feedbackId: string, reply: ReplyItem) => void;
@@ -81,6 +106,7 @@ interface CommentsPanelProps {
   openFeedbackId?: string | null;
   viewMode?: "view" | "comments" | "ai";
   aiSuggestions?: AISuggestion[];
+  aiAnalysisEmptyResult?: AiAnalysisEmptyResult | null;
   onIgnoreAISuggestion?: (id: string) => void;
   userRole?: "owner" | "admin" | "designer" | "client";
   workmode?: "creative" | "productive";
@@ -103,6 +129,7 @@ export function CommentsPanel({
   openFeedbackId,
   viewMode = "comments",
   aiSuggestions = [],
+  aiAnalysisEmptyResult = null,
   onIgnoreAISuggestion,
   userRole = "client",
   workmode = "productive",
@@ -265,7 +292,7 @@ export function CommentsPanel({
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
         {viewMode === "ai" ? (
-          aiSuggestions.length === 0 ? (
+          aiSuggestions.length === 0 && !aiAnalysisEmptyResult ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 p-8">
               <Sparkles className="w-12 h-12 mb-3 opacity-50" />
               <p className="text-sm font-medium">No AI suggestions</p>
@@ -273,8 +300,37 @@ export function CommentsPanel({
                 Run an AI analysis from the sidebar to get design feedback
               </p>
             </div>
+          ) : aiSuggestions.length === 0 && aiAnalysisEmptyResult ? (
+            <div className="flex flex-col items-center justify-center h-full p-8">
+              <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" />
+              <p className="text-sm font-medium text-gray-800 dark:text-white text-center">
+                {getAiAnalysisEmptyMessage(
+                  aiAnalysisEmptyResult.analysisType,
+                  aiAnalysisEmptyResult.pageNumber,
+                  showPageLabels
+                )}
+              </p>
+              <p className="text-xs mt-2 text-center text-gray-500 dark:text-gray-400">
+                Run another analysis from the sidebar to check something else.
+              </p>
+            </div>
           ) : (
-            <div className="divide-y divide-gray-100 dark:divide-[#333]">
+            <div>
+              {aiAnalysisEmptyResult && (
+                <div className="mx-3 mt-3 mb-1 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2.5 dark:border-emerald-800/50 dark:bg-emerald-900/20">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <p className="text-xs leading-relaxed text-emerald-800 dark:text-emerald-200">
+                      {getAiAnalysisEmptyMessage(
+                        aiAnalysisEmptyResult.analysisType,
+                        aiAnalysisEmptyResult.pageNumber,
+                        showPageLabels
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="divide-y divide-gray-100 dark:divide-[#333]">
               {aiSuggestions.map((suggestion, index) => {
                 const severityColor = suggestion.severity === "error"
                   ? "bg-red-500"
@@ -317,6 +373,7 @@ export function CommentsPanel({
                   </div>
                 );
               })}
+              </div>
             </div>
           )
         ) : filteredFeedbacks.length === 0 ? (

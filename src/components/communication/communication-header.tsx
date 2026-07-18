@@ -38,6 +38,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
+export type CreativeDownloadMode = "original" | "with-ai-boxes";
+
 interface Iteration {
   id: string;
   name: string;
@@ -51,8 +53,9 @@ interface CommunicationHeaderProps {
   onIterationChange?: (id: string) => void;
   onNewIteration?: () => void;
   onShare?: () => void;
-  onDownload?: () => void | Promise<void>;
+  onDownload?: (mode: CreativeDownloadMode) => void | Promise<void>;
   downloadDisabled?: boolean;
+  downloadWithAiBoxesDisabled?: boolean;
   clientId?: string;
   clientName?: string;
   clientLogo?: string;
@@ -68,6 +71,7 @@ export function CommunicationHeader({
   onShare,
   onDownload,
   downloadDisabled = false,
+  downloadWithAiBoxesDisabled = false,
   clientId = "",
   clientName = "",
   clientLogo = "",
@@ -81,11 +85,13 @@ export function CommunicationHeader({
   const [currentUser, setCurrentUser] = useState({ name: "", email: "", avatar: "" });
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const handleDownload = async () => {
+  const handleDownload = async (mode: CreativeDownloadMode) => {
     if (!onDownload || downloadDisabled || isDownloading) return
+    if (mode === "with-ai-boxes" && downloadWithAiBoxesDisabled) return
+
     setIsDownloading(true)
     try {
-      await onDownload()
+      await onDownload(mode)
     } finally {
       setIsDownloading(false)
     }
@@ -285,22 +291,49 @@ export function CommunicationHeader({
             </button>
           )}
 
-          {/* Download Button - Icon only */}
-          <Button
-            variant="outline"
-            size="icon"
-            disabled={downloadDisabled || isDownloading || !onDownload}
-            onClick={handleDownload}
-            aria-label="Download creative"
-            title="Download creative"
-            className="h-9 w-9 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-[#444] hover:bg-gray-50 dark:hover:bg-[#333] disabled:opacity-50"
-          >
-            {isDownloading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
-          </Button>
+          {/* Download Button - dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={downloadDisabled || isDownloading || !onDownload}
+                aria-label="Download creative"
+                title="Download creative"
+                className="h-9 w-9 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-[#444] hover:bg-gray-50 dark:hover:bg-[#333] disabled:opacity-50"
+              >
+                {isDownloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-[#444] shadow-lg rounded-lg p-1"
+            >
+              <DropdownMenuItem
+                disabled={downloadDisabled || isDownloading || !onDownload}
+                onClick={() => handleDownload("original")}
+                className="cursor-pointer rounded-md py-2.5 px-3 text-sm text-gray-700 dark:text-gray-200"
+              >
+                Download original
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={
+                  downloadDisabled ||
+                  isDownloading ||
+                  !onDownload ||
+                  downloadWithAiBoxesDisabled
+                }
+                onClick={() => handleDownload("with-ai-boxes")}
+                className="cursor-pointer rounded-md py-2.5 px-3 text-sm text-gray-700 dark:text-gray-200"
+              >
+                Download with AI boxes
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Share Button */}
           <Button

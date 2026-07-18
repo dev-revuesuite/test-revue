@@ -1,6 +1,6 @@
 import type { AIAnalysisType, AISuggestion } from "@/components/communication/comments-panel"
 
-export type PersistedAiAnalysisType = "spacing" | "spelling"
+export type PersistedAiAnalysisType = "spacing" | "spelling" | "lineheight"
 
 export interface AiAnalysisRunDimensions {
   image_width: number | null

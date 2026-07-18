@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { CommunicationHeader } from "./communication-header";
 import { CommunicationSidebar } from "./communication-sidebar";
-import { CommentsPanel, Feedback, ReplyItem, AIAnalysisType, AISuggestion } from "./comments-panel";
+import { CommentsPanel, Feedback, ReplyItem, AIAnalysisType, AISuggestion, type AiAnalysisEmptyResult } from "./comments-panel";
 import { ZoomControls } from "./zoom-controls";
 import { CanvasArea } from "./canvas-area";
 import type { PdfPageViewerReadyPayload } from "./pdf-page-viewer";
@@ -19,6 +19,11 @@ import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
 import { captureCreativeMediaForAnalysis } from "@/lib/capture-creative-media";
 import { apiPath } from "@/lib/base-path";
 import { downloadCreativeInBrowser } from "@/lib/download-creative-client";
+import {
+  downloadCreativeWithAiBoxesInBrowser,
+  filterExportableAiSuggestions,
+} from "@/lib/export-creative-with-ai-boxes";
+import type { CreativeDownloadMode } from "./communication-header";
 import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
 import { PdfPagePager } from "./pdf-page-pager";
 
@@ -167,6 +172,8 @@ export function RevueCanvas({
   // AI Analysis state
   const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
   const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
+  const [aiAnalysisEmptyResult, setAiAnalysisEmptyResult] =
+    useState<AiAnalysisEmptyResult | null>(null);
   const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
 
@@ -389,6 +396,9 @@ export function RevueCanvas({
         (s) => aiSuggestionPageNumber(s) === currentPage
       )
     : currentAiSuggestions;
+  const exportableAiSuggestions = filterExportableAiSuggestions(
+    pageFilteredAiSuggestions
+  );
   const effectivePageCount = Math.max(
     1,
     currentIteration?.pageCount ?? 1
@@ -401,6 +411,10 @@ export function RevueCanvas({
     }
   }, [activeIterationId, effectivePageCount, currentPage]);
 
+  useEffect(() => {
+    setAiAnalysisEmptyResult(null);
+  }, [activeIterationId]);
+
   const pageFilteredFeedbacks = isPdfIteration
     ? currentFeedbacks.filter((f) => feedbackPageNumber(f) === currentPage)
     : currentFeedbacks;
@@ -409,7 +423,7 @@ export function RevueCanvas({
     ? allDrawings.filter((d) => drawingPageNumber(d) === currentPage)
     : allDrawings;
 
-  const handleDownloadCreative = useCallback(async () => {
+  const handleDownloadCreative = useCallback(async (mode: CreativeDownloadMode) => {
     const iteration = iterations.find((item) => item.id === activeIterationId) ?? currentIteration
     if (!iteration?.imageUrl) {
       showToast("No file available to download", "error")
@@ -417,10 +431,27 @@ export function RevueCanvas({
     }
 
     try {
-      await downloadCreativeInBrowser(iteration.imageUrl, {
+      if (mode === "original") {
+        await downloadCreativeInBrowser(iteration.imageUrl, {
+          creativeName: creativeName || iteration.name,
+          version: iteration.version,
+          mediaType: iteration.mediaType,
+        })
+        return
+      }
+
+      if (exportableAiSuggestions.length === 0) {
+        showToast("No AI boxes available to export", "error")
+        return
+      }
+
+      await downloadCreativeWithAiBoxesInBrowser({
+        imageUrl: iteration.imageUrl,
+        mediaType: iteration.mediaType,
         creativeName: creativeName || iteration.name,
         version: iteration.version,
-        mediaType: iteration.mediaType,
+        currentPage,
+        aiSuggestions: pageFilteredAiSuggestions,
       })
     } catch (error) {
       console.error("Failed to download creative:", error)
@@ -429,7 +460,16 @@ export function RevueCanvas({
         "error"
       )
     }
-  }, [activeIterationId, creativeName, currentIteration, iterations, showToast])
+  }, [
+    activeIterationId,
+    creativeName,
+    currentIteration,
+    currentPage,
+    exportableAiSuggestions.length,
+    iterations,
+    pageFilteredAiSuggestions,
+    showToast,
+  ])
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 5, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 5, 10));
@@ -795,7 +835,7 @@ export function RevueCanvas({
   // Handle AI Analysis — images from storage, PDFs from browser canvas snapshot
   const handleStartAIAnalysis = useCallback(async (type: AIAnalysisType) => {
     if (!canRunAiAnalysis) return;
-    if (type !== "spacing" && type !== "spelling") return;
+    if (type !== "spacing" && type !== "spelling" && type !== "lineheight") return;
 
     const iteration = iterations.find((item) => item.id === activeIterationId);
     const isPdf = iteration?.mediaType === "pdf";
@@ -819,6 +859,7 @@ export function RevueCanvas({
     }
 
     setAiAnalysisType(type);
+    setAiAnalysisEmptyResult(null);
     setAiAnalysisActive(true);
     setViewMode("ai");
 
@@ -890,8 +931,14 @@ export function RevueCanvas({
         })
       );
 
-      if (payload.empty) {
-        showToast("No error found", "info");
+      const isEmpty = payload.empty ?? newSuggestions.length === 0;
+      if (isEmpty) {
+        setAiAnalysisEmptyResult({
+          analysisType: resultType,
+          pageNumber: resultPage,
+        });
+      } else {
+        setAiAnalysisEmptyResult(null);
       }
     } catch (error) {
       console.error("[AI Analysis] Error", error);
@@ -1064,6 +1111,7 @@ export function RevueCanvas({
           onShare={() => setShowShareDialog(true)}
           onDownload={handleDownloadCreative}
           downloadDisabled={!currentIteration?.imageUrl}
+          downloadWithAiBoxesDisabled={exportableAiSuggestions.length === 0}
           clientId={clientId}
           clientName={clientName}
           clientLogo={clientLogo}
@@ -1106,6 +1154,7 @@ export function RevueCanvas({
           openFeedbackId={openFeedbackId}
           viewMode={viewMode}
           aiSuggestions={currentAiSuggestions}
+          aiAnalysisEmptyResult={aiAnalysisEmptyResult}
           onIgnoreAISuggestion={handleIgnoreAISuggestion}
           userRole={userRole}
           workmode={workmode}

@@ -33,7 +33,7 @@ async function dumpOutgoingInferenceImage(
   }
 }
 
-export type InferenceEndpoint = "gramcheck" | "wordspace"
+export type InferenceEndpoint = "gramcheck" | "wordspace" | "lineheight"
 
 export class InferenceApiError extends Error {
   constructor(
@@ -49,6 +49,9 @@ export class InferenceApiError extends Error {
 function getEndpointPath(endpoint: InferenceEndpoint): string {
   if (endpoint === "gramcheck") {
     return process.env.INFERENCE_GRAMCHECK_PATH?.trim() || "/gramcheck/"
+  }
+  if (endpoint === "lineheight") {
+    return process.env.INFERENCE_LINEHEIGHT_PATH?.trim() || "/lineheight/"
   }
   return process.env.INFERENCE_WORDSPACE_PATH?.trim() || "/wordspace/"
 }
@@ -169,4 +172,11 @@ export async function callWordspace(
   options?: { filename?: string; mimeType?: string }
 ): Promise<unknown> {
   return callInferenceApi("wordspace", imageBuffer, options)
+}
+
+export async function callLineheight(
+  imageBuffer: Buffer,
+  options?: { filename?: string; mimeType?: string }
+): Promise<unknown> {
+  return callInferenceApi("lineheight", imageBuffer, options)
 }
