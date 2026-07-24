@@ -63,25 +63,11 @@ import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
 import { NewOrganizationDialog } from "@/components/studio/new-org-dialog"
 import { useNotifications } from "@/hooks/use-notifications"
+import { useMessages } from "@/hooks/use-messages"
 import { NotificationList } from "@/components/notifications/notification-list"
+import { MessageList } from "@/components/messages/message-list"
 import type { NotificationItem } from "@/types/notifications"
-
-const messages = [
-  {
-    id: 1,
-    sender: "Alice Smith",
-    message: "Hey, can you review the design?",
-    time: "5 min ago",
-    read: false,
-  },
-  {
-    id: 2,
-    sender: "Bob Johnson",
-    message: "Meeting at 3 PM today",
-    time: "1 hour ago",
-    read: false,
-  },
-]
+import type { MessageItem } from "@/types/messages"
 
 interface OrgMember {
   id: string
@@ -161,12 +147,35 @@ export function StudioHeader({
 
   const previewNotifications = notifications.slice(0, 20)
 
+  const {
+    messages,
+    unreadCount: unreadMessages,
+    loading: messagesLoading,
+    fetchError: messagesFetchError,
+    markAsRead: markMessageAsRead,
+    markAllAsRead: markAllMessagesAsRead,
+  } = useMessages(activeOrganizationId, {
+    previewLimit: 100,
+    userId,
+  })
+
+  const previewMessages = messages.slice(0, 20)
+
   const handleNotificationClick = async (notification: NotificationItem) => {
     if (!notification.read) {
       await markAsRead(notification.id)
     }
     if (notification.link) {
       router.push(appRoute(notification.link))
+    }
+  }
+
+  const handleMessageClick = async (message: MessageItem) => {
+    if (!message.read) {
+      await markMessageAsRead(message.id)
+    }
+    if (message.link) {
+      router.push(appRoute(message.link))
     }
   }
 
@@ -281,8 +290,6 @@ export function StudioHeader({
       .toUpperCase()
       .slice(0, 2)
   }
-
-  const unreadMessages = messages.filter(m => !m.read).length
 
   // Add Team Member function
   const handleAddTeamMember = async () => {
@@ -482,32 +489,33 @@ export function StudioHeader({
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-0" align="end" sideOffset={8}>
-            <div className="p-3 border-b border-[#e6e6e6] dark:border-[#333]">
+            <div className="p-3 border-b border-[#e6e6e6] dark:border-[#333] flex items-center justify-between gap-2">
               <h4 className="font-semibold text-sm text-[#1a1a1a] dark:text-white">Messages</h4>
+              {unreadMessages > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void markAllMessagesAsRead()}
+                  className="text-[10px] text-[#5C6ECD] hover:underline"
+                >
+                  Mark all read
+                </button>
+              ) : null}
             </div>
             <div className="max-h-64 overflow-auto">
-              {messages.map((msg) => (
-                <div key={msg.id} className={cn(
-                  "p-3 border-b border-[#e6e6e6] dark:border-[#333] last:border-0 hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] cursor-pointer",
-                  !msg.read && "bg-[#f0f7ff] dark:bg-[#1a2a3a]"
-                )}>
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-[#5C6ECD] text-white text-xs font-semibold">
-                        {msg.sender.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#1a1a1a] dark:text-white truncate">{msg.sender}</p>
-                      <p className="text-xs text-[#7a7a7a] dark:text-[#999] truncate">{msg.message}</p>
-                    </div>
-                    <span className="text-[10px] text-[#7a7a7a] dark:text-[#999] whitespace-nowrap">{msg.time}</span>
-                  </div>
-                </div>
-              ))}
+              <MessageList
+                messages={previewMessages}
+                loading={messagesLoading}
+                errorMessage={messagesFetchError}
+                compact
+                onMessageClick={(message) => void handleMessageClick(message)}
+              />
             </div>
             <div className="p-2 border-t border-[#e6e6e6] dark:border-[#333]">
-              <Button variant="ghost" className="w-full text-xs h-8 text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]" onClick={() => setMessageDialogOpen(true)}>
+              <Button
+                variant="ghost"
+                className="w-full text-xs h-8 text-[#5C6ECD] hover:text-[#5C6ECD] hover:bg-[#f0f7ff] dark:hover:bg-[#1a2a3a]"
+                onClick={() => setMessageDialogOpen(true)}
+              >
                 View all messages
               </Button>
             </div>
@@ -652,30 +660,29 @@ export function StudioHeader({
       <Dialog open={messageDialogOpen} onOpenChange={setMessageDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Messages</DialogTitle>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>Messages</DialogTitle>
+              {unreadMessages > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void markAllMessagesAsRead()}
+                  className="text-xs text-[#5C6ECD] hover:underline"
+                >
+                  Mark all read
+                </button>
+              ) : null}
+            </div>
           </DialogHeader>
           <div className="max-h-96 overflow-auto -mx-6 px-6">
-            {messages.map((msg) => (
-              <div key={msg.id} className={cn(
-                "p-3 border-b last:border-0 hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] cursor-pointer rounded-lg",
-                !msg.read && "bg-[#f0f7ff] dark:bg-[#1a2a3a]"
-              )}>
-                <div className="flex items-start gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-[#5C6ECD] text-white text-sm font-semibold">
-                      {msg.sender.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{msg.sender}</p>
-                      <span className="text-[10px] text-[#7a7a7a] dark:text-[#999]">{msg.time}</span>
-                    </div>
-                    <p className="text-sm text-[#7a7a7a] dark:text-[#999] mt-1">{msg.message}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+            <MessageList
+              messages={messages}
+              loading={messagesLoading}
+              errorMessage={messagesFetchError}
+              onMessageClick={(message) => {
+                void handleMessageClick(message)
+                setMessageDialogOpen(false)
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>

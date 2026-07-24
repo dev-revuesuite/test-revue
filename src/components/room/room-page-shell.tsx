@@ -22,6 +22,7 @@ interface RoomPageShellProps {
     email: string
     avatar: string
   }
+  userId: string
   organizationId: string | null
   organizationName: string
   organizationLogoUrl: string | null
@@ -37,6 +38,7 @@ interface RoomPageShellProps {
 
 export function RoomPageShell({
   user,
+  userId,
   organizationId,
   organizationName,
   organizationLogoUrl,
@@ -85,6 +87,7 @@ export function RoomPageShell({
     <div className="flex flex-col h-svh">
       <StudioHeader
         user={user}
+        userId={userId}
         organizationId={organizationId}
         organizationName={organizationName}
         organizationLogoUrl={organizationLogoUrl}

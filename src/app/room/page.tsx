@@ -458,6 +458,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   return (
     <RoomPageShell
       user={userData}
+      userId={user.id}
       organizationId={organization?.id ?? null}
       organizationName={organization?.name ?? ""}
       organizationLogoUrl={organization?.logo_url ?? null}
