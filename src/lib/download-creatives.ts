@@ -4,6 +4,7 @@ import type {
   DownloadManifest,
   DownloadableIteration,
 } from "@/lib/creative-download-manifest"
+import { buildCreativeDownloadFilename } from "@/lib/download-creative-client"
 import {
   fetchBlob,
   formatBytes,
@@ -52,6 +53,7 @@ export interface DownloadCreativesOptions {
 
 interface PlannedFile {
   creativeName: string
+  creativeStatus: string | null
   iteration: DownloadableIteration
 }
 
@@ -65,7 +67,11 @@ export function planDownload(
   for (const creative of manifest.creatives) {
     for (const iteration of creative.iterations) {
       if (filter !== "all" && iteration.mediaType !== filter) continue
-      planned.push({ creativeName: creative.name, iteration })
+      planned.push({
+        creativeName: creative.name,
+        creativeStatus: creative.status,
+        iteration,
+      })
     }
   }
 
@@ -85,10 +91,23 @@ export function needsSizeConfirmation(bytes: number): boolean {
   return bytes > ZIP_WARN_BYTES && bytes <= ZIP_MAX_BYTES
 }
 
-/** `v2_hero-banner.png` -- versions of one creative usually share a filename. */
-function versionedFilename(iteration: DownloadableIteration): string {
-  const name = sanitizeFilename(iteration.filename) || "file"
-  return `v${iteration.version}_${name}`
+function iterationDownloadFilename(
+  file: PlannedFile,
+  manifest: DownloadManifest
+): string {
+  return buildCreativeDownloadFilename(file.iteration.url, {
+    creativeName: file.creativeName,
+    version: file.iteration.version,
+    mediaType: file.iteration.mediaType,
+    namingColumns: manifest.namingColumns,
+    namingContext: {
+      brandName: manifest.brandName,
+      clientName: manifest.clientName,
+      projectName: manifest.projectName,
+      date: file.iteration.createdAt ?? undefined,
+      status: file.creativeStatus ?? undefined,
+    },
+  })
 }
 
 export async function downloadProjectCreatives(
@@ -139,7 +158,7 @@ export async function downloadProjectCreatives(
 
         zip
           .folder(folder)!
-          .file(uniqueName(versionedFilename(file.iteration), used), blob)
+          .file(uniqueName(iterationDownloadFilename(file, manifest), used), blob)
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") throw error
         failed.push(label)

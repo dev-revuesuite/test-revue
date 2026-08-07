@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NavigationPathTracker } from "@/components/navigation-path-tracker";
+import { CreativeUploadShell } from "@/components/uploads/creative-upload-shell";
 import { publicPath } from "@/lib/base-path";
 import "./globals.css";
 
@@ -47,8 +48,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <NavigationPathTracker />
-          {children}
+          <CreativeUploadShell>
+            <NavigationPathTracker />
+            {children}
+          </CreativeUploadShell>
         </ThemeProvider>
       </body>
     </html>

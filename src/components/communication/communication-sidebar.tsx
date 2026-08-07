@@ -109,6 +109,8 @@ interface CommunicationSidebarProps {
   /** Hold eye button to temporarily hide canvas overlays */
   overlaysPeekHidden?: boolean;
   onPeekOverlaysStart?: () => void;
+  /** Quick AI Analysis: sparkles + flyout + peek only (no draw/comment tools) */
+  aiOnlyMode?: boolean;
 }
 
 export function CommunicationSidebar({
@@ -131,6 +133,7 @@ export function CommunicationSidebar({
   pageCount = 1,
   overlaysPeekHidden = false,
   onPeekOverlaysStart,
+  aiOnlyMode = false,
 }: CommunicationSidebarProps) {
   const [internalShowAIOptions, setInternalShowAIOptions] = useState(false);
 
@@ -145,14 +148,17 @@ export function CommunicationSidebar({
   };
 
   const showExtension = selectedTool === "draw";
-  // Disable draw, comment tools when AI analysis is active OR when in AI view mode
-  const toolsDisabled = aiAnalysisActive || viewMode === "ai";
+  // Only lock tools while THIS page is analyzing. AI view still allows browsing
+  // suggestions without blocking the rest of Revue.
+  const toolsDisabled = aiAnalysisActive;
 
   const handleAIAnalysis = (type: AIAnalysisType) => {
-    if (!canRunAiAnalysis || !isLiveAiAnalysisType(type)) return;
+    if ((!canRunAiAnalysis && !aiOnlyMode) || !isLiveAiAnalysisType(type)) return;
     setShowAIOptions(false);
     onStartAIAnalysis?.(type);
   };
+
+  const showAiToolbar = canRunAiAnalysis || aiOnlyMode;
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -161,8 +167,12 @@ export function CommunicationSidebar({
         {/* Main Toolbar */}
         <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-lg border border-gray-200 dark:border-[#444] flex flex-col items-center py-2.5 px-1.5">
           {/* AI Analyse Button - team only, hidden entirely from clients */}
-          {canRunAiAnalysis && (
-            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-[#444]">
+          {showAiToolbar && (
+            <div
+              className={cn(
+                !aiOnlyMode && "mb-2 border-b border-gray-200 pb-2 dark:border-[#444]"
+              )}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -188,6 +198,7 @@ export function CommunicationSidebar({
           )}
 
           {/* Tool Buttons */}
+          {!aiOnlyMode && (
           <div className="flex flex-col items-center gap-0.5">
             {tools.filter(tool => canAddFeedback || tool.id !== "comment").map((tool) => {
               const isActive = tool.id === "compare" ? compareMode : selectedTool === tool.id;
@@ -229,9 +240,10 @@ export function CommunicationSidebar({
               );
             })}
           </div>
+          )}
 
           {/* Hold to peek — hide overlays while pressed */}
-          <div className="mt-2">
+          <div className={cn(aiOnlyMode ? "mt-0" : "mt-2")}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -267,7 +279,7 @@ export function CommunicationSidebar({
           </div>
 
           {/* Compare Mode Indicator */}
-          {compareMode && (
+          {!aiOnlyMode && compareMode && (
             <div className="mt-2 pt-2 border-t border-gray-200 dark:border-[#444]">
               <div className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded text-xs font-medium text-purple-700 dark:text-purple-300 text-center">
                 Compare
@@ -277,7 +289,7 @@ export function CommunicationSidebar({
         </div>
 
         {/* Extension Panel - Color Selector for Draw tool */}
-        {showExtension && (
+        {!aiOnlyMode && showExtension && (
           <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-lg border border-gray-200 dark:border-[#444] p-3 flex flex-col gap-3">
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Color</span>
@@ -302,7 +314,7 @@ export function CommunicationSidebar({
         )}
 
         {/* AI Analysis Options Panel */}
-        {showAIOptions && !aiAnalysisActive && canRunAiAnalysis && (
+        {showAIOptions && !aiAnalysisActive && showAiToolbar && (
           <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-xl border border-gray-200 dark:border-[#444] p-3 w-[220px] animate-in fade-in slide-in-from-left-2 duration-200">
             {/* Header */}
             <div className="flex items-center justify-between mb-3">

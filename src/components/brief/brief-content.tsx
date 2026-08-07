@@ -53,7 +53,8 @@ import {
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
-import { getMediaTypeFromUrl } from "@/lib/media-type"
+import { getMediaTypeFromUrl, isPdfFile } from "@/lib/media-type"
+import { requestPdfLinearization } from "@/lib/request-pdf-linearization"
 
 // Types
 interface Deliverable {
@@ -221,6 +222,10 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
         return
       }
       uploadedUrl = supabase.storage.from("creatives").getPublicUrl(path).data.publicUrl
+
+      if (isPdfFile(newCreative.file)) {
+        void requestPdfLinearization("creatives", path)
+      }
     }
 
     const { data: inserted, error } = await supabase

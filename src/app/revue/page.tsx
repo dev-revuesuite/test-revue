@@ -9,16 +9,26 @@ import {
 } from "@/lib/map-ai-suggestion-rows"
 
 interface RevuePageProps {
-  searchParams: Promise<{ projectId?: string; creativeId?: string }>
+  searchParams: Promise<{
+    projectId?: string
+    creativeId?: string
+    page?: string
+    view?: string
+  }>
 }
 
 export default async function RevuePage({ searchParams }: RevuePageProps) {
   const params = await searchParams
-  const { projectId, creativeId } = params
+  const { projectId, creativeId, page: pageParam, view: viewParam } = params
 
   if (!projectId || !creativeId) {
     redirect("/studio")
   }
+
+  const parsedPage = Number.parseInt(pageParam ?? "", 10)
+  const initialPage =
+    Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1
+  const initialViewMode = viewParam === "ai" ? "ai" : "comments"
 
   const supabase = await createClient()
 
@@ -45,7 +55,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   // Fetch project and client
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, client_id, workmode")
+    .select("id, name, client_id, workmode, naming_columns")
     .eq("id", projectId)
     .single()
 
@@ -218,6 +228,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
       version: iter.version,
       name: iter.name,
       timestamp: formatRelativeTime(iter.created_at),
+      createdAt: iter.created_at,
       imageUrl,
       mediaType: resolveIterationMediaType(iter.media_type, imageUrl),
       pageCount: iter.page_count ?? null,
@@ -262,6 +273,12 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   const currentUser = getUserDisplay(user.id)
 
+  const namingColumns = Array.isArray(project?.naming_columns)
+    ? project!.naming_columns.filter(
+        (column): column is string => typeof column === "string" && column.trim() !== ""
+      )
+    : []
+
   // Resolve role via the shared helper so org owners (no row in
   // organization_members) are correctly detected as "admin", matching the rest
   // of the app (Room, Studio, etc.).
@@ -269,14 +286,22 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   return (
     <RevueCanvas
+      // Remount when switching creatives via tray "View results" — soft nav
+      // only changes search params, so without a key client state stays on the
+      // previous creative (looks like the link does nothing).
+      key={`${projectId}-${creativeId}`}
       creativeId={creativeId}
       projectId={projectId}
       creativeName={creative.name}
+      creativeStatus={creative.status ?? undefined}
       projectName={project?.name || ""}
       clientId={client?.id || ""}
       clientName={client?.name || ""}
       clientLogo={client?.logo_url || ""}
+      namingColumns={namingColumns}
       initialIterations={iterations}
+      initialPage={initialPage}
+      initialViewMode={initialViewMode}
       currentUser={currentUser}
       userRole={userRole}
       workmode={(project?.workmode as "creative" | "productive") || "productive"}

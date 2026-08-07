@@ -70,6 +70,7 @@ export function OnboardingForm({
   const [phone, setPhone] = useState("")
   const [selectedTheme, setSelectedTheme] = useState<"light" | "dark">("light")
   const [loading, setLoading] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [animateIn, setAnimateIn] = useState(true)
 
@@ -97,6 +98,15 @@ export function OnboardingForm({
       setStep(1)
     }
   }, [detectedRole])
+
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    setError(null)
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/login")
+    router.refresh()
+  }
 
   const handleSubmit = async () => {
     setError(null)
@@ -613,7 +623,19 @@ export function OnboardingForm({
           height={37}
           priority
         />
-        {step > 0 && <StepDots total={getTotalSteps()} current={step - (detectedRole ? 1 : 0)} />}
+        <div className="flex items-center gap-4">
+          {step > 0 && (
+            <StepDots total={getTotalSteps()} current={step - (detectedRole ? 1 : 0)} />
+          )}
+          <button
+            type="button"
+            onClick={() => void handleSignOut()}
+            disabled={signingOut || loading}
+            className="text-sm text-zinc-500 hover:text-white transition-colors disabled:opacity-50"
+          >
+            {signingOut ? "Signing out..." : "Sign out"}
+          </button>
+        </div>
       </div>
 
       {/* Content area */}

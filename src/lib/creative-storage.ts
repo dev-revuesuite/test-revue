@@ -10,7 +10,9 @@ export class CreativeStorageError extends Error {
   }
 }
 
-const CREATIVES_BUCKET = "creatives"
+export const CREATIVES_BUCKET = "creatives"
+/** Immutable creative uploads — paths include timestamps, safe to cache long-term. */
+export const CREATIVE_FILE_CACHE_CONTROL = "31536000"
 const REVUE_ASSETS_BUCKET = "revue-assets"
 const ALLOWED_BUCKETS = [CREATIVES_BUCKET, REVUE_ASSETS_BUCKET]
 const DOWNLOAD_TIMEOUT_MS = 60_000
@@ -56,7 +58,7 @@ function isAllowedStoragePath(pathname: string): boolean {
   return false
 }
 
-function assertAllowedCreativeUrl(imageUrl: string): URL {
+export function assertAllowedCreativeUrl(imageUrl: string): URL {
   let parsed: URL
   try {
     parsed = new URL(imageUrl)
@@ -245,4 +247,4 @@ export async function getCreativeFileSize(
   }
 }
 
-export { CREATIVES_BUCKET, inferMimeType as inferCreativeMimeType }
+export { inferMimeType as inferCreativeMimeType }

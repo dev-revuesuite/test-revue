@@ -19,10 +19,6 @@ import {
   Building2,
   UserPlus,
   FolderOpen,
-  Image,
-  FileText,
-  Clock,
-  ArrowRight,
   Command,
   Mail,
   Check,
@@ -66,6 +62,10 @@ import { useNotifications } from "@/hooks/use-notifications"
 import { useMessages } from "@/hooks/use-messages"
 import { NotificationList } from "@/components/notifications/notification-list"
 import { MessageList } from "@/components/messages/message-list"
+import {
+  GlobalSearchDialog,
+  useGlobalSearchShortcut,
+} from "@/components/global-search-dialog"
 import type { NotificationItem } from "@/types/notifications"
 import type { MessageItem } from "@/types/messages"
 
@@ -103,19 +103,6 @@ const searchPlaceholders = [
   "Search Clients...",
   "Search Assets...",
   "Search Team...",
-]
-
-const searchCategories = [
-  { id: "projects", label: "Projects", icon: FolderOpen },
-  { id: "clients", label: "Clients", icon: Users },
-  { id: "assets", label: "Assets", icon: Image },
-  { id: "team", label: "Team Members", icon: UserPlus },
-]
-
-const recentSearches = [
-  { type: "project", name: "Website Redesign", icon: FolderOpen },
-  { type: "client", name: "TechVision Labs", icon: Building2 },
-  { type: "asset", name: "Brand Guidelines.pdf", icon: FileText },
 ]
 
 export function StudioHeader({
@@ -181,12 +168,11 @@ export function StudioHeader({
 
   const [notificationDialogOpen, setNotificationDialogOpen] = React.useState(false)
   const [messageDialogOpen, setMessageDialogOpen] = React.useState(false)
-  const [searchValue, setSearchValue] = React.useState("")
   const [searchModalOpen, setSearchModalOpen] = React.useState(false)
-  const [selectedCategory, setSelectedCategory] = React.useState("projects")
   const [placeholderIndex, setPlaceholderIndex] = React.useState(0)
   const [isAnimating, setIsAnimating] = React.useState(false)
-  const searchInputRef = React.useRef<HTMLInputElement>(null)
+
+  useGlobalSearchShortcut(() => setSearchModalOpen(true))
 
   // Add Team Member modal state
   const [addMemberModalOpen, setAddMemberModalOpen] = React.useState(false)
@@ -267,13 +253,6 @@ export function StudioHeader({
     }, 3000)
     return () => clearInterval(interval)
   }, [])
-
-  // Focus search input when modal opens
-  React.useEffect(() => {
-    if (searchModalOpen && searchInputRef.current) {
-      setTimeout(() => searchInputRef.current?.focus(), 100)
-    }
-  }, [searchModalOpen])
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -718,89 +697,10 @@ export function StudioHeader({
       </Dialog>
 
       {/* Search Modal */}
-      <Dialog open={searchModalOpen} onOpenChange={setSearchModalOpen}>
-        <DialogContent className="max-w-3xl w-[80vw] p-0 gap-0 overflow-hidden rounded-xl" showCloseButton={false}>
-          <DialogTitle className="sr-only">Search</DialogTitle>
-          <DialogDescription className="sr-only">Search for projects, clients, assets, and team members</DialogDescription>
-          {/* Search Input */}
-          <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[#e6e6e6] dark:border-[#333]">
-            <Search className="w-5 h-5 text-[#7a7a7a] dark:text-[#999] shrink-0" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Type to search..."
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              className="flex-1 bg-transparent text-base outline-none placeholder:text-[#7a7a7a] dark:placeholder:text-[#999] text-[#1a1a1a] dark:text-white"
-            />
-            <kbd className="px-2 py-1 bg-[#f5f5f5] dark:bg-[#2a2a2a] rounded text-xs text-[#7a7a7a] dark:text-[#999] border border-[#e0e0e0] dark:border-[#444]">
-              ESC
-            </kbd>
-          </div>
-
-          {/* Category Tabs */}
-          <div className="flex items-center gap-1.5 px-5 py-2.5 border-b border-[#e6e6e6] dark:border-[#333] bg-[#fafafa] dark:bg-[#1a1a1a]">
-            <span className="text-xs text-[#7a7a7a] dark:text-[#999] mr-2">Search in:</span>
-            {searchCategories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                  selectedCategory === category.id
-                    ? "bg-[#5C6ECD] text-white"
-                    : "text-[#7a7a7a] dark:text-[#999] hover:bg-[#e6e6e6] dark:hover:bg-[#333] hover:text-[#1a1a1a] dark:hover:text-white"
-                )}
-              >
-                <category.icon className="w-3.5 h-3.5" />
-                {category.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Results / Recent Searches */}
-          <div className="max-h-72 overflow-auto scrollbar-hide">
-            {searchValue ? (
-              // Search Results
-              <div className="p-5">
-                <div className="text-[10px] font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider mb-3">
-                  Results in {searchCategories.find(c => c.id === selectedCategory)?.label}
-                </div>
-                <div className="text-center py-10 text-[#7a7a7a] dark:text-[#999]">
-                  <Search className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">No results found for "{searchValue}"</p>
-                  <p className="text-xs mt-1 opacity-70">Try different keywords</p>
-                </div>
-              </div>
-            ) : (
-              // Recent Searches
-              <div className="p-5">
-                <div className="text-[10px] font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                  <Clock className="w-3 h-3" />
-                  Recent Searches
-                </div>
-                <div className="space-y-0.5">
-                  {recentSearches.map((item, index) => (
-                    <button
-                      key={index}
-                      className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors group"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-[#f0f0f0] dark:bg-[#333] flex items-center justify-center">
-                        <item.icon className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-sm font-medium text-[#1a1a1a] dark:text-white">{item.name}</p>
-                        <p className="text-[11px] text-[#7a7a7a] dark:text-[#999] capitalize">{item.type}</p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-[#7a7a7a] dark:text-[#999] opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <GlobalSearchDialog
+        open={searchModalOpen}
+        onOpenChange={setSearchModalOpen}
+      />
 
       {/* Add Team Member Modal */}
       <Dialog open={addMemberModalOpen} onOpenChange={setAddMemberModalOpen}>

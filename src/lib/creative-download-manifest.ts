@@ -31,6 +31,7 @@ export interface DownloadableIteration {
   url: string
   filename: string
   mediaType: MediaType
+  createdAt: string | null
   /** null when the storage server did not report a size. */
   bytes: number | null
 }
@@ -39,12 +40,16 @@ export interface DownloadableCreative {
   id: string
   name: string
   type: string
+  status: string | null
   iterations: DownloadableIteration[]
 }
 
 export interface DownloadManifest {
   projectId: string
   projectName: string
+  namingColumns: string[]
+  brandName: string
+  clientName: string
   creatives: DownloadableCreative[]
   /** Sum of known sizes only. */
   totalBytes: number
@@ -67,7 +72,12 @@ async function assertCanDownloadProject(
   supabase: SupabaseClient,
   userId: string,
   projectId: string
-): Promise<{ projectName: string }> {
+): Promise<{
+  projectName: string
+  namingColumns: string[]
+  brandName: string
+  clientName: string
+}> {
   const { role, organizationId } = await getUserRole(supabase, userId)
 
   if (role === "client") {
@@ -83,7 +93,7 @@ async function assertCanDownloadProject(
 
   const { data: project, error } = await supabase
     .from("projects")
-    .select("id, name, client_id")
+    .select("id, name, client_id, naming_columns")
     .eq("id", projectId)
     .single()
 
@@ -94,7 +104,7 @@ async function assertCanDownloadProject(
   // The project must belong to a client inside the caller's active organization.
   const { data: client } = await supabase
     .from("clients")
-    .select("id, organization_id")
+    .select("id, organization_id, name")
     .eq("id", project.client_id)
     .single()
 
@@ -102,7 +112,19 @@ async function assertCanDownloadProject(
     throw new CreativeDownloadError("Project not found", 404)
   }
 
-  return { projectName: project.name }
+  const clientName = client.name || ""
+  const namingColumns = Array.isArray(project.naming_columns)
+    ? project.naming_columns.filter(
+        (column): column is string => typeof column === "string" && column.trim() !== ""
+      )
+    : []
+
+  return {
+    projectName: project.name,
+    namingColumns,
+    brandName: clientName,
+    clientName,
+  }
 }
 
 /** Resolve sizes a few at a time rather than firing one request per file at once. */
@@ -132,15 +154,12 @@ export async function buildDownloadManifest(
   userId: string,
   projectId: string
 ): Promise<DownloadManifest> {
-  const { projectName } = await assertCanDownloadProject(
-    supabase,
-    userId,
-    projectId
-  )
+  const { projectName, namingColumns, brandName, clientName } =
+    await assertCanDownloadProject(supabase, userId, projectId)
 
   const { data: creatives } = await supabase
     .from("creatives")
-    .select("id, name, type")
+    .select("id, name, type, status")
     .eq("project_id", projectId)
     .order("created_at", { ascending: true })
 
@@ -149,7 +168,7 @@ export async function buildDownloadManifest(
   const { data: iterationRows } = creativeIds.length
     ? await supabase
         .from("iterations")
-        .select("id, creative_id, version, image_url, media_type")
+        .select("id, creative_id, version, image_url, media_type, created_at")
         .in("creative_id", creativeIds)
         .order("version", { ascending: true })
     : { data: [] }
@@ -167,6 +186,7 @@ export async function buildDownloadManifest(
             url: row.image_url,
             filename: filenameFromUrl(row.image_url, creative.name),
             mediaType: resolveIterationMediaType(row.media_type, row.image_url),
+            createdAt: row.created_at ?? null,
             bytes: null,
           }
           allIterations.push(iteration)
@@ -177,6 +197,7 @@ export async function buildDownloadManifest(
         id: creative.id,
         name: creative.name,
         type: creative.type || "design",
+        status: creative.status ?? null,
         iterations,
       }
     }
@@ -195,6 +216,9 @@ export async function buildDownloadManifest(
   return {
     projectId,
     projectName,
+    namingColumns,
+    brandName,
+    clientName,
     // Creatives with no uploaded file are not downloadable.
     creatives: byCreative.filter((creative) => creative.iterations.length > 0),
     totalBytes,

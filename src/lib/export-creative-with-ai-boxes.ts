@@ -1,4 +1,5 @@
 import type { AISuggestion } from "@/components/communication/comments-panel"
+import type { CreativeNamingContext } from "@/lib/creative-naming-convention"
 import type { MediaType } from "@/lib/media-type"
 import { buildCreativeDownloadFilename } from "@/lib/download-creative-client"
 
@@ -132,6 +133,11 @@ export async function downloadCreativeWithAiBoxesInBrowser(options: {
   version?: number
   currentPage?: number
   aiSuggestions: AISuggestion[]
+  namingColumns?: string[] | null
+  namingContext?: Omit<
+    CreativeNamingContext,
+    "version" | "mediaType" | "creativeName" | "fileExtension"
+  >
 }): Promise<void> {
   const {
     imageUrl,
@@ -140,6 +146,8 @@ export async function downloadCreativeWithAiBoxesInBrowser(options: {
     version,
     currentPage = 1,
     aiSuggestions,
+    namingColumns,
+    namingContext,
   } = options
 
   if (!imageUrl.trim()) {
@@ -179,6 +187,8 @@ export async function downloadCreativeWithAiBoxesInBrowser(options: {
     creativeName,
     version,
     mediaType: "image",
+    namingColumns,
+    namingContext,
   }).replace(/\.[^.]+$/, "")
 
   const pageSuffix = mediaType === "pdf" ? `-page-${currentPage}` : ""

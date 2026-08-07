@@ -65,6 +65,7 @@ interface CanvasAreaProps {
   onMarkerClick?: (markerId: string) => void;
   onAddReply?: (markerId: string, reply: ReplyItem) => void;
   imageUrl?: string;
+  iterationId?: string | null;
   mediaType?: MediaType;
   currentPage?: number;
   pageCount?: number | null;
@@ -73,6 +74,7 @@ interface CanvasAreaProps {
   rotation?: number;
   compareMode?: boolean;
   compareImageUrl?: string;
+  compareIterationId?: string | null;
   compareIterations?: CompareIteration[];
   selectedCompareId?: string | null;
   onCompareIterationChange?: (id: string | null) => void;
@@ -149,6 +151,7 @@ export function CanvasArea({
   onMarkerClick,
   onAddReply,
   imageUrl = "/assets/login.png",
+  iterationId = null,
   mediaType = "image",
   currentPage = 1,
   pageCount = null,
@@ -157,6 +160,7 @@ export function CanvasArea({
   rotation = 0,
   compareMode = false,
   compareImageUrl,
+  compareIterationId = null,
   compareIterations = [],
   selectedCompareId,
   onCompareIterationChange,
@@ -803,6 +807,7 @@ export function CanvasArea({
             <CreativeMediaDisplay
               mediaType={mediaType}
               url={imageUrl}
+              iterationId={iterationId}
               page={currentPage}
               displayWidth={500}
               alt="Creative Preview"
@@ -1069,6 +1074,7 @@ export function CanvasArea({
                 <CreativeMediaDisplay
                   mediaType={mediaType}
                   url={imageUrl}
+                  iterationId={iterationId}
                   page={currentPage}
                   displayWidth={400}
                   alt="Current Iteration"
@@ -1127,6 +1133,7 @@ export function CanvasArea({
                   <CreativeMediaDisplay
                     mediaType={compareMediaType}
                     url={compareImageUrl}
+                    iterationId={compareIterationId}
                     page={currentPage}
                     displayWidth={400}
                     alt="Compare Iteration"

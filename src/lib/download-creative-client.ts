@@ -1,3 +1,7 @@
+import {
+  buildFilenameFromNamingConvention,
+  type CreativeNamingContext,
+} from "@/lib/creative-naming-convention"
 import type { MediaType } from "@/lib/media-type"
 
 function filenameFromUrl(imageUrl: string): string {
@@ -31,13 +35,35 @@ export function buildCreativeDownloadFilename(
     creativeName?: string
     version?: number
     mediaType?: MediaType
+    namingColumns?: string[] | null
+    namingContext?: Omit<
+      CreativeNamingContext,
+      "version" | "mediaType" | "creativeName" | "fileExtension"
+    >
   } = {}
 ): string {
   const urlFilename = filenameFromUrl(imageUrl)
   const urlExtension = extensionFromFilename(urlFilename)
   const mediaType = options.mediaType ?? "image"
   const extension = urlExtension ?? extensionForMediaType(mediaType)
-  const base = sanitizeFilenameBase(options.creativeName || urlFilename.replace(/\.[^.]+$/, ""))
+  const fileExtension = extension.replace(/^\./, "")
+
+  const fromConvention = buildFilenameFromNamingConvention(
+    options.namingColumns,
+    {
+      ...options.namingContext,
+      version: options.version,
+      mediaType,
+      creativeName: options.creativeName,
+      fileExtension,
+    },
+    extension
+  )
+  if (fromConvention) return fromConvention
+
+  const base = sanitizeFilenameBase(
+    options.creativeName || urlFilename.replace(/\.[^.]+$/, "")
+  )
   const versionSuffix =
     options.version != null && Number.isFinite(options.version)
       ? `-v${options.version}`
@@ -52,6 +78,11 @@ export async function downloadCreativeInBrowser(
     creativeName?: string
     version?: number
     mediaType?: MediaType
+    namingColumns?: string[] | null
+    namingContext?: Omit<
+      CreativeNamingContext,
+      "version" | "mediaType" | "creativeName" | "fileExtension"
+    >
   } = {}
 ): Promise<void> {
   if (!imageUrl.trim()) {

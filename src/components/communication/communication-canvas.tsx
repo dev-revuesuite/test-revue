@@ -16,8 +16,10 @@ import { NewIterationDialog } from "./new-iteration-dialog";
 import { ShapeType, DrawingPath } from "@/lib/fabric";
 import { getMediaTypeFromFile, getMediaTypeFromUrl, type MediaType } from "@/lib/media-type";
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
+import { requestPdfLinearization } from "@/lib/request-pdf-linearization";
 import { captureCreativeMediaForAnalysis } from "@/lib/capture-creative-media";
 import { apiPath } from "@/lib/base-path";
+import { CREATIVE_FILE_CACHE_CONTROL } from "@/lib/creative-storage";
 import { downloadCreativeInBrowser } from "@/lib/download-creative-client";
 import {
   downloadCreativeWithAiBoxesInBrowser,
@@ -25,6 +27,11 @@ import {
 } from "@/lib/export-creative-with-ai-boxes";
 import type { CreativeDownloadMode } from "./communication-header";
 import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
+import {
+  useAiAnalysisJobs,
+  useAiAnalysisListener,
+} from "@/contexts/ai-analysis-context";
+import { isActiveAiAnalysisStatus } from "@/types/ai-analysis-job";
 import { PdfPagePager } from "./pdf-page-pager";
 
 function feedbackPageNumber(f: Feedback): number {
@@ -65,6 +72,7 @@ interface Iteration {
   version: number;
   name: string;
   timestamp: string;
+  createdAt?: string;
   imageUrl: string;
   mediaType: MediaType;
   pageCount?: number | null;
@@ -78,11 +86,17 @@ interface RevueCanvasProps {
   creativeId?: string;
   projectId?: string;
   creativeName?: string;
+  creativeStatus?: string;
   projectName?: string;
   clientId?: string;
   clientName?: string;
   clientLogo?: string;
+  namingColumns?: string[];
   initialIterations?: Iteration[];
+  /** 1-based page from ?page= (tray "View results"). */
+  initialPage?: number;
+  /** "ai" from ?view=ai opens the AI suggestions panel. */
+  initialViewMode?: "view" | "comments" | "ai";
   currentUser?: { name: string; avatar: string; color: string };
   userRole?: "owner" | "admin" | "designer" | "client";
   workmode?: "creative" | "productive";
@@ -103,11 +117,15 @@ export function RevueCanvas({
   creativeId,
   projectId,
   creativeName,
+  creativeStatus,
   projectName,
   clientId,
   clientName,
   clientLogo,
+  namingColumns,
   initialIterations: propIterations,
+  initialPage = 1,
+  initialViewMode = "comments",
   currentUser: propCurrentUser,
   userRole = "client",
   workmode = "productive",
@@ -153,8 +171,10 @@ export function RevueCanvas({
   const [compareMode, setCompareMode] = useState(false);
   const [compareIterationId, setCompareIterationId] = useState<string | null>(null);
 
-  // PDF page (pager UI in Phase 5; page 1 for Phase 3)
-  const [currentPage, setCurrentPage] = useState(1);
+  // PDF page — seeded from ?page= when opening via tray "View results"
+  const [currentPage, setCurrentPage] = useState(() =>
+    Math.max(1, initialPage)
+  );
 
   // Rotation state
   const [rotation, setRotation] = useState(0);
@@ -169,13 +189,37 @@ export function RevueCanvas({
   // Highlight state for sidebar selection (drawing associated with selected feedback)
   const [highlightDrawingId, setHighlightDrawingId] = useState<string | null>(null);
 
-  // AI Analysis state
-  const [aiAnalysisActive, setAiAnalysisActive] = useState(false);
-  const [aiAnalysisType, setAiAnalysisType] = useState<AIAnalysisType | null>(null);
+  // AI Analysis — jobs live in AiAnalysisProvider so navigation doesn't kill them
+  const { jobs: aiAnalysisJobs, startAnalysis } = useAiAnalysisJobs();
   const [aiAnalysisEmptyResult, setAiAnalysisEmptyResult] =
     useState<AiAnalysisEmptyResult | null>(null);
-  const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">("comments"); // View mode for annotations
+  const [viewMode, setViewMode] = useState<"view" | "comments" | "ai">(
+    initialViewMode
+  );
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
+
+  // Same creative, different ?page= / ?view= (key does not remount) — apply deep link
+  useEffect(() => {
+    setCurrentPage(Math.max(1, initialPage));
+    setViewMode(initialViewMode);
+  }, [creativeId, initialPage, initialViewMode]);
+
+  // Scanning overlay while a job for THIS iteration + page is queued/running
+  const activePageAnalysisJob = aiAnalysisJobs.find(
+    (job) =>
+      job.iterationId === activeIterationId &&
+      job.pageNumber === currentPage &&
+      isActiveAiAnalysisStatus(job.status)
+  );
+  const aiAnalysisActive = Boolean(activePageAnalysisJob);
+
+  // Latest view targets for the analysis listener (avoids stale closures)
+  const activeIterationIdRef = useRef(activeIterationId);
+  activeIterationIdRef.current = activeIterationId;
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
+  const creativeIdRef = useRef(creativeId);
+  creativeIdRef.current = creativeId;
 
   // Hold eye button — temporarily hide canvas overlays
   const [overlaysPeekHidden, setOverlaysPeekHidden] = useState(false);
@@ -208,6 +252,61 @@ export function RevueCanvas({
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
+
+  // Merge results when a job finishes — even if the user started it earlier and
+  // navigated away then returned to this Revue session.
+  useAiAnalysisListener((event) => {
+    if (event.type === "failed") {
+      if (event.job.creativeId === creativeIdRef.current) {
+        showToast(event.job.error || "AI analysis failed", "error");
+      }
+      return;
+    }
+
+    if (event.type !== "complete" && event.type !== "empty") return;
+
+    const job = event.job;
+    const iterationLoaded = iterationsRef.current.some(
+      (iteration) => iteration.id === job.iterationId
+    );
+    // User is on a different Revue (or left entirely) — DB has results; skip.
+    if (!iterationLoaded) return;
+
+    setIterations((prev) =>
+      prev.map((iteration) => {
+        if (iteration.id !== job.iterationId) return iteration;
+
+        const retained = iteration.aiSuggestions.filter(
+          (suggestion) =>
+            !(
+              (suggestion.pageNumber ?? 1) === job.pageNumber &&
+              suggestion.type === job.analysisType
+            )
+        );
+
+        return {
+          ...iteration,
+          aiSuggestions: [...retained, ...job.suggestions],
+        };
+      })
+    );
+
+    const viewingExactPage =
+      job.iterationId === activeIterationIdRef.current &&
+      job.pageNumber === currentPageRef.current;
+
+    if (!viewingExactPage) return;
+
+    setViewMode("ai");
+    if (event.type === "empty") {
+      setAiAnalysisEmptyResult({
+        analysisType: job.analysisType,
+        pageNumber: job.pageNumber,
+      });
+    } else {
+      setAiAnalysisEmptyResult(null);
+    }
+  });
 
   // Profile cache for resolving user names from realtime events
   const profileCacheRef = useRef<Record<string, { name: string; avatar: string; color: string }>>({});
@@ -431,11 +530,21 @@ export function RevueCanvas({
     }
 
     try {
+      const namingContext = {
+        brandName: clientName,
+        clientName,
+        projectName,
+        date: iteration.createdAt,
+        status: creativeStatus,
+      }
+
       if (mode === "original") {
         await downloadCreativeInBrowser(iteration.imageUrl, {
           creativeName: creativeName || iteration.name,
           version: iteration.version,
           mediaType: iteration.mediaType,
+          namingColumns,
+          namingContext,
         })
         return
       }
@@ -452,6 +561,8 @@ export function RevueCanvas({
         version: iteration.version,
         currentPage,
         aiSuggestions: pageFilteredAiSuggestions,
+        namingColumns,
+        namingContext,
       })
     } catch (error) {
       console.error("Failed to download creative:", error)
@@ -462,12 +573,16 @@ export function RevueCanvas({
     }
   }, [
     activeIterationId,
+    clientName,
     creativeName,
+    creativeStatus,
     currentIteration,
     currentPage,
     exportableAiSuggestions.length,
     iterations,
+    namingColumns,
     pageFilteredAiSuggestions,
+    projectName,
     showToast,
   ])
 
@@ -772,7 +887,9 @@ export function RevueCanvas({
         const filePath = `iterations/${creativeId}/${newId}/${file.name}`;
         const { data: uploadData } = await supabase.storage
           .from("revue-assets")
-          .upload(filePath, file);
+          .upload(filePath, file, {
+            cacheControl: CREATIVE_FILE_CACHE_CONTROL,
+          });
 
         if (uploadData) {
           const { data: urlData } = supabase.storage
@@ -796,14 +913,21 @@ export function RevueCanvas({
           newId = iterData.id;
         }
 
-        // For PDFs, read page count and persist so pager renders immediately
+        // For PDFs, read page count and persist so pager renders immediately.
+        // Reads via the range proxy, so only small chunks download.
         if (mediaType === "pdf") {
-          pageCount = await getPdfPageCountFromUrl(imageUrl);
+          pageCount = await getPdfPageCountFromUrl(imageUrl, newId);
           if (pageCount != null) {
             await supabase
               .from("iterations")
               .update({ page_count: pageCount })
               .eq("id", newId);
+          }
+
+          // Fire-and-forget fast-web-view optimization; runs after page count
+          // so the range reads above never race the file replacement.
+          if (uploadData) {
+            void requestPdfLinearization("revue-assets", filePath);
           }
         }
 
@@ -817,6 +941,7 @@ export function RevueCanvas({
       version: newVersion,
       name: `Iteration ${newVersion}`,
       timestamp: "Just now",
+      createdAt: new Date().toISOString(),
       imageUrl: imageUrl,
       mediaType,
       pageCount,
@@ -832,10 +957,16 @@ export function RevueCanvas({
     // Dialog closes itself when onUpload resolves; no need to close here.
   };
 
-  // Handle AI Analysis — images from storage, PDFs from browser canvas snapshot
+  // Hand off to AiAnalysisProvider — fetch lives outside this component so
+  // navigating away no longer kills the request. Results merge lands in Step 6.
   const handleStartAIAnalysis = useCallback(async (type: AIAnalysisType) => {
     if (!canRunAiAnalysis) return;
     if (type !== "spacing" && type !== "spelling" && type !== "lineheight") return;
+
+    if (!projectId || !creativeId || !activeIterationId) {
+      showToast("Open a creative before running AI analysis.", "error");
+      return;
+    }
 
     const iteration = iterations.find((item) => item.id === activeIterationId);
     const isPdf = iteration?.mediaType === "pdf";
@@ -858,98 +989,37 @@ export function RevueCanvas({
       clientImage = captured.capture;
     }
 
-    setAiAnalysisType(type);
-    setAiAnalysisEmptyResult(null);
-    setAiAnalysisActive(true);
-    setViewMode("ai");
-
-    console.log("[AI Analysis] Starting", {
-      analysisType: type,
+    const jobId = startAnalysis({
+      projectId,
+      projectName: projectName || "Project",
+      creativeId,
+      creativeName: creativeName || "Creative",
       iterationId: activeIterationId,
       pageNumber: currentPage,
-      source: isPdf ? "client-canvas" : "storage-download",
-      clientImageWidth: clientImage?.width,
-      clientImageHeight: clientImage?.height,
+      analysisType: type,
+      ...(clientImage ? { clientImage } : {}),
     });
 
-    try {
-      const response = await fetch(apiPath("/api/ai/analyze"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          iterationId: activeIterationId,
-          analysisType: type,
-          pageNumber: currentPage,
-          ...(clientImage ? { clientImage } : {}),
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        suggestions?: AISuggestion[];
-        empty?: boolean;
-        pageNumber?: number;
-        analysisType?: AIAnalysisType;
-        error?: string;
-      };
-
-      if (!response.ok) {
-        console.error("[AI Analysis] Failed", {
-          status: response.status,
-          error: payload.error,
-        });
-        throw new Error(payload.error || "AI analysis failed");
-      }
-
-      const resultPage = payload.pageNumber ?? currentPage;
-      const resultType = payload.analysisType ?? type;
-      const newSuggestions = payload.suggestions ?? [];
-
-      console.log("[AI Analysis] Success", {
-        analysisType: resultType,
-        pageNumber: resultPage,
-        empty: payload.empty ?? newSuggestions.length === 0,
-        suggestionCount: newSuggestions.length,
-        suggestions: newSuggestions,
-      });
-
-      setIterations((prev) =>
-        prev.map((iteration) => {
-          if (iteration.id !== activeIterationId) return iteration;
-
-          const retained = iteration.aiSuggestions.filter(
-            (suggestion) =>
-              !(
-                (suggestion.pageNumber ?? 1) === resultPage &&
-                suggestion.type === resultType
-              )
-          );
-
-          return {
-            ...iteration,
-            aiSuggestions: [...retained, ...newSuggestions],
-          };
-        })
-      );
-
-      const isEmpty = payload.empty ?? newSuggestions.length === 0;
-      if (isEmpty) {
-        setAiAnalysisEmptyResult({
-          analysisType: resultType,
-          pageNumber: resultPage,
-        });
-      } else {
-        setAiAnalysisEmptyResult(null);
-      }
-    } catch (error) {
-      console.error("[AI Analysis] Error", error);
-      showToast(
-        error instanceof Error ? error.message : "AI analysis failed",
-        "error"
-      );
-    } finally {
-      setAiAnalysisActive(false);
+    if (!jobId) {
+      showToast("This analysis is already running.", "error");
+      return;
     }
-  }, [activeIterationId, canRunAiAnalysis, currentPage, iterations, rotation, showToast]);
+
+    setAiAnalysisEmptyResult(null);
+    setViewMode("ai");
+  }, [
+    activeIterationId,
+    canRunAiAnalysis,
+    creativeId,
+    creativeName,
+    currentPage,
+    iterations,
+    projectId,
+    projectName,
+    rotation,
+    showToast,
+    startAnalysis,
+  ]);
 
   // Handle ignoring an AI suggestion - persisted in Supabase
   const handleIgnoreAISuggestion = useCallback(async (id: string) => {
@@ -1062,6 +1132,7 @@ export function RevueCanvas({
         onMarkerClick={handleMarkerClick}
         onAddReply={handleCanvasReply}
         imageUrl={currentIteration?.imageUrl || ""}
+        iterationId={activeIterationId}
         mediaType={currentIteration?.mediaType ?? "image"}
         currentPage={currentPage}
         pageCount={currentIteration?.pageCount ?? null}
@@ -1070,6 +1141,7 @@ export function RevueCanvas({
         rotation={rotation}
         compareMode={compareMode}
         compareImageUrl={compareIteration?.imageUrl}
+        compareIterationId={compareIteration?.id ?? null}
         compareIterations={iterations.filter(i => i.id !== activeIterationId)}
         selectedCompareId={compareIterationId}
         onCompareIterationChange={setCompareIterationId}
@@ -1188,7 +1260,10 @@ export function RevueCanvas({
       <ShareDialog
         open={showShareDialog}
         onClose={() => setShowShareDialog(false)}
+        projectId={projectId}
+        creativeId={creativeId}
         creativeName={creativeName || "Creative"}
+        onSuccess={(message) => showToast(message, "info")}
       />
 
       {/* New Iteration Dialog */}

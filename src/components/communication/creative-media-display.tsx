@@ -7,6 +7,7 @@ import { PdfPageViewer, type PdfPageViewerReadyPayload } from "./pdf-page-viewer
 interface CreativeMediaDisplayProps {
   mediaType: MediaType
   url: string
+  iterationId?: string | null
   page?: number
   displayWidth?: number
   alt?: string
@@ -21,6 +22,7 @@ interface CreativeMediaDisplayProps {
 export function CreativeMediaDisplay({
   mediaType,
   url,
+  iterationId,
   page = 1,
   displayWidth,
   alt = "Creative Preview",
@@ -47,6 +49,7 @@ export function CreativeMediaDisplay({
     return (
       <PdfPageViewer
         url={url}
+        iterationId={iterationId}
         page={page}
         displayWidth={displayWidth}
         className={className}

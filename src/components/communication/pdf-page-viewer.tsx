@@ -29,8 +29,9 @@ export interface PdfPageViewerReadyPayload {
 
 
 export interface PdfPageViewerProps {
-
   url: string
+  /** When set, PDF loads via same-origin range streaming (Revue). */
+  iterationId?: string | null
 
   /** 1-based page index */
 
@@ -57,6 +58,7 @@ export interface PdfPageViewerProps {
 export function PdfPageViewer({
 
   url,
+  iterationId,
 
   page,
 
@@ -98,6 +100,9 @@ export function PdfPageViewer({
 
   const [displayedPage, setDisplayedPage] = useState(page)
 
+  /** False until the first page of the current document has painted. */
+  const [firstPageRendered, setFirstPageRendered] = useState(false)
+
 
 
   onReadyRef.current = onReady
@@ -105,6 +110,18 @@ export function PdfPageViewer({
   onErrorRef.current = onError
 
   onPageRenderedRef.current = onPageRendered
+
+
+
+  // New document: show the paper skeleton until its first page paints
+
+  useEffect(() => {
+
+    setFirstPageRendered(false)
+
+    setLoading(true)
+
+  }, [url])
 
 
 
@@ -210,7 +227,7 @@ export function PdfPageViewer({
 
           cleanupDocument()
 
-          const pdf = await openPdfDocument(pdfjs, url)
+          const pdf = await openPdfDocument(pdfjs, url, { iterationId })
 
           if (cancelled) {
 
@@ -316,6 +333,8 @@ export function PdfPageViewer({
 
           setDisplayedPage(safePage)
 
+          setFirstPageRendered(true)
+
           setLoading(false)
 
           onPageRenderedRef.current?.()
@@ -358,7 +377,7 @@ export function PdfPageViewer({
 
     }
 
-  }, [url, renderPage, displayWidth])
+  }, [url, renderPage, displayWidth, iterationId])
 
 
 
@@ -487,7 +506,67 @@ export function PdfPageViewer({
       data-creative-media-page={displayedPage}
     >
 
-      {loading && (
+      {loading && !firstPageRendered && (
+
+        <div
+
+          className="relative overflow-hidden rounded-[3px] bg-white shadow-[0_2px_16px_rgba(0,0,0,0.25)]"
+
+          style={{ width: displayWidth, aspectRatio: "210 / 297" }}
+
+          role="status"
+
+          aria-live="polite"
+
+          aria-label="Loading PDF page"
+
+        >
+
+          {/* Fake document content so the paper clearly reads as "loading" */}
+
+          <div className="absolute inset-0 flex animate-pulse flex-col gap-3 p-7">
+
+            <div className="h-6 w-3/5 rounded bg-neutral-200" />
+
+            <div className="mt-1 h-3.5 w-full rounded bg-neutral-200/90" />
+
+            <div className="h-3.5 w-11/12 rounded bg-neutral-200/90" />
+
+            <div className="h-3.5 w-4/5 rounded bg-neutral-200/90" />
+
+            <div className="mt-2 h-2/6 w-full rounded bg-neutral-200/80" />
+
+            <div className="mt-1 h-3.5 w-full rounded bg-neutral-200/90" />
+
+            <div className="h-3.5 w-10/12 rounded bg-neutral-200/90" />
+
+            <div className="h-3.5 w-3/4 rounded bg-neutral-200/90" />
+
+          </div>
+
+          <div className="paper-shimmer absolute inset-0" />
+
+          <div className="absolute inset-0 flex items-center justify-center">
+
+            <div className="flex items-center gap-2 rounded-full bg-white/85 px-3.5 py-2 shadow-md backdrop-blur-sm">
+
+              <Loader2 className="h-4 w-4 animate-spin text-[#5C6ECD]" />
+
+              <span className="text-xs font-medium text-neutral-500">
+
+                Loading page {renderPage}...
+
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+      {loading && firstPageRendered && (
 
         <div
 
@@ -511,7 +590,13 @@ export function PdfPageViewer({
 
         ref={canvasRef}
 
-        className="max-w-none select-none block"
+        className={cn(
+
+          "max-w-none select-none",
+
+          firstPageRendered ? "block" : "hidden"
+
+        )}
 
         aria-label={`PDF page ${displayedPage}`}
 

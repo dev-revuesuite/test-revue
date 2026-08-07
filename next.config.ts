@@ -8,7 +8,11 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BASE_PATH: APP_BASE_PATH,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? CANONICAL_APP_ORIGIN,
   },
-  serverExternalPackages: ["pdfjs-dist", "@napi-rs/canvas"],
+  serverExternalPackages: [
+    "pdfjs-dist",
+    "@napi-rs/canvas",
+    "@neslinesli93/qpdf-wasm",
+  ],
 };
 
 export default nextConfig;

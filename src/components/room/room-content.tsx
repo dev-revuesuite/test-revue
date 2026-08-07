@@ -37,16 +37,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
-import { getMediaTypeFromFile, isPdfFile } from "@/lib/media-type"
-import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count"
-import { requestCreativePreview } from "@/lib/request-creative-preview"
+import { isPdfFile } from "@/lib/media-type"
 import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 import { downloadReference, downloadAllReferences } from "@/lib/download-references"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
+import { CreativeUploadPlaceholderCard } from "@/components/room/creative-upload-placeholder-card"
+import {
+  useCreativeUploadListener,
+  useCreativeUploads,
+} from "@/contexts/creative-upload-context"
 import {
   BrandColorSwatch,
   BRAND_COLOR_COUNT,
@@ -486,6 +489,7 @@ export function RoomContent({
   isRefreshingProjects = false,
 }: RoomContentProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
     clientData.projects.length > 0 ? clientData.projects[0] : null
   )
@@ -524,7 +528,6 @@ export function RoomContent({
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
   const [newCreative, setNewCreative] = useState({ name: "", type: "image" as Creative["type"], file: null as File | null, filePreview: "" })
   const creativeFileInputRef = useRef<HTMLInputElement>(null)
-  const [isAddingCreative, setIsAddingCreative] = useState(false)
   const [openingCreativeId, setOpeningCreativeId] = useState<string | null>(null)
   const [, startCreativeNavigation] = useTransition()
 
@@ -565,6 +568,16 @@ export function RoomContent({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientData.projects])
 
+  useEffect(() => {
+    const projectId = searchParams.get("project")
+    if (!projectId) return
+    const project = clientData.projects.find((item) => item.id === projectId)
+    if (!project) return
+    setSelectedProject(project)
+    setEditData(project)
+    setIsEditing(false)
+  }, [clientData.projects, searchParams])
+
   const projectCounts = client.projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; acc.all = (acc.all || 0) + 1; return acc }, {} as Record<string, number>)
   const filteredProjects = client.projects.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -579,6 +592,30 @@ export function RoomContent({
   }
 
   const supabase = createClient()
+  const { jobs, startCreativeUpload } = useCreativeUploads()
+
+  useCreativeUploadListener((event) => {
+    if (event.type === "complete") {
+      const { projectId, creative, briefStatus } = event.result
+
+      const applyUpdate = (project: Project | null) => {
+        if (!project || project.id !== projectId) return project
+        if (project.creatives.some((item) => item.id === creative.id)) {
+          return project
+        }
+
+        return {
+          ...project,
+          creatives: [...project.creatives, creative as Creative],
+          status: briefStatus as StatusKey,
+        }
+      }
+
+      setSelectedProject(applyUpdate)
+      setEditData(applyUpdate)
+      router.refresh()
+    }
+  })
 
   const persistDeliverables = async (projectId: string, deliverables: Deliverable[]) => {
     await supabase.from("projects").update({ project_deliverables: deliverables }).eq("id", projectId)
@@ -716,47 +753,22 @@ export function RoomContent({
     await persistDeliverables(selectedProject.id, updatedDeliverables)
   }
 
-  // Creative handlers
-  const handleAddCreative = async () => {
-    if (!selectedProject || !newCreative.name.trim() || isAddingCreative) return
-
-    setIsAddingCreative(true)
-    try {
-      await handleAddCreativeInner()
-    } finally {
-      setIsAddingCreative(false)
-    }
+  const resetCreativeForm = () => {
+    if (newCreative.filePreview) URL.revokeObjectURL(newCreative.filePreview)
+    setNewCreative({ name: "", type: "image", file: null, filePreview: "" })
+    if (creativeFileInputRef.current) creativeFileInputRef.current.value = ""
   }
 
-  const handleAddCreativeInner = async () => {
+  const handleAddCreativeWithoutFile = async () => {
     if (!selectedProject) return
-
-    // Upload file if provided
-    let thumbnailUrl: string | null = null
-    const file = newCreative.file
-    const fileMediaType = file ? getMediaTypeFromFile(file) : null
-    const creativeType =
-      file && isPdfFile(file) ? "document" : newCreative.type
-
-    if (file) {
-      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-")
-      const path = `${selectedProject.id}/${Date.now()}-${safeName}`
-      const { error: uploadErr } = await supabase.storage.from("creatives").upload(path, file)
-      if (uploadErr) {
-        console.error("File upload failed:", uploadErr)
-        return
-      }
-      const { data: urlData } = supabase.storage.from("creatives").getPublicUrl(path)
-      thumbnailUrl = urlData.publicUrl
-    }
 
     const { data: inserted, error } = await supabase
       .from("creatives")
       .insert({
         project_id: selectedProject.id,
         name: newCreative.name.trim(),
-        type: creativeType,
-        thumbnail_url: thumbnailUrl,
+        type: newCreative.type,
+        thumbnail_url: null,
       })
       .select()
       .single()
@@ -766,54 +778,19 @@ export function RoomContent({
       return
     }
 
-    let pageCount: number | null = null
-
-    // Insert first iteration if file was uploaded
-    if (file && thumbnailUrl) {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: iterationRow } = await supabase
-        .from("iterations")
-        .insert({
-          creative_id: inserted.id,
-          version: 1,
-          image_url: thumbnailUrl,
-          name: "Iteration 1",
-          media_type: fileMediaType ?? "image",
-          created_by: user?.id,
-        })
-        .select("id")
-        .single()
-
-      if (fileMediaType === "pdf" && iterationRow?.id) {
-        pageCount = await getPdfPageCountFromUrl(thumbnailUrl)
-        if (pageCount != null) {
-          await supabase
-            .from("iterations")
-            .update({ page_count: pageCount })
-            .eq("id", iterationRow.id)
-        }
-
-        // Render the card preview in the background. Never block the upload on
-        // it -- requestCreativePreview swallows its own failures. Refresh once
-        // it lands so the card swaps the placeholder for the rendered page.
-        void requestCreativePreview(inserted.id).then(({ previewUrl }) => {
-          if (previewUrl) router.refresh()
-        })
-      }
-    }
-
     const creative: Creative = {
       id: inserted.id,
       name: inserted.name,
-      type: creativeType as Creative["type"],
-      thumbnailUrl: thumbnailUrl || "",
-      mediaType: fileMediaType ?? "image",
-      pageCount,
+      type: newCreative.type,
+      thumbnailUrl: "",
+      mediaType: "image",
+      pageCount: null,
       updatedAt: "Just now",
       feedbackCount: inserted.feedback_count,
       iteration: inserted.iteration,
       status: inserted.status as Creative["status"],
     }
+
     const updatedCreatives = [...selectedProject.creatives, creative]
     const updatedProject = {
       ...selectedProject,
@@ -821,14 +798,35 @@ export function RoomContent({
     }
     setSelectedProject(updatedProject)
     setEditData(updatedProject)
-    setNewCreative({ name: "", type: "image", file: null, filePreview: "" })
+    resetCreativeForm()
     setAddCreativeOpen(false)
 
-    const newStatus = await recalculateBriefStatus(selectedProject.id, updatedCreatives)
-    setSelectedProject((prev) => prev ? { ...prev, status: newStatus } : prev)
-
-    // Refresh server data so creatives persist across page reloads
+    const newStatus = await recalculateBriefStatus(
+      selectedProject.id,
+      updatedCreatives
+    )
+    setSelectedProject((prev) => (prev ? { ...prev, status: newStatus } : prev))
     router.refresh()
+  }
+
+  const handleAddCreative = () => {
+    if (!selectedProject || !newCreative.name.trim()) return
+
+    if (newCreative.file) {
+      const isPdf = isPdfFile(newCreative.file)
+      startCreativeUpload({
+        projectId: selectedProject.id,
+        projectName: selectedProject.name,
+        creativeName: newCreative.name.trim(),
+        creativeType: isPdf ? "document" : newCreative.type,
+        file: newCreative.file,
+      })
+      resetCreativeForm()
+      setAddCreativeOpen(false)
+      return
+    }
+
+    void handleAddCreativeWithoutFile()
   }
 
   // Team member handler
@@ -979,6 +977,13 @@ export function RoomContent({
 
   const currentStatus = selectedProject ? statusConfig[selectedProject.status] : null
   const data = isEditing && editData ? editData : selectedProject
+  const activeUploadJobs = jobs.filter(
+    (job) =>
+      job.projectId === data?.id &&
+      (job.phase === "uploading" || job.phase === "processing")
+  )
+  const creativeCount = (data?.creatives.length ?? 0) + activeUploadJobs.length
+  const hasCreativesToShow = creativeCount > 0
 
   return (
     <main className="flex-1 overflow-hidden bg-background flex flex-col">
@@ -1281,7 +1286,7 @@ export function RoomContent({
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-base font-semibold text-foreground">Creatives</h3>
-                      <span className="text-sm text-muted-foreground">({data.creatives.length})</span>
+                      <span className="text-sm text-muted-foreground">({creativeCount})</span>
                     </div>
                     {userRole !== "client" && (
                       <Button
@@ -1295,8 +1300,11 @@ export function RoomContent({
                     )}
                   </div>
 
-                  {data.creatives.length > 0 ? (
+                  {hasCreativesToShow ? (
                     <div className="grid grid-cols-2 gap-4">
+                      {activeUploadJobs.map((job) => (
+                        <CreativeUploadPlaceholderCard key={job.id} job={job} />
+                      ))}
                       {[...data.creatives]
                         .sort((a, b) => {
                           // Sort in_progress first, then completed
@@ -1625,7 +1633,7 @@ export function RoomContent({
       </Dialog>
 
       {/* Add Creative Modal */}
-      <Dialog open={addCreativeOpen} onOpenChange={(open) => { if (!isAddingCreative) setAddCreativeOpen(open) }}>
+      <Dialog open={addCreativeOpen} onOpenChange={setAddCreativeOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1743,23 +1751,14 @@ export function RoomContent({
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setAddCreativeOpen(false)} disabled={isAddingCreative}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddCreativeOpen(false)}>Cancel</Button>
             <Button
               onClick={handleAddCreative}
-              disabled={!newCreative.name.trim() || isAddingCreative}
+              disabled={!newCreative.name.trim()}
               className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"
             >
-              {isAddingCreative ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {newCreative.file ? "Uploading..." : "Adding..."}
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Creative
-                </>
-              )}
+              <Upload className="w-4 h-4 mr-2" />
+              {newCreative.file ? "Start Upload" : "Add Creative"}
             </Button>
           </div>
         </DialogContent>

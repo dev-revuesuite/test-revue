@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon, FolderOpen } from "lucide-react"
+import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon, FolderOpen, Zap } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
@@ -14,6 +14,12 @@ const allNavItems = [
     title: "Dashboard",
     url: "/studio",
     icon: LayoutGrid,
+    roles: ["admin", "designer"] as UserRole[],
+  },
+  {
+    title: "Quick AI Analysis",
+    url: "/quick-analysis",
+    icon: Zap,
     roles: ["admin", "designer"] as UserRole[],
   },
   {
