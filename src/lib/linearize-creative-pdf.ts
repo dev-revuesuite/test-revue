@@ -9,6 +9,11 @@ import {
   linearizePdfBuffer,
   PdfLinearizeError,
 } from "@/lib/linearize-pdf"
+import {
+  isAcceptableWebPdfSize,
+  PDF_WEB_COPY_MIN_SIZE_RATIO,
+  toWebPdfStoragePath,
+} from "@/lib/pdf-web-copy"
 
 export const REVUE_ASSETS_BUCKET = "revue-assets"
 
@@ -32,6 +37,10 @@ export type CreativePdfBucket = typeof CREATIVES_BUCKET | typeof REVUE_ASSETS_BU
 
 const ALLOWED_BUCKETS = new Set<string>([CREATIVES_BUCKET, REVUE_ASSETS_BUCKET])
 
+function hasPdfHeader(buffer: Buffer): boolean {
+  return buffer.byteLength >= 4 && buffer.subarray(0, 4).toString("latin1") === "%PDF"
+}
+
 export function assertValidPdfStoragePath(storagePath: string): void {
   const normalized = storagePath.trim()
 
@@ -52,8 +61,16 @@ export function assertValidPdfStoragePath(storagePath: string): void {
 export interface LinearizeCreativePdfResult {
   linearized: boolean
   skipped: boolean
+  reason?: string
+  inputBytes?: number
+  outputBytes?: number
+  webStoragePath?: string
 }
 
+/**
+ * Builds a Fast Web View sibling (`.web.pdf`) next to the original.
+ * Never overwrites the uploaded original — downloads and AI keep `image_url`.
+ */
 export async function linearizeCreativePdfInStorage(
   supabase: SupabaseClient,
   bucket: CreativePdfBucket,
@@ -64,6 +81,17 @@ export async function linearizeCreativePdfInStorage(
   if (!ALLOWED_BUCKETS.has(bucket)) {
     throw new PdfLinearizeError("Invalid bucket", 400)
   }
+
+  // Do not treat an existing web copy as the source to re-linearize.
+  if (storagePath.toLowerCase().endsWith(".web.pdf")) {
+    return {
+      linearized: false,
+      skipped: true,
+      reason: "already-web-copy",
+    }
+  }
+
+  const webStoragePath = toWebPdfStoragePath(storagePath)
 
   const { data: blob, error: downloadError } = await supabase.storage
     .from(bucket)
@@ -81,9 +109,15 @@ export async function linearizeCreativePdfInStorage(
   }
 
   const input = Buffer.from(await blob.arrayBuffer())
+  const inputBytes = input.byteLength
 
   if (isPdfAlreadyLinearized(input)) {
-    return { linearized: false, skipped: true }
+    return {
+      linearized: false,
+      skipped: true,
+      reason: "already-linearized",
+      inputBytes,
+    }
   }
 
   let output: Buffer
@@ -92,16 +126,55 @@ export async function linearizeCreativePdfInStorage(
     output = await linearizePdfBuffer(input)
   } catch (error) {
     console.error("[linearize-pdf] keeping original file:", error)
-    return { linearized: false, skipped: true }
+    return {
+      linearized: false,
+      skipped: true,
+      reason: "qpdf-failed",
+      inputBytes,
+    }
   }
 
-  if (output.byteLength === input.byteLength && output.equals(input)) {
-    return { linearized: false, skipped: true }
+  const outputBytes = output.byteLength
+
+  if (outputBytes === inputBytes && output.equals(input)) {
+    return {
+      linearized: false,
+      skipped: true,
+      reason: "unchanged",
+      inputBytes,
+      outputBytes,
+    }
+  }
+
+  // Reject tiny/padded outputs. Viewers keep using the untouched original.
+  if (!isAcceptableWebPdfSize(inputBytes, outputBytes)) {
+    console.warn(
+      `[linearize-pdf] rejecting web copy: output ${outputBytes} bytes ` +
+        `is under ${PDF_WEB_COPY_MIN_SIZE_RATIO * 100}% of input ${inputBytes}`
+    )
+    return {
+      linearized: false,
+      skipped: true,
+      reason: "output-too-small",
+      inputBytes,
+      outputBytes,
+    }
+  }
+
+  if (!hasPdfHeader(output)) {
+    console.warn("[linearize-pdf] rejecting web copy: missing %PDF header")
+    return {
+      linearized: false,
+      skipped: true,
+      reason: "invalid-output",
+      inputBytes,
+      outputBytes,
+    }
   }
 
   const { error: uploadError } = await supabase.storage
     .from(bucket)
-    .upload(storagePath, output, {
+    .upload(webStoragePath, output, {
       upsert: true,
       contentType: "application/pdf",
       cacheControl: CREATIVE_FILE_CACHE_CONTROL,
@@ -111,5 +184,17 @@ export async function linearizeCreativePdfInStorage(
     throw new PdfLinearizeError("Could not save linearized PDF", 500)
   }
 
-  return { linearized: true, skipped: false }
+  console.info(
+    `[linearize-pdf] wrote web copy ${webStoragePath} ` +
+      `(${inputBytes} → ${outputBytes} bytes)`
+  )
+
+  return {
+    linearized: true,
+    skipped: false,
+    reason: "written",
+    inputBytes,
+    outputBytes,
+    webStoragePath,
+  }
 }

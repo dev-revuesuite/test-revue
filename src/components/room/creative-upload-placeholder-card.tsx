@@ -68,7 +68,7 @@ export function CreativeUploadPlaceholderCard({
         <p className="pl-9 text-xs text-muted-foreground">
           {isUploading
             ? `Uploading ${job.fileName}`
-            : "Saving creative and preparing preview..."}
+            : "Saving creative and preparing PDF for review..."}
         </p>
         <div className="mt-3 border-t border-border pt-3">
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">

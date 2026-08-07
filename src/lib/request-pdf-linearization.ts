@@ -5,11 +5,16 @@ export type LinearizePdfBucket = "creatives" | "revue-assets"
 export interface PdfLinearizationResult {
   linearized: boolean
   skipped: boolean
+  reason?: string
+  inputBytes?: number
+  outputBytes?: number
+  webStoragePath?: string
 }
 
 /**
- * Reorders a stored PDF for fast web view (linearized /Fast Web View).
- * Non-blocking for uploads: failures are logged and the original file is kept.
+ * Builds a Fast Web View sibling (`.web.pdf`) for an uploaded PDF.
+ * Never overwrites the original. Failures keep the original viewable.
+ * Await during upload "processing" so Revue does not open mid-prepare.
  */
 export async function requestPdfLinearization(
   bucket: LinearizePdfBucket,

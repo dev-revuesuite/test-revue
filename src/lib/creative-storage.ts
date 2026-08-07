@@ -11,7 +11,7 @@ export class CreativeStorageError extends Error {
 }
 
 export const CREATIVES_BUCKET = "creatives"
-/** Immutable creative uploads — paths include timestamps, safe to cache long-term. */
+/** Uploaded originals use timestamped paths and are never overwritten. */
 export const CREATIVE_FILE_CACHE_CONTROL = "31536000"
 const REVUE_ASSETS_BUCKET = "revue-assets"
 const ALLOWED_BUCKETS = [CREATIVES_BUCKET, REVUE_ASSETS_BUCKET]

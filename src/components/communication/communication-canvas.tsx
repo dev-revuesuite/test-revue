@@ -924,10 +924,10 @@ export function RevueCanvas({
               .eq("id", newId);
           }
 
-          // Fire-and-forget fast-web-view optimization; runs after page count
-          // so the range reads above never race the file replacement.
+          // Await web-copy linearization before the iteration becomes active.
+          // Original bytes stay at filePath; `.web.pdf` is optional for viewing.
           if (uploadData) {
-            void requestPdfLinearization("revue-assets", filePath);
+            await requestPdfLinearization("revue-assets", filePath);
           }
         }
 

@@ -122,9 +122,9 @@ export async function processCreativeUpload(
 
     void requestCreativePreview(inserted.id)
 
-    // Fire-and-forget: reorders the stored PDF for fast web view. Runs after
-    // page count so the range reads above never race the file replacement.
-    void requestPdfLinearization("creatives", path)
+    // Await web-copy linearization while still in "processing". Original is
+    // never overwritten; viewers pick up `.web.pdf` once it exists.
+    await requestPdfLinearization("creatives", path, options.signal)
   }
 
   options.onUploadProgress?.(100)

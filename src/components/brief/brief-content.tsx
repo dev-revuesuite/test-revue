@@ -224,7 +224,8 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
       uploadedUrl = supabase.storage.from("creatives").getPublicUrl(path).data.publicUrl
 
       if (isPdfFile(newCreative.file)) {
-        void requestPdfLinearization("creatives", path)
+        // Await so the web copy exists before the creative is usable in Revue.
+        await requestPdfLinearization("creatives", path)
       }
     }
 

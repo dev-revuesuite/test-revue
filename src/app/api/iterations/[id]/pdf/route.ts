@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server"
-import { CREATIVE_FILE_CACHE_CONTROL } from "@/lib/creative-storage"
 import {
   getIterationPdfStreamSource,
   PdfStreamAccessError,
@@ -8,7 +7,8 @@ import {
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const FORWARD_REQUEST_HEADERS = ["range", "if-range", "if-none-match", "if-modified-since"]
+/** Only forward Range — never conditional validators that can revive stale chunks. */
+const FORWARD_REQUEST_HEADERS = ["range"]
 
 function buildProxyResponseHeaders(upstream: Response): Headers {
   const headers = new Headers()
@@ -18,10 +18,9 @@ function buildProxyResponseHeaders(upstream: Response): Headers {
       "application/pdf"
   )
   headers.set("Accept-Ranges", "bytes")
-  headers.set(
-    "Cache-Control",
-    `public, max-age=${CREATIVE_FILE_CACHE_CONTROL}, immutable`
-  )
+  // Authenticated range streaming must not be CDN-immutable: linearization
+  // (and future re-uploads) can change which bytes map to which ranges.
+  headers.set("Cache-Control", "private, no-store")
 
   for (const name of [
     "content-length",

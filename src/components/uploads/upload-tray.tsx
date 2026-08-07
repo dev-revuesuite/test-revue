@@ -143,7 +143,7 @@ export function UploadTray() {
                           </>
                         )}
                         {job.phase === "processing" &&
-                          "Uploaded • finishing up..."}
+                          "Uploaded • preparing PDF..."}
                         {job.phase === "done" && "Upload complete"}
                         {job.phase === "failed" && (job.error || "Upload failed")}
                       </p>
