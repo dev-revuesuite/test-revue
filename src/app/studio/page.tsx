@@ -13,6 +13,9 @@ export const dynamic = "force-dynamic"
 export default async function StudioPage() {
   const supabase = await createClient()
 
+  // getUser() makes a network call to Supabase Auth to validate the JWT — this
+  // is what Supabase recommends (getSession() reads unauthenticated cookie
+  // data and emits a security warning).
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -21,6 +24,7 @@ export default async function StudioPage() {
     redirect("/login")
   }
 
+  // Profile + user orgs in parallel (orgs are now cached via unstable_cache)
   const [{ data: profile }, allOrganizations] = await Promise.all([
     supabase
       .from("profiles")
@@ -34,6 +38,8 @@ export default async function StudioPage() {
     redirect("/onboarding")
   }
 
+  // Pass profile.active_organization_id so resolveActiveOrganization skips
+  // its own redundant profiles query.
   const organization = await resolveActiveOrganization(
     supabase,
     user.id,
@@ -41,24 +47,11 @@ export default async function StudioPage() {
     profile.active_organization_id
   )
 
-  const { role: userRole } = await getUserRole(supabase, user.id, organization)
-
-  if (userRole === "client") {
-    redirect("/client-portal")
-  }
-
-  const userData = {
-    name:
-      profile.full_name ||
-      user.user_metadata?.full_name ||
-      user.email?.split("@")[0] ||
-      "User",
-    email: user.email || "",
-    avatar: profile.avatar_url || user.user_metadata?.avatar_url || "",
-  }
-
-  const [clientsResult, orgMembersResult] = organization
+  // Role lookup + org-scoped data fetch in parallel — both only need the
+  // resolved organization.
+  const [userRoleResult, clientsResult, orgMembersResult] = organization
     ? await Promise.all([
+        getUserRole(supabase, user.id, organization),
         supabase
           .from("clients")
           .select(
@@ -74,10 +67,29 @@ export default async function StudioPage() {
           .not("email", "is", null)
           .order("name"),
       ])
-    : [{ data: [] }, { data: [] }]
+    : [
+        { role: "admin" as const, organizationId: null, clientId: null },
+        { data: [] },
+        { data: [] },
+      ]
 
+  const { role: userRole } = userRoleResult
   const clients = clientsResult.data
   const orgMembersRaw = orgMembersResult.data
+
+  if (userRole === "client") {
+    redirect("/client-portal")
+  }
+
+  const userData = {
+    name:
+      profile.full_name ||
+      user.user_metadata?.full_name ||
+      user.email?.split("@")[0] ||
+      "User",
+    email: user.email || "",
+    avatar: profile.avatar_url || user.user_metadata?.avatar_url || "",
+  }
 
   const clientsData =
     clients?.map((client) => ({

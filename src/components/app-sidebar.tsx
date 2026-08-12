@@ -125,7 +125,7 @@ export function AppSidebar({ user, userRole = "admin", clientId }: AppSidebarPro
             <Link
               key={item.title}
               href={item.url}
-              prefetch={true}
+              prefetch={false}
               onClick={(e) => {
                 e.preventDefault()
                 if (!isActive && !isNavigating) {

@@ -441,9 +441,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
 
         const userIds = clientUserLinks.map(cu => cu.user_id)
 
-        console.log("🔍 Fetching client users for organization:", organizationId)
-        console.log("🔍 User IDs from client_users:", userIds)
-
         // Fetch user details from organization_members
         // Filter by organization to ensure we get the correct org member record
         const { data: users } = await supabase
@@ -454,9 +451,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
           .eq("organization_id", organizationId) // CRITICAL: Filter by current organization
           .not("name", "is", null)
           .not("email", "is", null)
-
-        console.log("🔍 Fetched organization_members:", users)
-        console.log("🔍 Current organizationId:", organizationId)
 
         const clientUsersData: TeamMember[] = (users || [])
           .filter(u => u.name && u.name.trim() !== "" && u.email && u.email.trim() !== "")

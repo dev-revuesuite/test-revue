@@ -2,7 +2,7 @@
 
 import { publicPath } from "@/lib/base-path"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -33,43 +33,6 @@ interface StudioClient {
   activeProjects: number
   team: { avatar: string; name: string }[]
   additionalMembers: number
-}
-
-// Skeleton Components
-function StatCardSkeleton() {
-  return (
-    <div className="flex items-center justify-between p-4 rounded-xl border border-black/10 dark:border-white/10 bg-card overflow-hidden relative">
-      <div className="absolute inset-0 skeleton-shimmer" />
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-muted animate-pulse" />
-        <div>
-          <div className="h-3 bg-muted rounded w-16 mb-1 animate-pulse" />
-          <div className="h-6 bg-muted rounded w-8 animate-pulse" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ClientCardSkeleton() {
-  return (
-    <div className="rounded-xl border border-black/10 dark:border-white/10 bg-card p-5 flex flex-col overflow-hidden relative">
-      <div className="absolute inset-0 skeleton-shimmer" />
-      <div className="flex items-center justify-between mb-4">
-        <div className="h-5 bg-muted rounded w-2/3 animate-pulse" />
-        <div className="h-5 bg-muted rounded w-14 animate-pulse" />
-      </div>
-      <div className="space-y-2.5 mb-4 flex-1">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex items-center justify-between py-1.5" style={{ animationDelay: `${i * 100}ms` }}>
-            <div className="h-4 bg-muted rounded w-1/3 animate-pulse" />
-            <div className="h-4 bg-muted rounded w-1/4 animate-pulse" />
-          </div>
-        ))}
-      </div>
-      <div className="h-10 bg-muted rounded w-full animate-pulse" />
-    </div>
-  )
 }
 
 const getStats = (clientsData: StudioClient[], dashboardStats: StudioDashboardStats) => {
@@ -130,19 +93,14 @@ export function StudioContent({
   isRefreshingClients = false,
   refreshOverlayMessage = "Updating clients...",
 }: StudioContentProps) {
-  const [isLoading, setIsLoading] = useState(true)
-  const [showWelcome, setShowWelcome] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoading && clients.length === 0 && userRole === "admin") {
-      setShowWelcome(true)
-    }
-  }, [isLoading, clients.length, userRole])
+  const [showWelcome, setShowWelcome] = useState(
+    () => clients.length === 0 && userRole === "admin"
+  )
+  // Keep showWelcome in sync if clients/userRole change after mount (e.g. router.refresh)
+  const shouldShowWelcome = clients.length === 0 && userRole === "admin"
+  if (shouldShowWelcome !== showWelcome) {
+    setShowWelcome(shouldShowWelcome)
+  }
 
   return (
     <main className="flex-1 overflow-auto bg-background">
@@ -161,33 +119,25 @@ export function StudioContent({
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-          {isLoading ? (
-            <>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <StatCardSkeleton key={i} />
-              ))}
-            </>
-          ) : (
-            getStats(clients, dashboardStats).map((stat, index) => (
-              <div
-                key={index}
-                className="group flex items-center justify-between p-4 rounded-xl border border-black/10 dark:border-white/10 bg-card hover:border-[#5C6ECD]/50 hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-white/5 transition-all duration-200 cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#5C6ECD] flex items-center justify-center group-hover:bg-[#4A5BC7] transition-colors">
-                    <stat.icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-foreground/60 font-medium">{stat.label}</p>
-                    <p className="text-xl font-bold text-foreground">{stat.value}</p>
-                  </div>
+          {getStats(clients, dashboardStats).map((stat, index) => (
+            <div
+              key={index}
+              className="group flex items-center justify-between p-4 rounded-xl border border-black/10 dark:border-white/10 bg-card hover:border-[#5C6ECD]/50 hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-white/5 transition-all duration-200 cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#5C6ECD] flex items-center justify-center group-hover:bg-[#4A5BC7] transition-colors">
+                  <stat.icon className="w-5 h-5 text-white" />
                 </div>
-                <div className="w-8 h-8 rounded-lg border border-black/15 dark:border-white/15 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-[#5C6ECD] hover:border-[#5C6ECD] hover:text-white">
-                  <ArrowRight className="w-4 h-4" />
+                <div>
+                  <p className="text-[11px] text-foreground/60 font-medium">{stat.label}</p>
+                  <p className="text-xl font-bold text-foreground">{stat.value}</p>
                 </div>
               </div>
-            ))
-          )}
+              <div className="w-8 h-8 rounded-lg border border-black/15 dark:border-white/15 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-[#5C6ECD] hover:border-[#5C6ECD] hover:text-white">
+                <ArrowRight className="w-4 h-4" />
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* All Clients Section */}
@@ -201,26 +151,18 @@ export function StudioContent({
               isRefreshingClients && "opacity-50 pointer-events-none"
             )}
           >
-            {isLoading ? (
-              <>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                  <ClientCardSkeleton key={i} />
-                ))}
-              </>
-            ) : (
-              clients.map((client) => (
-                <div key={client.id}>
-                  <ClientCard
-                    client={{
-                      ...client,
-                      createdOn: formatDate(client.createdAt),
-                      interactionDate: formatDate(client.interactionDate),
-                      feedbackDate: formatDate(client.feedbackDate),
-                    }}
-                  />
-                </div>
-              ))
-            )}
+            {clients.map((client) => (
+              <div key={client.id}>
+                <ClientCard
+                  client={{
+                    ...client,
+                    createdOn: formatDate(client.createdAt),
+                    interactionDate: formatDate(client.interactionDate),
+                    feedbackDate: formatDate(client.feedbackDate),
+                  }}
+                />
+              </div>
+            ))}
           </div>
 
           {isRefreshingClients && (
@@ -244,8 +186,8 @@ export function StudioContent({
             </button>
 
             <div className="flex justify-center mb-5">
-              <img src={publicPath("/Logo/Artboard_5.png")} alt="Revue" width={140} height={43} className="dark:hidden" />
-              <img src={publicPath("/Logo/Artboard_1.png")} alt="Revue" width={140} height={43} className="hidden dark:block" />
+              <img src={publicPath("/Logo/Artboard_5-welcome-140.png")} srcSet={`${publicPath("/Logo/Artboard_5-welcome-140.png")} 1x, ${publicPath("/Logo/Artboard_5-welcome-280.png")} 2x`} alt="Revue" width={140} height={43} className="dark:hidden" />
+              <img src={publicPath("/Logo/Artboard_1-welcome-140.png")} srcSet={`${publicPath("/Logo/Artboard_1-welcome-140.png")} 1x, ${publicPath("/Logo/Artboard_1-welcome-280.png")} 2x`} alt="Revue" width={140} height={43} className="hidden dark:block" />
             </div>
 
             <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-white mb-2">

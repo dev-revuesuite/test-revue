@@ -25,17 +25,24 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     redirect("/login")
   }
 
-  const { role: userRole, clientId: userClientId } = await getUserRole(supabase, user.id)
-
   if (!clientId) {
     redirect("/studio")
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name,avatar_url")
-    .eq("id", user.id)
-    .single()
+  // Parallelize independent queries: profile, user role, active org, user orgs
+  const [profileResult, userRoleResult, organization, allOrganizations] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name,avatar_url")
+      .eq("id", user.id)
+      .single(),
+    getUserRole(supabase, user.id),
+    getActiveOrganization(supabase, user.id),
+    getUserOrganizations(supabase, user.id),
+  ])
+
+  const { role: userRole, clientId: userClientId } = userRoleResult
+  const { data: profile } = profileResult
 
   const userData = {
     name:
@@ -47,45 +54,41 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  // Get active organization and all user orgs for the switcher
-  const organization = await getActiveOrganization(supabase, user.id)
-  const allOrganizations = await getUserOrganizations(supabase, user.id)
-
-  // Fetch client directory for header
-  const { data: allClients } = organization
-    ? await supabase
+  // Fetch client directory, team members, client data, and (if client) orgMember in parallel
+  const [allClientsResult, orgMembersResult, clientResult, orgMemberResult] = await Promise.all([
+    organization
+      ? supabase
+          .from("clients")
+          .select("id,name,logo_url")
+          .eq("organization_id", organization.id)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string; logo_url: string | null }> | null }),
+    organization
+      ? supabase
+          .from("organization_members")
+          .select("id, name, email, avatar_url, role")
+          .eq("organization_id", organization.id)
+          .order("name")
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string | null; email: string | null; avatar_url: string | null; role: string | null }> | null }),
+    supabase
       .from("clients")
-      .select("id,name,logo_url")
-      .eq("organization_id", organization.id)
-    : { data: [] }
+      .select("id,name,industry,logo_url,fonts,colors,contacts,social_links,brand_image_urls,website_url,office_address,contact_address,organization_id")
+      .eq("id", clientId)
+      .single(),
+    organization
+      ? supabase
+          .from("organization_members")
+          .select("id")
+          .eq("organization_id", organization.id)
+          .eq("user_id", user.id)
+          .eq("role", "client")
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
 
-  const clientDirectory =
-    allClients?.map((c) => ({ id: c.id, name: c.name, logoUrl: c.logo_url || undefined })) ?? []
-
-  // Fetch team members for header
-  const { data: orgMembersRaw } = organization
-    ? await supabase
-      .from("organization_members")
-      .select("id, name, email, avatar_url, role")
-      .eq("organization_id", organization.id)
-      .order("name")
-    : { data: [] }
-
-  const teamMembers =
-    orgMembersRaw?.map((m) => ({
-      id: m.id,
-      name: m.name || "",
-      email: m.email || "",
-      avatar: m.avatar_url || "",
-      role: m.role || "",
-    })) ?? []
-
-  // Fetch client data and validate it belongs to current organization
-  const { data: client } = await supabase
-    .from("clients")
-    .select("id,name,industry,logo_url,fonts,colors,contacts,social_links,brand_image_urls,website_url,office_address,contact_address,organization_id")
-    .eq("id", clientId)
-    .single()
+  const allClients = allClientsResult.data
+  const orgMembersRaw = orgMembersResult.data
+  const { data: client } = clientResult
+  const { data: orgMember } = orgMemberResult
 
   if (!client) {
     redirect("/studio")
@@ -97,21 +100,17 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     redirect("/studio")
   }
 
-  // Fetch projects for this client with user-specific access control
-  // First, get the organization_member id for this user
-  const { data: orgMember } = organization
-    ? await supabase
-      .from("organization_members")
-      .select("id")
-      .eq("organization_id", organization.id)
-      .eq("user_id", user.id)
-      .eq("role", "client")
-      .single()
-    : { data: null }
+  const clientDirectory =
+    allClients?.map((c) => ({ id: c.id, name: c.name, logoUrl: c.logo_url || undefined })) ?? []
 
-  console.log("🔍 DEBUG - Current user org member ID:", orgMember?.id)
-  console.log("🔍 DEBUG - User role:", userRole)
-  console.log("🔍 DEBUG - Client ID:", clientId)
+  const teamMembers =
+    orgMembersRaw?.map((m) => ({
+      id: m.id,
+      name: m.name || "",
+      email: m.email || "",
+      avatar: m.avatar_url || "",
+      role: m.role || "",
+    })) ?? []
 
   type ProjectData = {
     id: string
@@ -130,87 +129,72 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     brand_colors: unknown
   }
 
+  const projectsSelect =
+    "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
+
   let projects: ProjectData[] | null = null
 
   if (userRole === "client" && orgMember) {
     // For client users, check project_client_users table for access
-    const { data: accessibleProjectIds, error: accessError } = await supabase
+    const { data: accessibleProjectIds } = await supabase
       .from("project_client_users")
       .select("project_id")
       .eq("client_user_id", orgMember.id)
 
-    console.log("🔍 DEBUG - Accessible project IDs for this user:", accessibleProjectIds)
-    console.log("🔍 DEBUG - Access query error:", accessError)
-
     const accessibleIds = (accessibleProjectIds || []).map(p => p.project_id)
 
-    // Get all projects for this client
     const { data: allProjectsData } = await supabase
       .from("projects")
-      .select(
-        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
-      )
+      .select(projectsSelect)
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
-
-    console.log("🔍 DEBUG - All projects for client:", allProjectsData?.map(p => ({ id: p.id, name: p.name })))
 
     if (!allProjectsData || allProjectsData.length === 0) {
       projects = []
     } else {
-      // For each project, check if it has ANY entries in project_client_users
       const projectIds = allProjectsData.map(p => p.id)
-      const { data: allProjectAccess, error: allAccessError } = await supabase
+      const { data: allProjectAccess } = await supabase
         .from("project_client_users")
-        .select("project_id, client_user_id")
+        .select("project_id")
         .in("project_id", projectIds)
-
-      console.log("🔍 DEBUG - All project access entries:", allProjectAccess)
-      console.log("🔍 DEBUG - All access query error:", allAccessError)
 
       const projectsWithAccess = new Set((allProjectAccess || []).map(p => p.project_id))
 
-      console.log("🔍 DEBUG - Projects with access control enabled:", Array.from(projectsWithAccess))
-
-      // Filter projects:
-      // - If project has entries in project_client_users: only show if user has access
-      // - If project has NO entries (old project): show to all client users (backward compatibility)
       projects = allProjectsData.filter(project => {
         const hasAccessControl = projectsWithAccess.has(project.id)
         const userHasAccess = accessibleIds.includes(project.id)
-        const shouldShow = hasAccessControl ? userHasAccess : true
-
-        console.log(`🔍 DEBUG - Project "${project.name}":`, {
-          hasAccessControl,
-          userHasAccess,
-          shouldShow
-        })
-
-        return shouldShow
+        return hasAccessControl ? userHasAccess : true
       })
-
-      console.log("🔍 DEBUG - Final filtered projects:", projects?.map(p => p.name))
     }
   } else {
     // For non-client users (admin, manager, etc.), show all projects
     const { data: projectsData } = await supabase
       .from("projects")
-      .select(
-        "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
-      )
+      .select(projectsSelect)
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
     projects = projectsData
   }
 
-  // Fetch creatives from the creatives table
+  // Fetch creatives, iterations, and project members in parallel
   const projectIds = projects ? projects.map((p) => p.id) : []
-  const { data: allCreatives } = projectIds.length > 0
-    ? await supabase
-      .from("creatives")
-      .select("*")
-      .in("project_id", projectIds)
-    : { data: [] }
+  const [allCreativesResult, projectMembersDataResult] = await Promise.all([
+    projectIds.length > 0
+      ? supabase
+          .from("creatives")
+          .select("*")
+          .in("project_id", projectIds)
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>> | null }),
+    projectIds.length > 0
+      ? supabase
+          .from("project_members")
+          .select("project_id, member_id, role, organization_members(name, avatar_url)")
+          .in("project_id", projectIds)
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>> | null }),
+  ])
+
+  const allCreatives = allCreativesResult.data
+  const projectMembersData = projectMembersDataResult.data
 
   type CreativeRow = NonNullable<typeof allCreatives>[number]
   const creativesByProject = (allCreatives || []).reduce<Record<string, CreativeRow[]>>((acc, c) => {
@@ -240,14 +224,6 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
       }
     }
   }
-
-  // Fetch project members from junction table
-  const { data: projectMembersData } = projectIds.length > 0
-    ? await supabase
-      .from("project_members")
-      .select("project_id, member_id, role, organization_members(name, avatar_url)")
-      .in("project_id", projectIds)
-    : { data: [] }
 
   const projectTeamMap: Record<string, { id: string; name: string; role: string; avatar?: string }[]> = {}
   for (const pm of projectMembersData || []) {

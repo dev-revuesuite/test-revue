@@ -321,8 +321,8 @@ export function StudioHeader({
       <div className="flex items-center h-full">
         {/* Logo - aligned with sidebar width */}
         <div className="relative flex items-center justify-center w-16 h-full -ml-5">
-          <img src={publicPath("/Logo/Artboard_3.png")} alt="Revue" width={48} height={48} className="dark:hidden" />
-          <img src={publicPath("/Logo/Artboard_2.png")} alt="Revue" width={48} height={48} className="hidden dark:block" />
+          <img src={publicPath("/Logo/Artboard_3-header-48.png")} srcSet={`${publicPath("/Logo/Artboard_3-header-48.png")} 1x, ${publicPath("/Logo/Artboard_3-header-96.png")} 2x`} alt="Revue" width={48} height={48} className="dark:hidden" />
+          <img src={publicPath("/Logo/Artboard_2-header-48.png")} srcSet={`${publicPath("/Logo/Artboard_2-header-48.png")} 1x, ${publicPath("/Logo/Artboard_2-header-96.png")} 2x`} alt="Revue" width={48} height={48} className="hidden dark:block" />
           <div className="absolute right-0 top-1/2 h-6 w-px -translate-y-1/2 bg-[#e6e6e6] dark:bg-[#333]" />
         </div>
         {/* Organisation Switcher */}
@@ -445,6 +445,7 @@ export function StudioHeader({
         {/* Fullscreen Toggle */}
         <button
           onClick={toggleFullscreen}
+          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
           title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
         >
@@ -458,7 +459,10 @@ export function StudioHeader({
         {/* Messages Icon */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="relative flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors">
+            <button
+              aria-label={`Messages${unreadMessages > 0 ? ` (${unreadMessages} unread)` : ""}`}
+              className="relative flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
+            >
               <MessageSquare className="w-5 h-5 text-[#1a1a1a] dark:text-white" />
               {unreadMessages > 0 && (
                 <span className="absolute top-1 right-1 min-w-[14px] h-[14px] rounded-full bg-[#f24822] text-white text-[10px] flex items-center justify-center font-medium px-1">
@@ -504,7 +508,10 @@ export function StudioHeader({
         {/* Notifications Icon */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="relative flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors">
+            <button
+              aria-label={`Notifications${unreadNotifications > 0 ? ` (${unreadNotifications} unread)` : ""}`}
+              className="relative flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] transition-colors"
+            >
               <Bell className="w-5 h-5 text-[#1a1a1a] dark:text-white" />
               {unreadNotifications > 0 && (
                 <span className="absolute top-1 right-1 min-w-[14px] h-[14px] rounded-full bg-[#f24822] text-white text-[10px] flex items-center justify-center font-medium px-1">
@@ -1049,19 +1056,14 @@ export function StudioHeader({
               project_id: newProject.id,
               client_user_id: userId
             }))
-            console.log("💾 Saving client user access:", projectClientUsers)
-            const { data: insertedData, error: insertError } = await supabase
+            const { error: insertError } = await supabase
               .from("project_client_users")
               .insert(projectClientUsers)
               .select()
 
             if (insertError) {
-              console.error("❌ Failed to save client user access:", insertError)
-            } else {
-              console.log("✅ Client user access saved:", insertedData)
+              console.error("Failed to save client user access:", insertError)
             }
-          } else {
-            console.log("⚠️ No client users selected for this project")
           }
 
           setNewBriefDialogOpen(false)
