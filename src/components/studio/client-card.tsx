@@ -91,18 +91,29 @@ export function ClientCard({ client }: ClientCardProps) {
             <Users className="w-4 h-4 text-foreground/80 dark:text-foreground/70" />
             <span>Team</span>
           </div>
-          <div className="flex items-center -space-x-2">
-            {client.team.slice(0, 4).map((member, index) => (
-              <Avatar key={index} className="w-7 h-7 border-2 border-card ring-0 hover:scale-110 hover:z-10 transition-transform shadow-sm">
-                <AvatarImage src={member.avatar} alt={member.name} />
-                <AvatarFallback className="text-[10px] bg-[#4A5BC7] text-white font-semibold">
-                  {member.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-            {client.additionalMembers > 0 && (
-              <div className="w-7 h-7 rounded-full bg-[#C8E946] text-black text-[10px] font-bold flex items-center justify-center border-2 border-card shadow-sm">
-                +{client.additionalMembers}
+          <div className="flex items-center justify-end min-w-0">
+            {client.team.length === 0 && client.additionalMembers === 0 ? (
+              <span className="text-sm font-medium text-muted-foreground">
+                No team assigned
+              </span>
+            ) : (
+              <div className="flex items-center -space-x-2">
+                {client.team.map((member) => (
+                  <Avatar
+                    key={member.name}
+                    className="w-7 h-7 border-2 border-card ring-0 hover:scale-110 hover:z-10 transition-transform shadow-sm"
+                  >
+                    <AvatarImage src={member.avatar} alt={member.name} />
+                    <AvatarFallback className="text-[10px] bg-[#4A5BC7] text-white font-semibold">
+                      {member.name.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {client.additionalMembers > 0 && (
+                  <div className="w-7 h-7 rounded-full bg-[#C8E946] text-black text-[10px] font-bold flex items-center justify-center border-2 border-card shadow-sm">
+                    +{client.additionalMembers}
+                  </div>
+                )}
               </div>
             )}
           </div>

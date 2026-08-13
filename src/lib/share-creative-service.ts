@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { appRoute } from "@/lib/base-path"
 import { getUserRole } from "@/lib/get-user-role"
+import { touchClientActivity } from "@/lib/touch-client-activity"
 import type {
   ShareCandidate,
   ShareCandidateKind,
@@ -438,6 +439,10 @@ export async function sendShareInvites(
     context,
     selectedCandidates
   )
+
+  if (context.clientId) {
+    await touchClientActivity(supabase, context.clientId)
+  }
 
   return { granted, notified }
 }

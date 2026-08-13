@@ -7,6 +7,7 @@ import { StudioHeader } from "@/components/studio-header"
 import { StudioContent } from "@/components/studio/studio-content"
 import { AiHealthNotice } from "@/components/studio/ai-health-toast"
 import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
+import { OrgSwitchProvider } from "@/contexts/org-switch-context"
 import { getCurrentNavigationPath } from "@/components/navigation-path-tracker"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
@@ -112,8 +113,9 @@ export function StudioPageShell({
   )
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
+    <OrgSwitchProvider currentOrgId={currentOrgId ?? organizationId}>
+      <div className="flex flex-col h-svh">
+        <StudioHeader
         user={user}
         userId={userId}
         organizationId={organizationId}
@@ -157,6 +159,7 @@ export function StudioPageShell({
           {toast}
         </div>
       )}
-    </div>
+      </div>
+    </OrgSwitchProvider>
   )
 }

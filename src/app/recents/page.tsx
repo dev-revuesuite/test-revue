@@ -1,3 +1,5 @@
+import { OrgSwitchProvider } from "@/contexts/org-switch-context"
+import { OrgSwitchAwareMain } from "@/components/org-switch-aware-main"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -22,23 +24,27 @@ export default async function RecentsPage() {
   }
 
   return (
-    <div className="flex h-svh">
-      <AppSidebar user={userData} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <StudioHeader
-          user={userData}
-          organizationId={null}
-          organizationLogoUrl={null}
-          clientDirectory={[]}
-        />
-        <main className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center">
-            <Clock className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <h1 className="text-2xl font-semibold mb-2">Recents</h1>
-            <p className="text-muted-foreground">Your recently accessed items will appear here</p>
-          </div>
-        </main>
+    <OrgSwitchProvider currentOrgId={null}>
+      <div className="flex h-svh">
+        <AppSidebar user={userData} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <StudioHeader
+            user={userData}
+            organizationId={null}
+            organizationLogoUrl={null}
+            clientDirectory={[]}
+          />
+          <OrgSwitchAwareMain>
+            <main className="flex-1 flex items-center justify-center bg-background">
+              <div className="text-center">
+                <Clock className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <h1 className="text-2xl font-semibold mb-2">Recents</h1>
+                <p className="text-muted-foreground">Your recently accessed items will appear here</p>
+              </div>
+            </main>
+          </OrgSwitchAwareMain>
+        </div>
       </div>
-    </div>
+    </OrgSwitchProvider>
   )
 }

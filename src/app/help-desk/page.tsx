@@ -1,3 +1,5 @@
+import { OrgSwitchProvider } from "@/contexts/org-switch-context"
+import { OrgSwitchAwareMain } from "@/components/org-switch-aware-main"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -65,21 +67,23 @@ export default async function HelpDeskPage() {
   ]
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
-        user={userData}
-        organizationId={organization?.id ?? null}
-        organizationName={organization?.name ?? ""}
-        organizationLogoUrl={organization?.logo_url ?? null}
-        currentOrgId={organization?.id}
-        organizations={allOrganizations}
-        clientDirectory={[]}
-        teamMembers={[]}
-        userRole={userRole}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} userRole={userRole} clientId={clientId} />
-        <main className="flex-1 overflow-auto bg-background">
+    <OrgSwitchProvider currentOrgId={organization?.id}>
+      <div className="flex flex-col h-svh">
+        <StudioHeader
+          user={userData}
+          organizationId={organization?.id ?? null}
+          organizationName={organization?.name ?? ""}
+          organizationLogoUrl={organization?.logo_url ?? null}
+          currentOrgId={organization?.id}
+          organizations={allOrganizations}
+          clientDirectory={[]}
+          teamMembers={[]}
+          userRole={userRole}
+        />
+        <div className="flex flex-1 overflow-hidden">
+          <AppSidebar user={userData} userRole={userRole} clientId={clientId} />
+          <OrgSwitchAwareMain>
+            <main className="flex-1 overflow-auto bg-background">
           <div className="max-w-3xl mx-auto px-6 py-12">
             <div className="mb-10">
               <h1 className="text-2xl font-bold text-foreground">Help Desk</h1>
@@ -179,8 +183,10 @@ export default async function HelpDeskPage() {
               </div>
             </div>
           </div>
-        </main>
+            </main>
+          </OrgSwitchAwareMain>
+        </div>
       </div>
-    </div>
+    </OrgSwitchProvider>
   )
 }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { RoomContent } from "@/components/room/room-content"
+import { OrgSwitchProvider } from "@/contexts/org-switch-context"
+import { OrgSwitchAwareMain } from "@/components/org-switch-aware-main"
 import { cn } from "@/lib/utils"
 import { Check } from "lucide-react"
 
@@ -84,8 +86,9 @@ export function RoomPageShell({
   }, [router])
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
+    <OrgSwitchProvider currentOrgId={currentOrgId ?? organizationId}>
+      <div className="flex flex-col h-svh">
+        <StudioHeader
         user={user}
         userId={userId}
         organizationId={organizationId}
@@ -100,14 +103,16 @@ export function RoomPageShell({
       />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar user={user} userRole={userRole} clientId={userClientId} />
-        <RoomContent
-          clientData={clientData}
-          orgMembers={teamMembers}
-          clientEditData={clientEditData}
-          organizationId={organizationId}
-          userRole={userRole}
-          isRefreshingProjects={isRefreshingProjects}
-        />
+        <OrgSwitchAwareMain>
+          <RoomContent
+            clientData={clientData}
+            orgMembers={teamMembers}
+            clientEditData={clientEditData}
+            organizationId={organizationId}
+            userRole={userRole}
+            isRefreshingProjects={isRefreshingProjects}
+          />
+        </OrgSwitchAwareMain>
       </div>
 
       {toast && (
@@ -123,6 +128,7 @@ export function RoomPageShell({
           {toast}
         </div>
       )}
-    </div>
+      </div>
+    </OrgSwitchProvider>
   )
 }

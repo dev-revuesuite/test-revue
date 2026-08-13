@@ -1,3 +1,5 @@
+import { OrgSwitchProvider } from "@/contexts/org-switch-context"
+import { OrgSwitchAwareMain } from "@/components/org-switch-aware-main"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -121,29 +123,33 @@ export default async function MasterDrivePage() {
     })) ?? []
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
-        user={userData}
-        organizationId={organization?.id ?? null}
-        organizationName={organization?.name ?? ""}
-        organizationLogoUrl={organization?.logo_url ?? null}
-        currentOrgId={organization?.id}
-        organizations={allOrganizations}
-        clientDirectory={clientDirectory}
-        teamMembers={teamMembers}
-        userRole={userRole}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} userRole={userRole} clientId={clientId} />
-        <MasterDriveContent
+    <OrgSwitchProvider currentOrgId={organization?.id}>
+      <div className="flex flex-col h-svh">
+        <StudioHeader
           user={userData}
-          organizationName={organization?.name || ""}
-          clients={driveClients}
-          projects={driveProjects}
-          creatives={driveCreatives}
+          organizationId={organization?.id ?? null}
+          organizationName={organization?.name ?? ""}
+          organizationLogoUrl={organization?.logo_url ?? null}
+          currentOrgId={organization?.id}
+          organizations={allOrganizations}
+          clientDirectory={clientDirectory}
+          teamMembers={teamMembers}
           userRole={userRole}
         />
+        <div className="flex flex-1 overflow-hidden">
+          <AppSidebar user={userData} userRole={userRole} clientId={clientId} />
+          <OrgSwitchAwareMain>
+            <MasterDriveContent
+              user={userData}
+              organizationName={organization?.name || ""}
+              clients={driveClients}
+              projects={driveProjects}
+              creatives={driveCreatives}
+              userRole={userRole}
+            />
+          </OrgSwitchAwareMain>
+        </div>
       </div>
-    </div>
+    </OrgSwitchProvider>
   )
 }

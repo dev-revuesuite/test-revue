@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import {
   Building2,
   X,
@@ -19,7 +18,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { switchOrganization } from "@/lib/actions/switch-organization"
+import { useOrgSwitch } from "@/contexts/org-switch-context"
 
 // ── Props ──
 interface NewOrganizationDialogProps {
@@ -209,7 +208,7 @@ export function NewOrganizationDialog({
   open,
   onClose,
 }: NewOrganizationDialogProps) {
-  const router = useRouter()
+  const { performOrgSwitch } = useOrgSwitch()
 
   // Form state
   const [orgName, setOrgName] = useState("")
@@ -363,14 +362,13 @@ export function NewOrganizationDialog({
       }
 
       // 6. Auto-switch to the new organization
-      const switchResult = await switchOrganization(newOrg.id)
-      if (!switchResult.success) {
-        console.error("Failed to auto-switch:", switchResult.error)
+      const switched = await performOrgSwitch(newOrg.id)
+      if (!switched) {
+        console.error("Failed to auto-switch to new organization")
       }
 
-      // 7. Close dialog and refresh page
+      // 7. Close dialog (refresh runs inside performOrgSwitch)
       onClose()
-      router.refresh()
     } catch (err) {
       console.error("Unexpected error creating organization:", err)
       setError("Something went wrong. Please try again.")

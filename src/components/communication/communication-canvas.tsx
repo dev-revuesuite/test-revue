@@ -25,6 +25,14 @@ import {
   downloadCreativeWithAiBoxesInBrowser,
   filterExportableAiSuggestions,
 } from "@/lib/export-creative-with-ai-boxes";
+import {
+  INTERACTION_AND_FEEDBACK,
+  INTERACTION_ONLY,
+  touchClientActivity,
+  touchClientActivityByCreativeId,
+  touchClientActivityByProjectId,
+  type ClientActivityTouch,
+} from "@/lib/touch-client-activity";
 import type { CreativeDownloadMode } from "./communication-header";
 import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
 import {
@@ -134,6 +142,25 @@ export function RevueCanvas({
   const currentUser = propCurrentUser || defaultUser;
   const startIterations = (propIterations || []).map(normalizeIteration);
   const channelRef = useRef<RealtimeChannel | null>(null);
+
+  const recordClientActivity = useCallback(
+    (touch: ClientActivityTouch = INTERACTION_ONLY) => {
+      void (async () => {
+        if (clientId) {
+          await touchClientActivity(supabase, clientId, touch);
+          return;
+        }
+        if (projectId) {
+          await touchClientActivityByProjectId(supabase, projectId, touch);
+          return;
+        }
+        if (creativeId) {
+          await touchClientActivityByCreativeId(supabase, creativeId, touch);
+        }
+      })();
+    },
+    [supabase, clientId, projectId, creativeId]
+  );
 
   // Role-based permissions ("admin" is the studio role used elsewhere in the app
   // and is treated as the organization owner here).
@@ -676,6 +703,7 @@ export function RevueCanvas({
             page_number: isPdfIteration ? currentPage : 1,
           }).then(({ error }) => {
             if (error) console.error("Failed to save feedback:", error);
+            else recordClientActivity(INTERACTION_AND_FEEDBACK);
           });
         }
       });
@@ -715,6 +743,7 @@ export function RevueCanvas({
         for (const d of added) localDrawingIdsRef.current.add(d.id);
         supabase.auth.getUser().then(({ data: { user: authUser } }) => {
           if (authUser) {
+            let savedDrawings = 0;
             for (const d of added) {
               const pageNum =
                 d.pageNumber ??
@@ -740,6 +769,12 @@ export function RevueCanvas({
                 page_number: pageNum,
               }).then(({ error }) => {
                 if (error) console.error("Failed to save drawing:", error);
+                else {
+                  savedDrawings += 1;
+                  if (savedDrawings === added.length) {
+                    recordClientActivity(INTERACTION_ONLY);
+                  }
+                }
               });
             }
           }
@@ -790,6 +825,8 @@ export function RevueCanvas({
               hint: error.hint,
               code: error.code,
             });
+          } else {
+            recordClientActivity(INTERACTION_AND_FEEDBACK);
           }
         });
       });
@@ -933,6 +970,7 @@ export function RevueCanvas({
 
         // Update creative's iteration count
         await supabase.from("creatives").update({ iteration: newVersion }).eq("id", creativeId);
+        recordClientActivity(INTERACTION_ONLY);
       }
     }
 

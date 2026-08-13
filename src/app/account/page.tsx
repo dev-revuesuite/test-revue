@@ -1,3 +1,5 @@
+import { OrgSwitchProvider } from "@/contexts/org-switch-context"
+import { OrgSwitchAwareMain } from "@/components/org-switch-aware-main"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -100,27 +102,31 @@ export default async function AccountPage({
   const defaultTab: TabType = tabParam && validTabs.includes(tabParam) ? tabParam : "profile"
 
   return (
-    <div className="flex flex-col h-svh">
-      <StudioHeader
-        user={userData}
-        organizationId={organization?.id ?? null}
-        organizationName={organization?.name ?? ""}
-        organizationLogoUrl={organization?.logo_url ?? null}
-        currentOrgId={organization?.id ?? undefined}
-        organizations={allOrganizations}
-        clientDirectory={[]}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar user={userData} />
-        <AccountContent
+    <OrgSwitchProvider currentOrgId={organization?.id}>
+      <div className="flex flex-col h-svh">
+        <StudioHeader
           user={userData}
-          defaultTab={defaultTab}
-          organization={orgData}
-          teamMembers={teamMembers}
-          profileData={profileData}
           organizationId={organization?.id ?? null}
+          organizationName={organization?.name ?? ""}
+          organizationLogoUrl={organization?.logo_url ?? null}
+          currentOrgId={organization?.id ?? undefined}
+          organizations={allOrganizations}
+          clientDirectory={[]}
         />
+        <div className="flex flex-1 overflow-hidden">
+          <AppSidebar user={userData} />
+          <OrgSwitchAwareMain>
+            <AccountContent
+              user={userData}
+              defaultTab={defaultTab}
+              organization={orgData}
+              teamMembers={teamMembers}
+              profileData={profileData}
+              organizationId={organization?.id ?? null}
+            />
+          </OrgSwitchAwareMain>
+        </div>
       </div>
-    </div>
+    </OrgSwitchProvider>
   )
 }

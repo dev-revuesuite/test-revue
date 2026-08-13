@@ -6,6 +6,8 @@ import { useState } from "react"
 import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useOrgSwitch } from "@/contexts/org-switch-context"
+import { OrgSwitchMainSkeleton } from "@/components/studio/studio-loading-skeletons"
 import { ClientCard } from "./client-card"
 import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 
@@ -93,6 +95,7 @@ export function StudioContent({
   isRefreshingClients = false,
   refreshOverlayMessage = "Updating clients...",
 }: StudioContentProps) {
+  const { isOrgSwitchLoading } = useOrgSwitch()
   const [showWelcome, setShowWelcome] = useState(
     () => clients.length === 0 && userRole === "admin"
   )
@@ -100,6 +103,10 @@ export function StudioContent({
   const shouldShowWelcome = clients.length === 0 && userRole === "admin"
   if (shouldShowWelcome !== showWelcome) {
     setShowWelcome(shouldShowWelcome)
+  }
+
+  if (isOrgSwitchLoading) {
+    return <OrgSwitchMainSkeleton />
   }
 
   return (

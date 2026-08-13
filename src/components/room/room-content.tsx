@@ -40,6 +40,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { touchClientActivity } from "@/lib/touch-client-activity"
 import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
 import { isPdfFile } from "@/lib/media-type"
 import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
@@ -592,6 +593,10 @@ export function RoomContent({
   }
 
   const supabase = createClient()
+
+  const touchClient = () => {
+    void touchClientActivity(supabase, clientData.id)
+  }
   const { jobs, startCreativeUpload } = useCreativeUploads()
 
   useCreativeUploadListener((event) => {
@@ -619,6 +624,7 @@ export function RoomContent({
 
   const persistDeliverables = async (projectId: string, deliverables: Deliverable[]) => {
     await supabase.from("projects").update({ project_deliverables: deliverables }).eq("id", projectId)
+    touchClient()
   }
 
   // Brand (Pantone) colors — fixed at BRAND_COLOR_COUNT rows
@@ -639,6 +645,7 @@ export function RoomContent({
     setEditData(updatedProject)
     setEditColorsOpen(false)
     await supabase.from("projects").update({ brand_colors: cleaned }).eq("id", selectedProject.id)
+    touchClient()
   }
 
   const deriveBriefStatus = (creatives: Creative[]): StatusKey => {
@@ -651,6 +658,7 @@ export function RoomContent({
   const recalculateBriefStatus = async (projectId: string, creatives: Creative[]) => {
     const newStatus = deriveBriefStatus(creatives)
     await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectId)
+    touchClient()
     return newStatus
   }
 
@@ -663,6 +671,7 @@ export function RoomContent({
       project_type: editData.type,
       description: editData.description,
     }).eq("id", selectedProject.id)
+    touchClient()
   }
 
   const handleCancel = () => {
@@ -853,6 +862,7 @@ export function RoomContent({
       member_id: orgMember.id,
       role: "member",
     }, { onConflict: "project_id,member_id" })
+    touchClient()
   }
 
   const handleUpdateClient = async (data: Record<string, unknown>) => {
@@ -940,6 +950,7 @@ export function RoomContent({
           .filter((c) => c.hex.trim())
           .map((c) => ({ hex: c.hex, font_label: c.font || null, name: c.name || null })),
         brand_image_urls: brandImageUrls,
+        interaction_date: new Date().toISOString(),
       })
       .eq("id", client.id)
 
@@ -1006,14 +1017,24 @@ export function RoomContent({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setAssetsDrawerOpen(true)} className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
+          <button
+            type="button"
+            aria-label="Brand Assets"
+            onClick={() => setAssetsDrawerOpen(true)}
+            className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all"
+          >
             <Layers className="w-4 h-4 text-[#5C6ECD]" />
-            <span className="text-sm font-medium text-foreground">Brand Assets</span>
+            <span className="text-sm font-medium text-[#5C6ECD]">Brand Assets</span>
           </button>
           {userRole === "admin" && (
-            <button onClick={() => setEditClientOpen(true)} className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all">
+            <button
+              type="button"
+              aria-label="Edit Client"
+              onClick={() => setEditClientOpen(true)}
+              className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all"
+            >
               <Settings className="w-4 h-4 text-[#5C6ECD] group-hover:rotate-90 transition-transform duration-300" />
-              <span className="text-sm font-medium text-foreground">Edit Client</span>
+              <span className="text-sm font-medium text-[#5C6ECD]">Edit Client</span>
             </button>
           )}
         </div>

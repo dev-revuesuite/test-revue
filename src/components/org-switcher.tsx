@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
-import { Check, ChevronDown, Building2, Loader2 } from "lucide-react"
+import { Check, ChevronDown, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { switchOrganization } from "@/lib/actions/switch-organization"
+import { useOrgSwitch } from "@/contexts/org-switch-context"
+import { OrgSwitcherTriggerSkeleton } from "@/components/studio/studio-loading-skeletons"
 import {
   Popover,
   PopoverContent,
@@ -73,115 +73,110 @@ export function OrgSwitcher({
   currentOrgLogo,
   organizations,
 }: OrgSwitcherProps) {
-  const router = useRouter()
+  const { isOrgSwitchLoading, switchingToOrgId, performOrgSwitch } = useOrgSwitch()
   const [open, setOpen] = React.useState(false)
-  const [switchingTo, setSwitchingTo] = React.useState<string | null>(null)
-
-  // Reset loading state when the active org changes (means switch completed)
-  React.useEffect(() => {
-    setSwitchingTo(null)
-    setOpen(false)
-  }, [currentOrgId])
 
   const handleSwitch = async (orgId: string) => {
-    if (orgId === currentOrgId) {
+    if (orgId === currentOrgId || isOrgSwitchLoading) {
       setOpen(false)
       return
     }
 
-    setSwitchingTo(orgId)
-
-    const result = await switchOrganization(orgId)
-
-    if (result.success) {
+    const success = await performOrgSwitch(orgId)
+    if (success) {
       setOpen(false)
-      router.refresh()
-    } else {
-      console.error("Failed to switch organization:", result.error)
-      setSwitchingTo(null)
     }
   }
 
-  // Don't show the dropdown trigger if there's only 1 org
   const hasMultipleOrgs = organizations.length > 1
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !isOrgSwitchLoading} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          type="button"
           className={cn(
             "flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors",
-            hasMultipleOrgs
+            hasMultipleOrgs && !isOrgSwitchLoading
               ? "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] cursor-pointer"
-              : "cursor-default"
+              : "cursor-default",
+            isOrgSwitchLoading && "pointer-events-none"
           )}
-          disabled={!hasMultipleOrgs}
+          disabled={!hasMultipleOrgs || isOrgSwitchLoading}
+          aria-busy={isOrgSwitchLoading}
         >
-          <OrgAvatar name={currentOrgName} logoUrl={currentOrgLogo} size="md" />
-          <span className="text-sm font-semibold text-[#1a1a1a] dark:text-white max-w-[140px] truncate">
-            {currentOrgName}
-          </span>
-          {hasMultipleOrgs && (
-            <ChevronDown className="w-3.5 h-3.5 text-[#7a7a7a] dark:text-[#999] shrink-0" />
+          {isOrgSwitchLoading ? (
+            <OrgSwitcherTriggerSkeleton />
+          ) : (
+            <>
+              <OrgAvatar name={currentOrgName} logoUrl={currentOrgLogo} size="md" />
+              <span className="text-sm font-semibold text-[#1a1a1a] dark:text-white max-w-[140px] truncate">
+                {currentOrgName}
+              </span>
+              {hasMultipleOrgs && (
+                <ChevronDown className="w-3.5 h-3.5 text-[#7a7a7a] dark:text-[#999] shrink-0" />
+              )}
+            </>
           )}
         </button>
       </PopoverTrigger>
 
-      <PopoverContent
-        className="w-72 p-1.5"
-        align="start"
-        sideOffset={8}
-      >
-        {/* Header */}
-        <div className="px-2.5 py-2 mb-1">
-          <p className="text-[10px] font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider">
-            Switch Organization
-          </p>
-        </div>
+      {hasMultipleOrgs && (
+        <PopoverContent
+          className="w-72 p-1.5"
+          align="start"
+          sideOffset={8}
+        >
+          <div className="px-2.5 py-2 mb-1">
+            <p className="text-[10px] font-semibold text-[#7a7a7a] dark:text-[#999] uppercase tracking-wider">
+              Switch Organization
+            </p>
+          </div>
 
-        {/* Org List */}
-        <div className="space-y-0.5 max-h-64 overflow-auto">
-          {organizations.map((org) => {
-            const isActive = org.id === currentOrgId
-            const isSwitching = switchingTo === org.id
+          <div className="space-y-0.5 max-h-64 overflow-auto">
+            {organizations.map((org) => {
+              const isActive = org.id === currentOrgId
+              const isSwitching = switchingToOrgId === org.id
 
-            return (
-              <button
-                key={org.id}
-                onClick={() => handleSwitch(org.id)}
-                disabled={isSwitching}
-                className={cn(
-                  "w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-colors group text-left",
-                  isActive
-                    ? "bg-[#f0f7ff] dark:bg-[#1a2a3a]"
-                    : "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
-                  isSwitching && "opacity-60"
-                )}
-              >
-                <OrgAvatar name={org.name} logoUrl={org.logo_url} size="md" />
-
-                <div className="flex-1 min-w-0">
-                  <p className={cn(
-                    "text-sm font-medium truncate",
+              return (
+                <button
+                  key={org.id}
+                  type="button"
+                  onClick={() => void handleSwitch(org.id)}
+                  disabled={isOrgSwitchLoading}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-colors group text-left",
                     isActive
-                      ? "text-[#5C6ECD]"
-                      : "text-[#1a1a1a] dark:text-white"
-                  )}>
-                    {org.name}
-                  </p>
-                  <RoleBadge role={org.role} />
-                </div>
+                      ? "bg-[#f0f7ff] dark:bg-[#1a2a3a]"
+                      : "hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a]",
+                    isSwitching && "opacity-60"
+                  )}
+                >
+                  <OrgAvatar name={org.name} logoUrl={org.logo_url} size="md" />
 
-                {isSwitching ? (
-                  <Loader2 className="w-4 h-4 text-[#5C6ECD] animate-spin shrink-0" />
-                ) : isActive ? (
-                  <Check className="w-4 h-4 text-[#5C6ECD] shrink-0" />
-                ) : null}
-              </button>
-            )
-          })}
-        </div>
-      </PopoverContent>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm font-medium truncate",
+                      isActive
+                        ? "text-[#5C6ECD]"
+                        : "text-[#1a1a1a] dark:text-white"
+                    )}>
+                      {org.name}
+                    </p>
+                    <RoleBadge role={org.role} />
+                  </div>
+
+                  {isSwitching ? (
+                    <Loader2 className="w-4 h-4 text-[#5C6ECD] animate-spin shrink-0" />
+                  ) : isActive ? (
+                    <Check className="w-4 h-4 text-[#5C6ECD] shrink-0" />
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </PopoverContent>
+      )}
     </Popover>
   )
 }

@@ -30,6 +30,7 @@ import {
   Minimize,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { touchClientActivity } from "@/lib/touch-client-activity"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -303,7 +304,11 @@ export function StudioHeader({
     const supabase = createClient()
     const { data, error } = await supabase
       .from("clients")
-      .insert({ organization_id: organizationId, name: clientName })
+      .insert({
+        organization_id: organizationId,
+        name: clientName,
+        interaction_date: new Date().toISOString(),
+      })
       .select("id")
       .single()
 
@@ -429,7 +434,6 @@ export function StudioHeader({
                 <FolderOpen className="w-4 h-4 text-[#10b981]" />
                 <span className="font-medium">Add Brief</span>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-1 bg-[#e6e6e6] dark:bg-[#333]" />
               <DropdownMenuItem
                 onClick={() => setNewOrgDialogOpen(true)}
                 className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
@@ -916,6 +920,7 @@ export function StudioHeader({
                 name: c.name || null,
               })),
             brand_image_urls: brandImageUrls,
+            interaction_date: new Date().toISOString(),
           }).select("id").single()
 
           if (error) {
@@ -1027,6 +1032,8 @@ export function StudioHeader({
             console.error("Failed to create project:", error)
             return
           }
+
+          await touchClientActivity(supabase, clientId)
 
           // Insert project members into the junction table
           const projectMembers: { project_id: string; member_id: string; role: string }[] = []

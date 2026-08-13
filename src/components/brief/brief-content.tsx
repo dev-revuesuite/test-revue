@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { touchClientActivityByProjectId } from "@/lib/touch-client-activity"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
 import { getMediaTypeFromUrl, isPdfFile } from "@/lib/media-type"
 import { requestPdfLinearization } from "@/lib/request-pdf-linearization"
@@ -150,6 +151,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
     if (!projectData) return
     const newStatus = deriveBriefStatus(creatives)
     await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectData.id)
+    await touchClientActivityByProjectId(supabase, projectData.id)
   }
 
   const handleSave = () => {
@@ -329,8 +331,9 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
       setProjectData(updated)
       setEditData(updated)
       setNewDeliverableName("")
-      setAddDeliverableCreativeId(null)
-    } finally {
+    setAddDeliverableCreativeId(null)
+    await touchClientActivityByProjectId(supabase, projectData.id)
+  } finally {
       setIsAddingDeliverable(false)
     }
   }

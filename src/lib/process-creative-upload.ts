@@ -8,6 +8,7 @@ import {
   CreativeFileUploadError,
   uploadCreativeFileWithProgress,
 } from "@/lib/upload-creative-file"
+import { touchClientActivityByProjectId } from "@/lib/touch-client-activity"
 import type {
   CompletedCreativeUpload,
   RoomCreativeType,
@@ -149,6 +150,8 @@ export async function processCreativeUpload(
     .from("projects")
     .update({ brief_status: briefStatus })
     .eq("id", projectId)
+
+  await touchClientActivityByProjectId(supabase, projectId)
 
   return {
     projectId,

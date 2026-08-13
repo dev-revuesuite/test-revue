@@ -7,6 +7,7 @@ import {
   resolveActiveOrganization,
 } from "@/lib/get-active-organization"
 import { getStudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
+import { getClientTeamsForStudio } from "@/lib/get-client-teams"
 
 export const dynamic = "force-dynamic"
 
@@ -91,18 +92,31 @@ export default async function StudioPage() {
     avatar: profile.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
+  const clientIds = clients?.map((client) => client.id) ?? []
+  const [dashboardStats, clientTeams] = await Promise.all([
+    getStudioDashboardStats(supabase, clientIds),
+    getClientTeamsForStudio(supabase, clientIds),
+  ])
+
   const clientsData =
-    clients?.map((client) => ({
-      id: client.id,
-      name: client.name,
-      logoUrl: client.logo_url || undefined,
-      createdAt: client.created_at,
-      interactionDate: client.interaction_date,
-      feedbackDate: client.feedback_date,
-      activeProjects: client.projects?.[0]?.count ?? 0,
-      team: [],
-      additionalMembers: 0,
-    })) ?? []
+    clients?.map((client) => {
+      const teamSummary = clientTeams.get(client.id) ?? {
+        team: [],
+        additionalMembers: 0,
+      }
+
+      return {
+        id: client.id,
+        name: client.name,
+        logoUrl: client.logo_url || undefined,
+        createdAt: client.created_at,
+        interactionDate: client.interaction_date,
+        feedbackDate: client.feedback_date,
+        activeProjects: client.projects?.[0]?.count ?? 0,
+        team: teamSummary.team,
+        additionalMembers: teamSummary.additionalMembers,
+      }
+    }) ?? []
 
   const clientDirectory =
     clients?.map((client) => ({
@@ -127,9 +141,6 @@ export default async function StudioPage() {
         avatar: m.avatar_url || "",
         role: m.role || "",
       })) ?? []
-
-  const clientIds = clientsData.map((client) => client.id)
-  const dashboardStats = await getStudioDashboardStats(supabase, clientIds)
 
   return (
     <StudioPageShell
