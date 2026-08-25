@@ -57,12 +57,7 @@ export default async function ClientPortalPage() {
 
   const clientIds = clientLinks?.map((cl) => cl.client_id) || []
 
-  // If only one client, redirect directly to room
-  if (clientIds.length === 1) {
-    redirect(`/room?client=${clientIds[0]}`)
-  }
-
-  // Fetch client details with project counts
+  // Fetch client details scoped to the active organization
   const { data: clients } = clientIds.length > 0 && organizationId
     ? await supabase
         .from("clients")
@@ -71,6 +66,11 @@ export default async function ClientPortalPage() {
         .in("id", clientIds)
         .order("name")
     : { data: [] }
+
+  // If only one client in this org, redirect directly to room
+  if ((clients || []).length === 1) {
+    redirect(`/room?client=${clients![0].id}`)
+  }
 
   // Fetch project counts per client
   const clientsWithCounts = await Promise.all(

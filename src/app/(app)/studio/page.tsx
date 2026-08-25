@@ -8,6 +8,7 @@ import {
 } from "@/lib/get-active-organization"
 import { getStudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 import { getClientTeamsForStudio } from "@/lib/get-client-teams"
+import { backfillCreativePipelineForOrganization } from "@/lib/backfill-creative-pipeline"
 
 export const dynamic = "force-dynamic"
 
@@ -93,6 +94,15 @@ export default async function StudioPage() {
   }
 
   const clientIds = clients?.map((client) => client.id) ?? []
+
+  if (organization?.id) {
+    try {
+      await backfillCreativePipelineForOrganization(supabase, organization.id)
+    } catch (backfillError) {
+      console.error("Pipeline backfill failed:", backfillError)
+    }
+  }
+
   const [dashboardStats, clientTeams] = await Promise.all([
     getStudioDashboardStats(supabase, clientIds),
     getClientTeamsForStudio(supabase, clientIds),

@@ -28,6 +28,11 @@ import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 import { useDownloadManifest } from "@/hooks/use-download-manifest"
 import { DownloadAllButton } from "@/components/master-drive/download-all-button"
 import { formatBytes } from "@/lib/download-utils"
+import {
+  CREATIVE_PIPELINE_STATUS_LABELS,
+  normalizeCreativePipelineStatus,
+  type CreativePipelineStatus,
+} from "@/lib/creative-pipeline-status"
 
 // Data types from server
 export interface DriveClient {
@@ -100,18 +105,14 @@ interface FolderItem {
   projectId?: string
 }
 
-const statusLabels: Record<string, string> = {
-  in_progress: "In Progress",
-  completed: "Completed",
-  pending: "Pending",
-  review: "Review",
-}
-
-const statusColors: Record<string, string> = {
-  in_progress: "bg-blue-500",
-  completed: "bg-green-500",
-  pending: "bg-amber-500",
-  review: "bg-purple-500",
+const statusColors: Record<CreativePipelineStatus, string> = {
+  brief_received: "bg-blue-500",
+  qc_pending: "bg-amber-500",
+  review_qc: "bg-purple-500",
+  iteration_shared: "bg-blue-500",
+  feedback_received: "bg-orange-500",
+  iteration_approved: "bg-green-500",
+  completed: "bg-emerald-500",
 }
 
 type CreativeType = "image" | "video" | "document" | "design"
@@ -749,8 +750,9 @@ function CreativeRow({
 }) {
   const creativeType = toCreativeType(item.creativeType)
   const TypeIcon = creativeTypeIcons[creativeType]
-  const statusLabel = statusLabels[item.status || ""] || item.status || "In Progress"
-  const statusDot = statusColors[item.status || ""] || "bg-blue-500"
+  const pipelineStatus = normalizeCreativePipelineStatus(item.status)
+  const statusLabel = CREATIVE_PIPELINE_STATUS_LABELS[pipelineStatus]
+  const statusDot = statusColors[pipelineStatus]
 
   return (
     <div
@@ -823,8 +825,9 @@ function CreativeCard({
   isOpening?: boolean
   isBlocked?: boolean
 }) {
-  const statusLabel = statusLabels[item.status || ""] || item.status || "In Progress"
-  const statusDot = statusColors[item.status || ""] || "bg-blue-500"
+  const pipelineStatus = normalizeCreativePipelineStatus(item.status)
+  const statusLabel = CREATIVE_PIPELINE_STATUS_LABELS[pipelineStatus]
+  const statusDot = statusColors[pipelineStatus]
   const creativeType = toCreativeType(item.creativeType)
 
   return (

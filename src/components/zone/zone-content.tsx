@@ -21,6 +21,11 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  CREATIVE_PIPELINE_STATUS_LABELS,
+  getZoneStatusBucket,
+  normalizeProjectBriefStatus,
+} from "@/lib/creative-pipeline-status"
 
 export interface ZoneProject {
   id: string
@@ -46,21 +51,41 @@ interface ZoneContentProps {
 }
 
 const statusLabels: Record<string, string> = {
-  brief_received: "Brief Received",
-  qc_pending: "QC Pending",
-  review_qc: "Review QC",
-  iteration_shared: "Iteration Shared",
-  feedback_received: "Feedback Received",
-  iteration_approved: "Approved",
-  completed: "Completed",
+  ...CREATIVE_PIPELINE_STATUS_LABELS,
   active: "Active",
 }
 
-// Status filter tabs
+const zoneBucketStyles: Record<
+  ReturnType<typeof getZoneStatusBucket>,
+  { borderColor: string; badgeClass: string; label: string }
+> = {
+  todo: {
+    label: "To Do",
+    borderColor: "border-l-blue-400",
+    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  },
+  in_progress: {
+    label: "In Progress",
+    borderColor: "border-l-amber-400",
+    badgeClass: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  },
+  review: {
+    label: "In Review",
+    borderColor: "border-l-purple-400",
+    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  },
+  done: {
+    label: "Completed",
+    borderColor: "border-l-green-400",
+    badgeClass: "bg-green-500/10 text-green-700 dark:text-green-400",
+  },
+}
+
+// Status filter tabs — buckets derived from creative pipeline rollup
 interface StatusFilter {
   id: string
   label: string
-  statuses: string[]
+  bucket: ReturnType<typeof getZoneStatusBucket> | "all"
   borderColor: string
   badgeClass: string
 }
@@ -69,54 +94,59 @@ const statusFilters: StatusFilter[] = [
   {
     id: "all",
     label: "All",
-    statuses: [],
+    bucket: "all",
     borderColor: "border-l-transparent",
     badgeClass: "",
   },
   {
     id: "todo",
-    label: "To Do",
-    statuses: ["brief_received", "active"],
-    borderColor: "border-l-blue-400",
-    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    label: zoneBucketStyles.todo.label,
+    bucket: "todo",
+    borderColor: zoneBucketStyles.todo.borderColor,
+    badgeClass: zoneBucketStyles.todo.badgeClass,
   },
   {
     id: "in_progress",
-    label: "In Progress",
-    statuses: ["qc_pending", "review_qc"],
-    borderColor: "border-l-amber-400",
-    badgeClass: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    label: zoneBucketStyles.in_progress.label,
+    bucket: "in_progress",
+    borderColor: zoneBucketStyles.in_progress.borderColor,
+    badgeClass: zoneBucketStyles.in_progress.badgeClass,
   },
   {
     id: "review",
-    label: "In Review",
-    statuses: ["iteration_shared", "feedback_received"],
-    borderColor: "border-l-purple-400",
-    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+    label: zoneBucketStyles.review.label,
+    bucket: "review",
+    borderColor: zoneBucketStyles.review.borderColor,
+    badgeClass: zoneBucketStyles.review.badgeClass,
   },
   {
     id: "done",
-    label: "Completed",
-    statuses: ["iteration_approved", "completed"],
-    borderColor: "border-l-green-400",
-    badgeClass: "bg-green-500/10 text-green-700 dark:text-green-400",
+    label: zoneBucketStyles.done.label,
+    bucket: "done",
+    borderColor: zoneBucketStyles.done.borderColor,
+    badgeClass: zoneBucketStyles.done.badgeClass,
   },
 ]
 
-function getFilterForStatus(status: string): StatusFilter {
-  return statusFilters.find((f) => f.statuses.includes(status)) || statusFilters[1]
-}
-
 function getBadgeForStatus(status: string): { label: string; className: string } {
-  const filter = getFilterForStatus(status)
+  const normalized = normalizeProjectBriefStatus(status)
+  const bucket = getZoneStatusBucket(normalized)
   return {
-    label: statusLabels[status] || status,
-    className: filter.badgeClass,
+    label: statusLabels[normalized] || statusLabels[status] || status,
+    className: zoneBucketStyles[bucket].badgeClass,
   }
 }
 
 function getBorderForStatus(status: string): string {
-  return getFilterForStatus(status).borderColor
+  return zoneBucketStyles[getZoneStatusBucket(status)].borderColor
+}
+
+function projectMatchesZoneFilter(
+  status: string,
+  filter: StatusFilter
+): boolean {
+  if (filter.bucket === "all") return true
+  return getZoneStatusBucket(status) === filter.bucket
 }
 
 // Skeleton
@@ -175,8 +205,10 @@ export function ZoneContent({ zone, projects }: ZoneContentProps) {
       p.type.toLowerCase().includes(search.toLowerCase())
 
     const activeFilterObj = statusFilters.find((f) => f.id === activeFilter)
-    const matchesStatus =
-      activeFilter === "all" || (activeFilterObj?.statuses.includes(p.status) ?? false)
+    const matchesStatus = projectMatchesZoneFilter(
+      p.status,
+      activeFilterObj ?? statusFilters[0]
+    )
 
     return matchesSearch && matchesStatus
   })
@@ -213,7 +245,10 @@ export function ZoneContent({ zone, projects }: ZoneContentProps) {
           ).length
         : projects.filter(
             (p) =>
-              f.statuses.includes(p.status) &&
+              projectMatchesZoneFilter(
+                p.status,
+                f
+              ) &&
               (p.name.toLowerCase().includes(search.toLowerCase()) ||
                 p.clientName.toLowerCase().includes(search.toLowerCase()) ||
                 p.type.toLowerCase().includes(search.toLowerCase()))

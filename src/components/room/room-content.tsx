@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useTransition } from "react"
+import { useState, useRef, useEffect, useTransition, type MouseEvent } from "react"
 import {
   Users, FileText, Clock, Download, ChevronDown, Eye, MessageSquare,
   Check, CheckCircle, ArrowLeft, Plus,
@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
+import { uploadClientBrandImages } from "@/lib/upload-client-brand-images"
 import { isPdfFile } from "@/lib/media-type"
 import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 import { downloadReference, downloadAllReferences } from "@/lib/download-references"
@@ -59,6 +60,25 @@ import {
   type BrandColor,
 } from "@/components/shared/brand-color-swatch"
 import type { MediaType } from "@/lib/media-type"
+import {
+  getCreativePipelineRank,
+  normalizeCreativePipelineStatus,
+  deriveProjectPipelineBadge,
+  formatProjectCreativeSummary,
+  projectMatchesCreativeStatusFilter,
+  summarizeCreativePipelineStatuses,
+  canApproveCreative,
+  isCreativeApproved,
+  type CreativePipelineStatus,
+  type ProjectPipelineBadge,
+} from "@/lib/creative-pipeline-status"
+import { apiPath } from "@/lib/base-path"
+import {
+  formatProjectCompletionWarning,
+  getProjectCompletionBlockers,
+  isProjectReadyToComplete,
+} from "@/lib/project-completion"
+import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipeline-status"
 
 // Types
 interface Deliverable {
@@ -79,7 +99,7 @@ interface Creative {
   updatedAt: string
   feedbackCount: number
   iteration: number
-  status: "in_progress" | "completed"
+  status: CreativePipelineStatus
 }
 
 interface TeamMember {
@@ -153,6 +173,51 @@ const statusConfig: Record<StatusKey, { label: string; icon: typeof FileText; co
 
 const statusList: StatusKey[] = ["brief_received", "qc_pending", "review_qc", "iteration_shared", "feedback_received", "iteration_approved"]
 
+const projectPipelineBadgeConfig: Record<
+  ProjectPipelineBadge,
+  { label: string; tagBg: string; icon: typeof CircleDot }
+> = {
+  not_started: {
+    label: "Not started",
+    tagBg: "bg-slate-500/10 text-slate-600 border-slate-500/20",
+    icon: CircleDot,
+  },
+  in_progress: {
+    label: "In progress",
+    tagBg: "bg-[#5C6ECD]/10 text-[#5C6ECD] border-[#5C6ECD]/20",
+    icon: Clock,
+  },
+  completed: {
+    label: "Completed",
+    tagBg: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    icon: CheckCircle,
+  },
+}
+
+function getProjectPipelineBadge(project: Project): ProjectPipelineBadge {
+  if (project.status === "completed") return "completed"
+  return deriveProjectPipelineBadge(project.creatives.map((creative) => creative.status))
+}
+
+function getProjectCreativeSummary(project: Project): string {
+  return formatProjectCreativeSummary(
+    summarizeCreativePipelineStatuses(
+      project.creatives.map((creative) => creative.status)
+    )
+  )
+}
+
+function projectMatchesStatusFilter(
+  project: Project,
+  filter: StatusKey | "all"
+): boolean {
+  if (filter === "all") return true
+  return projectMatchesCreativeStatusFilter(
+    project.creatives.map((creative) => creative.status),
+    filter
+  )
+}
+
 const projectTypes = [
   "Branding", "Social Media", "Web Design", "Mobile App", "Print Design", "Motion Graphics", "Packaging", "Video Production", "Other",
 ]
@@ -186,8 +251,10 @@ function ModeBadge({ mode }: { mode?: "productive" | "creative" }) {
 
 // Project Card Component
 function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Project; isSelected: boolean; onClick: () => void; clientLogo?: string }) {
-  const status = statusConfig[project.status] || statusConfig.brief_received
-  const StatusIcon = status.icon
+  const pipelineBadge = getProjectPipelineBadge(project)
+  const badgeConfig = projectPipelineBadgeConfig[pipelineBadge]
+  const BadgeIcon = badgeConfig.icon
+  const creativeSummary = getProjectCreativeSummary(project)
 
   return (
     <div
@@ -198,9 +265,9 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
       )}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className={cn("flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full", status.tagBg)}>
-          <StatusIcon className="w-3 h-3" />
-          {status.label}
+        <span className={cn("flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border", badgeConfig.tagBg)}>
+          <BadgeIcon className="w-3 h-3" />
+          {badgeConfig.label}
         </span>
         <ModeBadge mode={project.workmode} />
       </div>
@@ -211,6 +278,7 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-foreground text-sm truncate leading-tight">{project.name}</h3>
           <p className="text-xs text-muted-foreground truncate">{project.type}</p>
+          <p className="text-[11px] text-muted-foreground mt-1 truncate">{creativeSummary}</p>
         </div>
       </div>
       <div className="mb-3">
@@ -235,12 +303,12 @@ function ProjectCard({ project, isSelected, onClick, clientLogo }: { project: Pr
         </div>
         <span className={cn(
           "text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1",
-          project.status === "completed" ? "bg-emerald-500/10 text-emerald-600" :
+          pipelineBadge === "completed" ? "bg-emerald-500/10 text-emerald-600" :
           project.daysLeft <= 3 ? "bg-red-500/10 text-red-500" :
           project.daysLeft <= 5 ? "bg-orange-500/10 text-orange-500" : "bg-muted text-foreground/60"
         )}>
           <Clock className="w-3 h-3" />
-          {project.status === "completed" ? "Done" : `${project.daysLeft}d`}
+          {pipelineBadge === "completed" ? "Done" : `${project.daysLeft}d`}
         </span>
       </div>
     </div>
@@ -527,6 +595,9 @@ export function RoomContent({
 
   // Creative modal state
   const [addCreativeOpen, setAddCreativeOpen] = useState(false)
+  const [approvingCreativeId, setApprovingCreativeId] = useState<string | null>(null)
+  const [completeProjectOpen, setCompleteProjectOpen] = useState(false)
+  const [isCompletingProject, setIsCompletingProject] = useState(false)
   const [newCreative, setNewCreative] = useState({ name: "", type: "image" as Creative["type"], file: null as File | null, filePreview: "" })
   const creativeFileInputRef = useRef<HTMLInputElement>(null)
   const [openingCreativeId, setOpeningCreativeId] = useState<string | null>(null)
@@ -579,10 +650,19 @@ export function RoomContent({
     setIsEditing(false)
   }, [clientData.projects, searchParams])
 
-  const projectCounts = client.projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; acc.all = (acc.all || 0) + 1; return acc }, {} as Record<string, number>)
-  const filteredProjects = client.projects.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || p.status === statusFilter
+  const projectCounts = client.projects.reduce((acc, project) => {
+    acc.all = (acc.all || 0) + 1
+    for (const statusKey of statusList) {
+      if (projectMatchesStatusFilter(project, statusKey)) {
+        acc[statusKey] = (acc[statusKey] || 0) + 1
+      }
+    }
+    return acc
+  }, {} as Record<string, number>)
+
+  const filteredProjects = client.projects.filter((project) => {
+    const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = projectMatchesStatusFilter(project, statusFilter)
     return matchesSearch && matchesStatus
   })
 
@@ -625,6 +705,32 @@ export function RoomContent({
   const persistDeliverables = async (projectId: string, deliverables: Deliverable[]) => {
     await supabase.from("projects").update({ project_deliverables: deliverables }).eq("id", projectId)
     touchClient()
+
+    try {
+      const response = await fetch(
+        apiPath(`/api/projects/${projectId}/try-auto-complete`),
+        { method: "POST" }
+      )
+
+      if (!response.ok) return
+
+      const payload = (await response.json()) as {
+        completed?: boolean
+      }
+
+      if (!payload.completed) return
+
+      const applyUpdate = (project: Project | null) =>
+        project && project.id === projectId
+          ? { ...project, status: "completed" as StatusKey }
+          : project
+
+      setSelectedProject(applyUpdate)
+      setEditData(applyUpdate)
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to auto-complete project:", error)
+    }
   }
 
   // Brand (Pantone) colors — fixed at BRAND_COLOR_COUNT rows
@@ -648,16 +754,8 @@ export function RoomContent({
     touchClient()
   }
 
-  const deriveBriefStatus = (creatives: Creative[]): StatusKey => {
-    if (creatives.length === 0) return "brief_received"
-    if (creatives.every((c) => c.status === "completed")) return "completed"
-    if (creatives.some((c) => c.status === "completed")) return "feedback_received"
-    return "qc_pending"
-  }
-
   const recalculateBriefStatus = async (projectId: string, creatives: Creative[]) => {
-    const newStatus = deriveBriefStatus(creatives)
-    await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectId)
+    const newStatus = await syncProjectBriefStatusFromCreatives(supabase, projectId)
     touchClient()
     return newStatus
   }
@@ -722,6 +820,104 @@ export function RoomContent({
     })
   }
 
+  const handleApproveCreative = async (
+    creative: Creative,
+    event: MouseEvent<HTMLButtonElement>
+  ) => {
+    event.stopPropagation()
+    if (!selectedProject || approvingCreativeId) return
+    if (
+      !canApproveCreative(creative.status) ||
+      isCreativeApproved(creative.status)
+    ) {
+      return
+    }
+
+    setApprovingCreativeId(creative.id)
+    try {
+      const response = await fetch(
+        apiPath(`/api/creatives/${creative.id}/approve`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: selectedProject.id }),
+        }
+      )
+
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string
+        projectCompleted?: boolean
+        briefStatus?: string
+      } | null
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to approve creative")
+      }
+
+      const updatedCreatives = selectedProject.creatives.map((item) =>
+        item.id === creative.id
+          ? { ...item, status: "iteration_approved" as CreativePipelineStatus }
+          : item
+      )
+
+      const nextStatus: StatusKey = payload?.projectCompleted
+        ? "completed"
+        : ((payload?.briefStatus as StatusKey | undefined) ??
+          (await recalculateBriefStatus(selectedProject.id, updatedCreatives)))
+
+      const applyUpdate = (project: Project | null) =>
+        project && project.id === selectedProject.id
+          ? {
+              ...project,
+              creatives: updatedCreatives,
+              status: nextStatus,
+            }
+          : project
+
+      setSelectedProject(applyUpdate)
+      setEditData(applyUpdate)
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to approve creative:", error)
+    } finally {
+      setApprovingCreativeId(null)
+    }
+  }
+
+  const handleCompleteProject = async () => {
+    if (!selectedProject || isCompletingProject) return
+
+    setIsCompletingProject(true)
+    try {
+      const response = await fetch(
+        apiPath(`/api/projects/${selectedProject.id}/complete`),
+        { method: "POST" }
+      )
+
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string
+      } | null
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to complete project")
+      }
+
+      const applyUpdate = (project: Project | null) =>
+        project && project.id === selectedProject.id
+          ? { ...project, status: "completed" as StatusKey }
+          : project
+
+      setSelectedProject(applyUpdate)
+      setEditData(applyUpdate)
+      setCompleteProjectOpen(false)
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to complete project:", error)
+    } finally {
+      setIsCompletingProject(false)
+    }
+  }
+
   // Deliverable handlers
   const handleAddDeliverable = async () => {
     if (!selectedProject || !newDeliverable.name.trim()) return
@@ -778,6 +974,7 @@ export function RoomContent({
         name: newCreative.name.trim(),
         type: newCreative.type,
         thumbnail_url: null,
+        status: "brief_received",
       })
       .select()
       .single()
@@ -797,7 +994,7 @@ export function RoomContent({
       updatedAt: "Just now",
       feedbackCount: inserted.feedback_count,
       iteration: inserted.iteration,
-      status: inserted.status as Creative["status"],
+      status: normalizeCreativePipelineStatus(inserted.status),
     }
 
     const updatedCreatives = [...selectedProject.creatives, creative]
@@ -865,24 +1062,9 @@ export function RoomContent({
     touchClient()
   }
 
-  const handleUpdateClient = async (data: Record<string, unknown>) => {
+  const handleUpdateClient = async (data: ClientFormData) => {
     if (!organizationId) return
-    const d = data as {
-      brandName: string
-      industry: string
-      websiteUrl: string
-      officeAddress: string
-      contactAddress: string
-      sameAsOffice: boolean
-      logo: File | null
-      logoPreview: string
-      contacts: { name: string; email: string; countryCode: string; phone: string }[]
-      socialLinks: { platform: string; url: string }[]
-      fontRows: { label: string; font: string }[]
-      customFonts: { name: string; file: File }[]
-      brandImages: string[]
-      colorRows: { hex: string; font: string; name: string }[]
-    }
+    const d = data
 
     // Upload logo if a new file was selected
     let logoUrl: string | null = d.logoPreview || null
@@ -895,22 +1077,12 @@ export function RoomContent({
       }
     }
 
-    // Upload new brand images (data URLs from file picker)
-    const brandImageUrls: string[] = []
-    for (const img of d.brandImages) {
-      if (img.startsWith("http")) {
-        brandImageUrls.push(img)
-      } else {
-        const res = await fetch(img)
-        const blob = await res.blob()
-        const ext = (blob.type.split("/").pop() || "png").replace(/[^A-Za-z0-9]+/g, "")
-        const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-        const { error: imgErr } = await supabase.storage.from("client-assets").upload(path, blob)
-        if (!imgErr) {
-          brandImageUrls.push(supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl)
-        }
-      }
-    }
+    // Upload new brand images (File objects from file picker)
+    const brandImageUrls = await uploadClientBrandImages(
+      supabase,
+      organizationId,
+      d.brandImages
+    )
 
     // Upload custom fonts
     const fontsJson = d.fontRows
@@ -988,6 +1160,15 @@ export function RoomContent({
 
   const currentStatus = selectedProject ? statusConfig[selectedProject.status] : null
   const data = isEditing && editData ? editData : selectedProject
+  const completionBlockers = data
+    ? getProjectCompletionBlockers(data.creatives, data.deliverables)
+    : null
+  const projectReadyToComplete = completionBlockers
+    ? isProjectReadyToComplete(completionBlockers)
+    : false
+  const completionWarning = completionBlockers
+    ? formatProjectCompletionWarning(completionBlockers)
+    : ""
   const activeUploadJobs = jobs.filter(
     (job) =>
       job.projectId === data?.id &&
@@ -1149,7 +1330,20 @@ export function RoomContent({
                     <Button onClick={handleSave} size="sm" className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"><FileCheck className="w-4 h-4 mr-2" />Save</Button>
                   </>
                 ) : userRole === "admin" ? (
-                  <Button variant="outline" onClick={() => setIsEditing(true)} size="sm"><Pencil className="w-4 h-4 mr-2" />Edit</Button>
+                  <>
+                    {data.status !== "completed" && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setCompleteProjectOpen(true)}
+                        size="sm"
+                        className="border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Complete project
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => setIsEditing(true)} size="sm"><Pencil className="w-4 h-4 mr-2" />Edit</Button>
+                  </>
                 ) : null}
               </div>
             </div>
@@ -1327,16 +1521,25 @@ export function RoomContent({
                         <CreativeUploadPlaceholderCard key={job.id} job={job} />
                       ))}
                       {[...data.creatives]
-                        .sort((a, b) => {
-                          // Sort in_progress first, then completed
-                          if (a.status === "in_progress" && b.status === "completed") return -1
-                          if (a.status === "completed" && b.status === "in_progress") return 1
-                          return 0
-                        })
+                        .sort(
+                          (a, b) =>
+                            getCreativePipelineRank(a.status) -
+                            getCreativePipelineRank(b.status)
+                        )
                         .map((creative) => {
                         const TypeIcon = creativeTypeIcons[creative.type]
-                        const isInProgress = creative.status === "in_progress"
+                        const pipelineStatus = normalizeCreativePipelineStatus(creative.status)
+                        const creativeStatusMeta =
+                          statusConfig[pipelineStatus] || statusConfig.brief_received
+                        const isApproved =
+                          pipelineStatus === "iteration_approved" ||
+                          pipelineStatus === "completed"
                         const isOpening = openingCreativeId === creative.id
+                        const showMarkApproved =
+                          userRole !== "client" &&
+                          canApproveCreative(creative.status) &&
+                          !isCreativeApproved(creative.status)
+                        const isApprovingCreative = approvingCreativeId === creative.id
                         return (
                           <div
                             key={creative.id}
@@ -1345,7 +1548,7 @@ export function RoomContent({
                               "bg-card rounded-2xl border overflow-hidden transition-all group cursor-pointer",
                               isOpening && "cursor-wait",
                               openingCreativeId && !isOpening && "pointer-events-none opacity-60",
-                              isInProgress
+                              !isApproved
                                 ? "border-[#5C6ECD]/30 hover:border-[#5C6ECD] hover:shadow-lg hover:shadow-[#5C6ECD]/10"
                                 : "border-border hover:border-[#5C6ECD]/50 hover:shadow-md"
                             )}
@@ -1367,12 +1570,10 @@ export function RoomContent({
                               </div>
                               {/* Status Badge */}
                               <div className={cn(
-                                "absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-lg backdrop-blur-sm z-10",
-                                isInProgress
-                                  ? "bg-amber-500/90 text-white"
-                                  : "bg-emerald-500/90 text-white"
+                                "absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-lg backdrop-blur-sm z-10 border",
+                                creativeStatusMeta.tagBg
                               )}>
-                                {isInProgress ? "In Progress" : "Completed"}
+                                {creativeStatusMeta.label}
                               </div>
                               {/* Open in Revue overlay on hover / while navigating */}
                               <div
@@ -1401,13 +1602,36 @@ export function RoomContent({
                               <div className="flex items-center gap-2.5 mb-1.5">
                                 <div className={cn(
                                   "w-7 h-7 rounded-lg flex items-center justify-center",
-                                  isInProgress ? "bg-[#5C6ECD]/10" : "bg-emerald-500/10"
+                                  !isApproved ? "bg-[#5C6ECD]/10" : "bg-emerald-500/10"
                                 )}>
-                                  <TypeIcon className={cn("w-4 h-4", isInProgress ? "text-[#5C6ECD]" : "text-emerald-600")} />
+                                  <TypeIcon className={cn("w-4 h-4", !isApproved ? "text-[#5C6ECD]" : "text-emerald-600")} />
                                 </div>
                                 <h4 className="font-semibold text-foreground">{creative.name}</h4>
                               </div>
                               <p className="text-xs text-muted-foreground mb-3 pl-9">Updated {creative.updatedAt}</p>
+                              {showMarkApproved && (
+                                <div className="mb-3 pl-9">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isApprovingCreative}
+                                    onClick={(event) => void handleApproveCreative(creative, event)}
+                                    className="h-8 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10"
+                                  >
+                                    {isApprovingCreative ? (
+                                      <>
+                                        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                                        Approving...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CircleCheck className="w-3.5 h-3.5 mr-2" />
+                                        Mark approved
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              )}
                               {/* Stats */}
                               <div className="flex items-center gap-3 pt-3 border-t border-border">
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1648,6 +1872,54 @@ export function RoomContent({
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Deliverable
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete Project Confirmation */}
+      <Dialog open={completeProjectOpen} onOpenChange={setCompleteProjectOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              Complete project?
+            </DialogTitle>
+            <DialogDescription>
+              {projectReadyToComplete
+                ? "All creatives are approved and deliverables are done. Mark this project as complete?"
+                : "This project still has open work. You can complete it anyway as an admin override."}
+            </DialogDescription>
+          </DialogHeader>
+          {!projectReadyToComplete && completionWarning && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800">
+              {completionWarning}
+            </div>
+          )}
+          <div className="flex justify-end gap-3 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setCompleteProjectOpen(false)}
+              disabled={isCompletingProject}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCompleteProject()}
+              disabled={isCompletingProject}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {isCompletingProject ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Completing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  {projectReadyToComplete ? "Complete project" : "Complete anyway"}
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -1996,7 +2268,7 @@ export function RoomContent({
           onClose={() => setEditClientOpen(false)}
           editMode
           initialData={clientEditData as Partial<ClientFormData>}
-          onComplete={(data) => handleUpdateClient(data as unknown as Record<string, unknown>)}
+          onComplete={handleUpdateClient}
         />
       )}
     </main>

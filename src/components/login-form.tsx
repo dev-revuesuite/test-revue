@@ -1,25 +1,25 @@
 "use client"
 
-import { authRedirectUrl, withBasePath, publicPath } from "@/lib/base-path"
+import { authRedirectUrl, withBasePath } from "@/lib/base-path"
+import { applyThemePreference } from "@/lib/theme-preference"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/password-input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { createClient } from "@/lib/supabase/client"
-import Image from "next/image"
 
 export function LoginForm({
+  logo,
   className,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & {
+  logo?: ReactNode
+}) {
   const router = useRouter()
-  const { setTheme } = useTheme()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +39,7 @@ export function LoginForm({
     setError(null)
     setLoading(true)
 
+    const { createClient } = await import("@/lib/supabase/client")
     const supabase = createClient()
 
     const { data: signInData, error } = await supabase.auth.signInWithPassword({
@@ -92,7 +93,7 @@ export function LoginForm({
 
     const savedTheme = (profile.preferences as { theme?: string })?.theme
     if (savedTheme === "dark" || savedTheme === "light") {
-      setTheme(savedTheme)
+      applyThemePreference(savedTheme)
     }
 
     const { data: membership } = await supabase
@@ -114,6 +115,7 @@ export function LoginForm({
     setError(null)
     setLoading(true)
 
+    const { createClient } = await import("@/lib/supabase/client")
     const supabase = createClient()
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -131,25 +133,7 @@ export function LoginForm({
 
   return (
     <div className={cn("flex flex-col gap-8", className)} {...props}>
-      {/* Logo */}
-      <div className="flex justify-center">
-        <Image
-          src={publicPath("/Logo/Artboard_5.png")}
-          alt="Revue"
-          width={160}
-          height={49}
-          priority
-          className="dark:hidden"
-        />
-        <Image
-          src={publicPath("/Logo/Artboard_1.png")}
-          alt="Revue"
-          width={160}
-          height={49}
-          priority
-          className="hidden dark:block"
-        />
-      </div>
+      {logo}
 
       {/* Header */}
       <div className="flex flex-col items-center gap-2 text-center">

@@ -6,6 +6,7 @@ import * as React from "react"
 import { useState, useRef, useEffect } from "react"
 import { ChevronDown, Check, Plus, Upload, X, Image as ImageIcon, Pencil, Trash2, ArrowRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { type BrandImageEntry, brandImageUrlsToEntries } from "@/lib/upload-client-brand-images"
 
 // Types
 interface Contact {
@@ -41,6 +42,8 @@ interface CustomFont {
   file: File
 }
 
+export type { BrandImageEntry }
+
 export interface ClientFormData {
   // Step 1: Brand Info
   brandName: string
@@ -58,7 +61,7 @@ export interface ClientFormData {
   logoPreview: string
   fontRows: FontRow[]
   customFonts: CustomFont[]
-  brandImages: string[]
+  brandImages: BrandImageEntry[]
   colorRows: ColorRow[]
 }
 
@@ -364,14 +367,22 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
     ],
   }
 
-  const [formData, setFormData] = useState<ClientFormData>(
-    initialData ? { ...defaultFormData, ...initialData } : defaultFormData
-  )
+  const mergeInitialData = (data?: Partial<ClientFormData>): ClientFormData => {
+    if (!data) return defaultFormData
+    const brandImages = data.brandImages
+      ? data.brandImages.every((entry) => typeof entry === "string")
+        ? brandImageUrlsToEntries(data.brandImages as unknown as string[])
+        : data.brandImages
+      : defaultFormData.brandImages
+    return { ...defaultFormData, ...data, brandImages }
+  }
+
+  const [formData, setFormData] = useState<ClientFormData>(mergeInitialData(initialData))
 
   // Reset form when dialog opens with new initialData
   useEffect(() => {
     if (open) {
-      setFormData(initialData ? { ...defaultFormData, ...initialData } : defaultFormData)
+      setFormData(mergeInitialData(initialData))
       setStep(1)
       setErrors({})
     }
@@ -783,12 +794,16 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
         reader.onload = (e) => {
           setFormData(prev => ({
             ...prev,
-            brandImages: [...prev.brandImages, e.target?.result as string]
+            brandImages: [
+              ...prev.brandImages,
+              { preview: e.target?.result as string, file },
+            ],
           }))
         }
         reader.readAsDataURL(file)
       })
     }
+    if (e.target) e.target.value = ""
   }
 
   const removeBrandImage = (index: number) => {
@@ -1597,9 +1612,9 @@ export function NewClientOnboarding({ open, onClose, onComplete, editMode = fals
                 {formData.brandImages.length > 0 ? (
                   <div>
                     <div className="grid grid-cols-3 gap-3">
-                      {formData.brandImages.map((img, index) => (
+                      {formData.brandImages.map((entry, index) => (
                         <div key={index} className="relative aspect-video rounded-lg overflow-hidden border border-[#e5e5e5] dark:border-[#444] group">
-                          <img src={img} alt={`Brand ${index + 1}`} className="w-full h-full object-cover" />
+                          <img src={entry.preview} alt={`Brand ${index + 1}`} className="w-full h-full object-cover" />
                           <button
                             type="button"
                             onClick={() => removeBrandImage(index)}

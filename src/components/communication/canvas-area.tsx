@@ -11,6 +11,7 @@ import { AISuggestion } from "./comments-panel";
 import { bboxToPercentRect } from "@/lib/ai-suggestion-display";
 import { CreativeMediaDisplay } from "./creative-media-display";
 import type { PdfPageViewerReadyPayload } from "./pdf-page-viewer";
+import { AnalysisLoading } from "@/components/ai-analysis/analysis-loading";
 
 interface CompareIteration {
   id: string;
@@ -835,40 +836,16 @@ export function CanvasArea({
               {!hideDrawings && renderActiveDrawing()}
             </svg>
 
-            {/* AI Analysis Scanning Animation */}
+            {/* AI Analysis Loading State */}
             {aiAnalysisActive && (
               <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-                <div className="absolute inset-0 bg-black/40 animate-pulse" />
-                <div
-                  className="absolute inset-x-0 h-1.5 bg-gradient-to-r from-transparent via-purple-400 to-transparent shadow-[0_0_20px_rgba(168,85,247,0.8)]"
-                  style={{ animation: "scan 2s ease-in-out infinite" }}
+                <AnalysisLoading
+                  badge={
+                    mediaType === "pdf" && pageCount && pageCount > 1
+                      ? `Page ${currentPage}`
+                      : undefined
+                  }
                 />
-                <div
-                  className="absolute inset-x-0 h-24 bg-gradient-to-b from-purple-500/30 via-transparent to-transparent"
-                  style={{ animation: "scan 2s ease-in-out infinite" }}
-                />
-                <div className="absolute top-4 left-4 w-12 h-12 border-t-3 border-l-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: "3px" }} />
-                <div className="absolute top-4 right-4 w-12 h-12 border-t-3 border-r-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: "3px" }} />
-                <div className="absolute bottom-4 left-4 w-12 h-12 border-b-3 border-l-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: "3px" }} />
-                <div className="absolute bottom-4 right-4 w-12 h-12 border-b-3 border-r-3 border-purple-400 animate-pulse shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ borderWidth: "3px" }} />
-                <div className="absolute inset-0 opacity-30" style={{
-                  backgroundImage: "linear-gradient(rgba(168, 85, 247, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(168, 85, 247, 0.4) 1px, transparent 1px)",
-                  backgroundSize: "24px 24px",
-                }} />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
-                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2.5 animate-pulse">
-                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Analyzing Design...
-                  </div>
-                  {mediaType === "pdf" && pageCount && pageCount > 1 && (
-                    <p className="text-xs text-white/90 bg-black/50 px-3 py-1 rounded-full">
-                      Analyses current page only (page {currentPage})
-                    </p>
-                  )}
-                </div>
               </div>
             )}
 

@@ -509,6 +509,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
     if (step < totalSteps) {
       setStep(step + 1)
     } else {
+      setDropdownOpen(null)
       setIsCreating(true)
       try {
         await onComplete(formData)
@@ -657,35 +658,6 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
               </button>
             </div>
           </header>
-
-          {/* Creating Animation Overlay */}
-          {isCreating && (
-            <div className="absolute inset-0 z-10 bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
-              {/* Animated rings */}
-              <div className="relative w-24 h-24 mb-8">
-                <div className="absolute inset-0 rounded-full border-4 border-[#5C6ECD]/20 animate-ping" />
-                <div className="absolute inset-2 rounded-full border-4 border-[#5C6ECD]/30 animate-ping" style={{ animationDelay: "0.2s" }} />
-                <div className="absolute inset-4 rounded-full border-4 border-[#5C6ECD]/40 animate-ping" style={{ animationDelay: "0.4s" }} />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-14 h-14 bg-gradient-to-br from-[#5C6ECD] to-[#4A5BC7] rounded-full flex items-center justify-center shadow-lg shadow-[#5C6ECD]/30 animate-pulse">
-                    <Sparkles className="w-7 h-7 text-white" />
-                  </div>
-                </div>
-              </div>
-              <h2 className="text-xl font-semibold text-[#1a1a1a] dark:text-white mb-2 animate-pulse">Creating your brief...</h2>
-              <p className="text-sm text-[#666] dark:text-[#999]">Setting up project, uploading resources</p>
-              {/* Progress dots */}
-              <div className="flex gap-1.5 mt-6">
-                {[0, 1, 2].map(i => (
-                  <div
-                    key={i}
-                    className="w-2 h-2 rounded-full bg-[#5C6ECD] animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Main Content */}
           <main className="flex-1 overflow-y-auto overflow-x-visible px-8 pt-6 pb-8">
@@ -1320,6 +1292,32 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
               </button>
             </div>
           </footer>
+
+          {isCreating && (
+            <div className="absolute inset-0 z-[100000] bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
+              <div className="relative w-24 h-24 mb-8">
+                <div className="absolute inset-0 rounded-full border-4 border-[#5C6ECD]/20 animate-ping" />
+                <div className="absolute inset-2 rounded-full border-4 border-[#5C6ECD]/30 animate-ping" style={{ animationDelay: "0.2s" }} />
+                <div className="absolute inset-4 rounded-full border-4 border-[#5C6ECD]/40 animate-ping" style={{ animationDelay: "0.4s" }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-14 h-14 bg-gradient-to-br from-[#5C6ECD] to-[#4A5BC7] rounded-full flex items-center justify-center shadow-lg shadow-[#5C6ECD]/30 animate-pulse">
+                    <Sparkles className="w-7 h-7 text-white" />
+                  </div>
+                </div>
+              </div>
+              <h2 className="text-xl font-semibold text-[#1a1a1a] dark:text-white mb-2 animate-pulse">Creating your brief...</h2>
+              <p className="text-sm text-[#666] dark:text-[#999]">Setting up project, uploading resources</p>
+              <div className="flex gap-1.5 mt-6">
+                {[0, 1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 rounded-full bg-[#5C6ECD] animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

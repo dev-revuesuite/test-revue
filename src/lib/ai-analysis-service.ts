@@ -32,6 +32,7 @@ import {
   type AiSuggestionRow,
   type PersistedAiAnalysisType,
 } from "@/lib/map-ai-suggestion-rows"
+import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status"
 
 const AI_ANALYSIS_DEBUG_LOG = process.env.AI_ANALYSIS_DEBUG_LOG === "true"
 
@@ -382,6 +383,30 @@ export async function runAiAnalysis(
       pageNumber,
       suggestionCount: suggestions.length,
     })
+  }
+
+  const { data: creativeRow, error: creativeLookupError } = await supabase
+    .from("creatives")
+    .select("project_id")
+    .eq("id", access.iteration.creative_id)
+    .single()
+
+  if (creativeLookupError) {
+    console.error(
+      "Failed to resolve creative project for review_qc status:",
+      creativeLookupError
+    )
+  } else if (creativeRow?.project_id) {
+    try {
+      await advanceCreativePipelineStatus(
+        supabase,
+        access.iteration.creative_id,
+        creativeRow.project_id,
+        "review_qc"
+      )
+    } catch (statusError) {
+      console.error("Failed to advance creative to review_qc:", statusError)
+    }
   }
 
   return {

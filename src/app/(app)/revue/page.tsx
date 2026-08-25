@@ -7,6 +7,7 @@ import {
   buildAiSuggestionMap,
   type AiSuggestionRow,
 } from "@/lib/map-ai-suggestion-rows"
+import { ensureInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
 
 interface RevuePageProps {
   searchParams: Promise<{
@@ -40,6 +41,61 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     redirect("/login")
   }
 
+  const { role: userRole, organizationId } = await getUserRole(supabase, user.id)
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, name, client_id, workmode, naming_columns")
+    .eq("id", projectId)
+    .single()
+
+  if (!project) {
+    redirect("/studio")
+  }
+
+  const { data: client } = project.client_id
+    ? await supabase
+        .from("clients")
+        .select("id, name, logo_url, organization_id")
+        .eq("id", project.client_id)
+        .single()
+    : { data: null }
+
+  if (!client || !organizationId || client.organization_id !== organizationId) {
+    redirect("/studio")
+  }
+
+  if (userRole === "client") {
+    const { data: membership } = await supabase
+      .from("organization_members")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    if (!membership) {
+      redirect("/studio")
+    }
+
+    const { count: accessControlCount } = await supabase
+      .from("project_client_users")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+
+    if ((accessControlCount ?? 0) > 0) {
+      const { data: clientAccess } = await supabase
+        .from("project_client_users")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("client_user_id", membership.id)
+        .maybeSingle()
+
+      if (!clientAccess) {
+        redirect("/studio")
+      }
+    }
+  }
+
   // Fetch the creative
   const { data: creative } = await supabase
     .from("creatives")
@@ -52,20 +108,13 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     redirect("/studio")
   }
 
-  // Fetch project and client
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, name, client_id, workmode, naming_columns")
-    .eq("id", projectId)
-    .single()
-
-  const { data: client } = project?.client_id
-    ? await supabase
-        .from("clients")
-        .select("id, name, logo_url")
-        .eq("id", project.client_id)
-        .single()
-    : { data: null }
+  try {
+    await ensureInitialIterationForCreative(supabase, creativeId, {
+      userId: user.id,
+    })
+  } catch (backfillError) {
+    console.error("Failed to ensure initial iteration:", backfillError)
+  }
 
   // Fetch iterations for this creative
   const { data: iterationsRaw } = await supabase
@@ -273,16 +322,11 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   const currentUser = getUserDisplay(user.id)
 
-  const namingColumns = Array.isArray(project?.naming_columns)
-    ? project!.naming_columns.filter(
+  const namingColumns = Array.isArray(project.naming_columns)
+    ? project.naming_columns.filter(
         (column): column is string => typeof column === "string" && column.trim() !== ""
       )
     : []
-
-  // Resolve role via the shared helper so org owners (no row in
-  // organization_members) are correctly detected as "admin", matching the rest
-  // of the app (Room, Studio, etc.).
-  const { role: userRole } = await getUserRole(supabase, user.id)
 
   return (
     <RevueCanvas
@@ -294,7 +338,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
       projectId={projectId}
       creativeName={creative.name}
       creativeStatus={creative.status ?? undefined}
-      projectName={project?.name || ""}
+      projectName={project.name || ""}
       clientId={client?.id || ""}
       clientName={client?.name || ""}
       clientLogo={client?.logo_url || ""}
@@ -304,7 +348,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
       initialViewMode={initialViewMode}
       currentUser={currentUser}
       userRole={userRole}
-      workmode={(project?.workmode as "creative" | "productive") || "productive"}
+      workmode={(project.workmode as "creative" | "productive") || "productive"}
     />
   )
 }

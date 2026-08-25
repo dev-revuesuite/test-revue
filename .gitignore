@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+lighthouse-login.tmp.json
+.lighthouseci/
 
 # next.js
 /.next/

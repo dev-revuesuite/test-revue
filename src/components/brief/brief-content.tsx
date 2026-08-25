@@ -56,6 +56,8 @@ import { touchClientActivityByProjectId } from "@/lib/touch-client-activity"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
 import { getMediaTypeFromUrl, isPdfFile } from "@/lib/media-type"
 import { requestPdfLinearization } from "@/lib/request-pdf-linearization"
+import { createInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
+import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipeline-status"
 
 // Types
 interface Deliverable {
@@ -137,22 +139,6 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
   const [addDeliverableCreativeId, setAddDeliverableCreativeId] = useState<string | null>(null)
   const [newDeliverableName, setNewDeliverableName] = useState("")
   const [isAddingDeliverable, setIsAddingDeliverable] = useState(false)
-
-  type StatusKey = "brief_received" | "qc_pending" | "review_qc" | "iteration_shared" | "feedback_received" | "iteration_approved" | "completed"
-
-  const deriveBriefStatus = (creatives: Creative[]): StatusKey => {
-    if (creatives.length === 0) return "brief_received"
-    if (creatives.every((c) => c.deliverables.length > 0 && c.deliverables.every((d) => d.status === "completed"))) return "completed"
-    if (creatives.some((c) => c.deliverables.some((d) => d.status === "completed"))) return "feedback_received"
-    return "qc_pending"
-  }
-
-  const recalculateBriefStatus = async (creatives: Creative[]) => {
-    if (!projectData) return
-    const newStatus = deriveBriefStatus(creatives)
-    await supabase.from("projects").update({ brief_status: newStatus }).eq("id", projectData.id)
-    await touchClientActivityByProjectId(supabase, projectData.id)
-  }
 
   const handleSave = () => {
     if (editData) {
@@ -248,13 +234,23 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
     }
 
     if (uploadedUrl && newCreative.file) {
-      await supabase.from("creative_iterations").insert({
-        creative_id: inserted.id,
-        version: 1,
-        file_url: uploadedUrl,
-        file_type: newCreative.file.type,
-        file_name: newCreative.file.name,
-      })
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser()
+
+      try {
+        await createInitialIterationForCreative(supabase, {
+          creativeId: inserted.id,
+          imageUrl: uploadedUrl,
+          creativeType: newCreative.type,
+          userId: authUser?.id,
+          file: newCreative.file,
+        })
+      } catch (iterationError) {
+        console.error("Failed to create iteration for creative:", iterationError)
+        await supabase.from("creatives").delete().eq("id", inserted.id)
+        return
+      }
     }
 
     const creative: Creative = {
@@ -276,7 +272,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
     setNewCreative({ name: "", type: "design", file: null, filePreview: "" })
     setAddCreativeOpen(false)
     setExpandedCreatives((prev) => new Set([...prev, creative.id]))
-    await recalculateBriefStatus(updatedCreatives)
+    await syncProjectBriefStatusFromCreatives(supabase, projectData.id)
   }
 
   // Delete Creative handler
@@ -293,7 +289,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
       const updated = { ...projectData, creatives: updatedCreatives }
       setProjectData(updated)
       setEditData(updated)
-      await recalculateBriefStatus(updatedCreatives)
+      await syncProjectBriefStatusFromCreatives(supabase, projectData.id)
     } finally {
       setDeletingCreativeId(null)
     }

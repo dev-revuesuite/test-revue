@@ -1,4 +1,5 @@
 import type { MediaType } from "@/lib/media-type"
+import type { CreativePipelineStatus } from "@/lib/creative-pipeline-status"
 
 export type CreativeUploadPhase =
   | "uploading"
@@ -45,7 +46,7 @@ export interface CompletedCreativeUpload {
     updatedAt: string
     feedbackCount: number
     iteration: number
-    status: "in_progress" | "completed"
+    status: CreativePipelineStatus
   }
   briefStatus: string
 }

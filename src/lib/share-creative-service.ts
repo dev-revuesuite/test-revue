@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { appRoute } from "@/lib/base-path"
 import { getUserRole } from "@/lib/get-user-role"
 import { touchClientActivity } from "@/lib/touch-client-activity"
+import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status"
 import type {
   ShareCandidate,
   ShareCandidateKind,
@@ -442,6 +443,23 @@ export async function sendShareInvites(
 
   if (context.clientId) {
     await touchClientActivity(supabase, context.clientId)
+  }
+
+  const sharedWithClient = selectedCandidates.some(
+    (candidate) => candidate.kind === "client"
+  )
+
+  if (sharedWithClient) {
+    try {
+      await advanceCreativePipelineStatus(
+        supabase,
+        creativeId,
+        projectId,
+        "iteration_shared"
+      )
+    } catch (statusError) {
+      console.error("Failed to advance creative to iteration_shared:", statusError)
+    }
   }
 
   return { granted, notified }

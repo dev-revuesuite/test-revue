@@ -2,7 +2,7 @@
 
 import { publicPath } from "@/lib/base-path"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -96,14 +96,15 @@ export function StudioContent({
   refreshOverlayMessage = "Updating clients...",
 }: StudioContentProps) {
   const { isOrgSwitchLoading } = useOrgSwitch()
-  const [showWelcome, setShowWelcome] = useState(
-    () => clients.length === 0 && userRole === "admin"
-  )
-  // Keep showWelcome in sync if clients/userRole change after mount (e.g. router.refresh)
-  const shouldShowWelcome = clients.length === 0 && userRole === "admin"
-  if (shouldShowWelcome !== showWelcome) {
-    setShowWelcome(shouldShowWelcome)
-  }
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false)
+  const showWelcome =
+    clients.length === 0 && userRole === "admin" && !welcomeDismissed
+
+  useEffect(() => {
+    if (clients.length > 0) {
+      setWelcomeDismissed(false)
+    }
+  }, [clients.length])
 
   if (isOrgSwitchLoading) {
     return <OrgSwitchMainSkeleton />
@@ -186,8 +187,10 @@ export function StudioContent({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="relative bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 text-center animate-in fade-in zoom-in-95 duration-300">
             <button
-              onClick={() => setShowWelcome(false)}
+              type="button"
+              onClick={() => setWelcomeDismissed(true)}
               className="absolute top-4 right-4 p-1 text-[#999] hover:text-[#1a1a1a] dark:hover:text-white transition-colors"
+              aria-label="Close welcome dialog"
             >
               <X className="w-5 h-5" />
             </button>
@@ -205,8 +208,9 @@ export function StudioContent({
             </p>
 
             <button
+              type="button"
               onClick={() => {
-                setShowWelcome(false)
+                setWelcomeDismissed(true)
                 onAddClient?.()
                 window.dispatchEvent(new CustomEvent("revue:open-add-client"))
               }}
@@ -217,7 +221,8 @@ export function StudioContent({
             </button>
 
             <button
-              onClick={() => setShowWelcome(false)}
+              type="button"
+              onClick={() => setWelcomeDismissed(true)}
               className="mt-3 text-sm text-[#999] hover:text-[#666] dark:hover:text-[#ccc] transition-colors"
             >
               I&apos;ll do this later

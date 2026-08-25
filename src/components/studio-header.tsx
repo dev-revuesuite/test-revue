@@ -31,6 +31,8 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { touchClientActivity } from "@/lib/touch-client-activity"
+import { assignProjectTeamMembers } from "@/lib/ensure-project-member-access"
+import { uploadClientBrandImages } from "@/lib/upload-client-brand-images"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -850,22 +852,11 @@ export function StudioHeader({
           }
 
           // Upload brand images to storage and collect URLs
-          const brandImageUrls: string[] = []
-          for (const imageDataUrl of data.brandImages) {
-            const res = await fetch(imageDataUrl)
-            const blob = await res.blob()
-            const ext = blob.type.split("/").pop() || "png"
-            const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-            const { error: imgErr } = await supabase.storage
-              .from("client-assets")
-              .upload(path, blob)
-            if (!imgErr) {
-              const { data: imgUrl } = supabase.storage
-                .from("client-assets")
-                .getPublicUrl(path)
-              brandImageUrls.push(imgUrl.publicUrl)
-            }
-          }
+          const brandImageUrls = await uploadClientBrandImages(
+            supabase,
+            organizationId,
+            data.brandImages
+          )
 
           // Upload custom fonts and build full fonts array
           const fontsJson = data.fontRows
@@ -1035,7 +1026,6 @@ export function StudioHeader({
 
           await touchClientActivity(supabase, clientId)
 
-          // Insert project members into the junction table
           const projectMembers: { project_id: string; member_id: string; role: string }[] = []
 
           // Add manager
@@ -1046,15 +1036,26 @@ export function StudioHeader({
             }
           }
 
-          // Add team members
+          // Add selected team members
           for (const memberId of data.teamMemberIds) {
             if (!projectMembers.some(pm => pm.member_id === memberId)) {
               projectMembers.push({ project_id: newProject.id, member_id: memberId, role: "member" })
             }
           }
 
-          if (projectMembers.length > 0) {
-            await supabase.from("project_members").insert(projectMembers)
+          try {
+            const {
+              data: { user: authUser },
+            } = await supabase.auth.getUser()
+
+            await assignProjectTeamMembers(
+              supabase,
+              newProject.id,
+              userId ?? authUser?.id ?? null,
+              projectMembers
+            )
+          } catch (membersError) {
+            console.error("Failed to assign project team access:", membersError)
           }
 
           // Insert selected client users into project_client_users table

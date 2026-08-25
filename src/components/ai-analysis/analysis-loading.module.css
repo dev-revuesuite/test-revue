@@ -1,0 +1,133 @@
+.igWrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.igCanvas {
+  position: absolute;
+  inset: 0;
+  background: rgba(245, 243, 255, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.igDots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #c4b5fd 0.7px, transparent 1.3px);
+  background-size: 11px 11px;
+  background-repeat: space;
+  opacity: 0.28;
+}
+
+.igGlow {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #5c6ecd 1.1px, transparent 1.6px);
+  background-size: 11px 11px;
+  background-repeat: space;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, transparent 60%),
+    radial-gradient(ellipse at center, #000 0%, transparent 62%);
+  mask-image: radial-gradient(ellipse at center, #000 0%, transparent 60%),
+    radial-gradient(ellipse at center, #000 0%, transparent 62%);
+  -webkit-mask-repeat: no-repeat, no-repeat;
+  mask-repeat: no-repeat, no-repeat;
+  -webkit-mask-size: 72% 62%, 52% 52%;
+  mask-size: 72% 62%, 52% 52%;
+  -webkit-mask-position: 16% 20%, 30% 32%;
+  mask-position: 16% 20%, 30% 32%;
+  animation: ig-morph 4.2s cubic-bezier(0.35, 1.55, 0.65, 1) infinite,
+    ig-breathe 1.9s cubic-bezier(0.66, 0, 0.34, 1) infinite;
+}
+
+@keyframes ig-morph {
+  0% {
+    -webkit-mask-size: 52% 46%, 40% 40%;
+    mask-size: 52% 46%, 40% 40%;
+    -webkit-mask-position: 16% 20%, 30% 32%;
+    mask-position: 16% 20%, 30% 32%;
+  }
+  25% {
+    -webkit-mask-size: 46% 58%, 44% 38%;
+    mask-size: 46% 58%, 44% 38%;
+    -webkit-mask-position: 84% 16%, 66% 30%;
+    mask-position: 84% 16%, 66% 30%;
+  }
+  50% {
+    -webkit-mask-size: 60% 44%, 38% 46%;
+    mask-size: 60% 44%, 38% 46%;
+    -webkit-mask-position: 82% 84%, 62% 68%;
+    mask-position: 82% 84%, 62% 68%;
+  }
+  75% {
+    -webkit-mask-size: 48% 54%, 46% 40%;
+    mask-size: 48% 54%, 46% 40%;
+    -webkit-mask-position: 14% 82%, 34% 66%;
+    mask-position: 14% 82%, 34% 66%;
+  }
+  100% {
+    -webkit-mask-size: 52% 46%, 40% 40%;
+    mask-size: 52% 46%, 40% 40%;
+    -webkit-mask-position: 16% 20%, 30% 32%;
+    mask-position: 16% 20%, 30% 32%;
+  }
+}
+
+@keyframes ig-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.igRes {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #5c6ecd;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(92, 110, 205, 0.28);
+  padding: 2px 7px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+}
+
+.igStatus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+}
+
+:global(.dark) .igCanvas {
+  background: rgba(18, 14, 28, 0.84);
+}
+
+:global(.dark) .igDots {
+  background-image: radial-gradient(circle, #6b5f8a 0.7px, transparent 1.3px);
+  opacity: 0.32;
+}
+
+:global(.dark) .igGlow {
+  background-image: radial-gradient(circle, #c084fc 1.1px, transparent 1.6px);
+}
+
+:global(.dark) .igRes {
+  color: #c4b5fd;
+  background: rgba(26, 22, 38, 0.82);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .igGlow {
+    animation: none;
+    opacity: 0.75;
+  }
+}

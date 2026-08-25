@@ -53,6 +53,10 @@ interface CommunicationHeaderProps {
   onIterationChange?: (id: string) => void;
   onNewIteration?: () => void;
   onShare?: () => void;
+  onApprove?: () => void | Promise<void>;
+  approveLabel?: string;
+  approveDisabled?: boolean;
+  isApproving?: boolean;
   onDownload?: (mode: CreativeDownloadMode) => void | Promise<void>;
   downloadDisabled?: boolean;
   downloadWithAiBoxesDisabled?: boolean;
@@ -69,6 +73,10 @@ export function CommunicationHeader({
   onIterationChange,
   onNewIteration,
   onShare,
+  onApprove,
+  approveLabel = "Approve",
+  approveDisabled = false,
+  isApproving = false,
   onDownload,
   downloadDisabled = false,
   downloadWithAiBoxesDisabled = false,
@@ -337,16 +345,42 @@ export function CommunicationHeader({
           </DropdownMenu>
 
           {/* Share Button */}
-          <Button
-            size="sm"
-            onClick={handleShare}
-            className="h-9 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium px-5 rounded-md"
-          >
-            Share
-          </Button>
+          {onShare && (
+            <Button
+              size="sm"
+              onClick={handleShare}
+              className="h-9 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium px-5 rounded-md"
+            >
+              Share
+            </Button>
+          )}
+
+          {/* Approve / Mark approved */}
+          {onApprove && (
+            <Button
+              size="sm"
+              onClick={() => void onApprove()}
+              disabled={approveDisabled || isApproving}
+              className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-5 rounded-md disabled:opacity-50"
+            >
+              {isApproving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  {approveLabel}
+                </>
+              )}
+            </Button>
+          )}
 
           {/* Divider */}
-          <div className="w-px h-6 bg-gray-200 dark:bg-[#444]" />
+          {(onShare || onApprove) && (
+            <div className="w-px h-6 bg-gray-200 dark:bg-[#444]" />
+          )}
 
           {/* User Avatar with Dropdown */}
           <DropdownMenu>

@@ -5,7 +5,9 @@ import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { resolveIterationMediaType } from "@/lib/media-type"
 import { normalizeExternalUrl } from "@/lib/external-link"
+import { normalizeCreativePipelineStatus, normalizeProjectBriefStatus } from "@/lib/creative-pipeline-status"
 import type { BrandColor } from "@/components/shared/brand-color-swatch"
+import { brandImageUrlsToEntries } from "@/lib/upload-client-brand-images"
 
 export const dynamic = "force-dynamic"
 
@@ -286,7 +288,12 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
           })
           : "No deadline",
         daysLeft,
-        status: (p.brief_status || "brief_received") as
+        status: (p.brief_status === "completed"
+          ? "completed"
+          : normalizeProjectBriefStatus(
+              p.brief_status,
+              (creativesByProject[p.id] ?? []).map((creative) => creative.status as string)
+            )) as
           | "brief_received"
           | "qc_pending"
           | "review_qc"
@@ -360,9 +367,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
               : "Recently",
             feedbackCount: c.feedback_count || 0,
             iteration: c.iteration || 1,
-            status: (c.status || "in_progress") as
-              | "in_progress"
-              | "completed",
+            status: normalizeCreativePipelineStatus(c.status),
           }
         }),
       }
@@ -426,7 +431,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
         { id: "3", hex: "", font: "", name: "" },
         { id: "4", hex: "", font: "", name: "" },
       ],
-    brandImages: brandImageUrlsRaw,
+    brandImages: brandImageUrlsToEntries(brandImageUrlsRaw),
     logo: null as File | null,
     customFonts: [] as { name: string; file: File }[],
   }

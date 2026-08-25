@@ -33,6 +33,18 @@ import {
   touchClientActivityByProjectId,
   type ClientActivityTouch,
 } from "@/lib/touch-client-activity";
+import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status";
+import {
+  canApproveCreative,
+  canReceiveClientFeedback,
+  deriveProjectPipelineBadge,
+  formatProjectCreativeSummary,
+  isCreativeApproved,
+  normalizeCreativePipelineStatus,
+  projectMatchesCreativeStatusFilter,
+  summarizeCreativePipelineStatuses,
+  type ProjectPipelineBadge,
+} from "@/lib/creative-pipeline-status";
 import type { CreativeDownloadMode } from "./communication-header";
 import type { ClientAnalysisImageInput } from "@/lib/ai-analysis-client-image";
 import {
@@ -193,6 +205,43 @@ export function RevueCanvas({
   // Dialog states
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showNewIterationDialog, setShowNewIterationDialog] = useState(startIterations.length === 0 && canUploadIterations);
+  const [pipelineStatus, setPipelineStatus] = useState(() =>
+    normalizeCreativePipelineStatus(creativeStatus)
+  );
+  const [isApproving, setIsApproving] = useState(false);
+
+  const maybeAdvanceToReviewQc = useCallback(() => {
+    if (!creativeId || !projectId || userRole === "client") return;
+
+    void advanceCreativePipelineStatus(
+      supabase,
+      creativeId,
+      projectId,
+      "review_qc"
+    ).catch((error) => {
+      console.error("Failed to advance creative to review_qc:", error);
+    });
+  }, [creativeId, projectId, userRole, supabase]);
+
+  const maybeAdvanceToFeedbackReceived = useCallback(() => {
+    if (!creativeId || !projectId || userRole !== "client") return;
+    if (!canReceiveClientFeedback(pipelineStatus)) return;
+
+    void advanceCreativePipelineStatus(
+      supabase,
+      creativeId,
+      projectId,
+      "feedback_received"
+    )
+      .then((briefStatus) => {
+        if (briefStatus) {
+          setPipelineStatus("feedback_received");
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to advance creative to feedback_received:", error);
+      });
+  }, [creativeId, pipelineStatus, projectId, userRole, supabase]);
 
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
@@ -226,6 +275,10 @@ export function RevueCanvas({
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false); // Control sidebar AI options panel
 
   // Same creative, different ?page= / ?view= (key does not remount) — apply deep link
+  useEffect(() => {
+    setPipelineStatus(normalizeCreativePipelineStatus(creativeStatus));
+  }, [creativeId, creativeStatus]);
+
   useEffect(() => {
     setCurrentPage(Math.max(1, initialPage));
     setViewMode(initialViewMode);
@@ -703,7 +756,14 @@ export function RevueCanvas({
             page_number: isPdfIteration ? currentPage : 1,
           }).then(({ error }) => {
             if (error) console.error("Failed to save feedback:", error);
-            else recordClientActivity(INTERACTION_AND_FEEDBACK);
+            else {
+              recordClientActivity(INTERACTION_AND_FEEDBACK);
+              if (feedbackSource === "team") {
+                maybeAdvanceToReviewQc();
+              } else {
+                maybeAdvanceToFeedbackReceived();
+              }
+            }
           });
         }
       });
@@ -773,6 +833,7 @@ export function RevueCanvas({
                   savedDrawings += 1;
                   if (savedDrawings === added.length) {
                     recordClientActivity(INTERACTION_ONLY);
+                    maybeAdvanceToReviewQc();
                   }
                 }
               });
@@ -827,6 +888,11 @@ export function RevueCanvas({
             });
           } else {
             recordClientActivity(INTERACTION_AND_FEEDBACK);
+            if (userRole === "client") {
+              maybeAdvanceToFeedbackReceived();
+            } else {
+              maybeAdvanceToReviewQc();
+            }
           }
         });
       });
@@ -1151,6 +1217,70 @@ export function RevueCanvas({
     drawingId: f.drawingId,
   }));
 
+  const canApprove =
+    canApproveCreative(pipelineStatus) && !isCreativeApproved(pipelineStatus);
+  const showApproveButton =
+    canApprove &&
+    (userRole === "client" ||
+      userRole === "owner" ||
+      userRole === "admin" ||
+      userRole === "designer");
+  const approveLabel =
+    userRole === "client" ? "Approve" : "Mark approved";
+  const canShare =
+    userRole === "owner" || userRole === "admin" || userRole === "designer";
+
+  const handleApproveCreative = useCallback(async () => {
+    if (!creativeId || !projectId || !canApprove || isApproving) return;
+
+    setIsApproving(true);
+    try {
+      const response = await fetch(
+        apiPath(`/api/creatives/${creativeId}/approve`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId }),
+        }
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        projectCompleted?: boolean;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to approve creative");
+      }
+
+      setPipelineStatus("iteration_approved");
+      showToast(
+        userRole === "client"
+          ? "Creative approved"
+          : "Creative marked as approved",
+        "info"
+      );
+
+      if (payload?.projectCompleted) {
+        showToast("Project completed", "info");
+      }
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Failed to approve creative",
+        "error"
+      );
+    } finally {
+      setIsApproving(false);
+    }
+  }, [
+    canApprove,
+    creativeId,
+    isApproving,
+    projectId,
+    showToast,
+    userRole,
+  ]);
+
   // Get compare iteration
   const compareIteration = compareIterationId
     ? iterations.find(i => i.id === compareIterationId)
@@ -1218,7 +1348,11 @@ export function RevueCanvas({
           activeIterationId={activeIterationId}
           onIterationChange={handleIterationChange}
           onNewIteration={canUploadIterations ? () => setShowNewIterationDialog(true) : undefined}
-          onShare={() => setShowShareDialog(true)}
+          onShare={canShare ? () => setShowShareDialog(true) : undefined}
+          onApprove={showApproveButton ? handleApproveCreative : undefined}
+          approveLabel={approveLabel}
+          approveDisabled={!canApprove || isApproving}
+          isApproving={isApproving}
           onDownload={handleDownloadCreative}
           downloadDisabled={!currentIteration?.imageUrl}
           downloadWithAiBoxesDisabled={exportableAiSuggestions.length === 0}

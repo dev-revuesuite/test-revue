@@ -9,33 +9,17 @@ import {
   uploadCreativeFileWithProgress,
 } from "@/lib/upload-creative-file"
 import { touchClientActivityByProjectId } from "@/lib/touch-client-activity"
+import {
+  deriveProjectBriefStatusFromCreatives,
+  type CreativePipelineStatus,
+} from "@/lib/creative-pipeline-status"
+import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipeline-status"
+import { createInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
 import type {
   CompletedCreativeUpload,
   RoomCreativeType,
   StartCreativeUploadInput,
 } from "@/types/creative-upload"
-
-type BriefStatus =
-  | "brief_received"
-  | "qc_pending"
-  | "review_qc"
-  | "iteration_shared"
-  | "feedback_received"
-  | "iteration_approved"
-  | "completed"
-
-function deriveBriefStatus(
-  creatives: CompletedCreativeUpload["creative"][]
-): BriefStatus {
-  if (creatives.length === 0) return "brief_received"
-  if (creatives.every((creative) => creative.status === "completed")) {
-    return "completed"
-  }
-  if (creatives.some((creative) => creative.status === "completed")) {
-    return "feedback_received"
-  }
-  return "qc_pending"
-}
 
 interface ProcessCreativeUploadOptions {
   existingCreatives?: CompletedCreativeUpload["creative"][]
@@ -93,32 +77,37 @@ export async function processCreativeUpload(
 
   options.onUploadProgress?.(95)
 
-  let pageCount: number | null = null
-
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { data: iterationRow } = await supabase
-    .from("iterations")
-    .insert({
-      creative_id: inserted.id,
-      version: 1,
-      image_url: thumbnailUrl,
-      name: "Iteration 1",
-      media_type: fileMediaType ?? "image",
-      created_by: user?.id,
+  let iterationId: string
+  try {
+    iterationId = await createInitialIterationForCreative(supabase, {
+      creativeId: inserted.id,
+      imageUrl: thumbnailUrl,
+      mediaType: fileMediaType ?? "image",
+      creativeType: resolvedCreativeType,
+      userId: user?.id,
+      file,
     })
-    .select("id")
-    .single()
+  } catch (iterationError) {
+    console.error("Creative iteration failed:", iterationError)
+    await supabase.from("creatives").delete().eq("id", inserted.id)
+    throw new CreativeFileUploadError(
+      "Could not save the creative iteration. Please try again."
+    )
+  }
 
-  if (fileMediaType === "pdf" && iterationRow?.id) {
-    pageCount = await getPdfPageCountFromUrl(thumbnailUrl, iterationRow.id)
+  let pageCount: number | null = null
+
+  if (fileMediaType === "pdf") {
+    pageCount = await getPdfPageCountFromUrl(thumbnailUrl, iterationId)
     if (pageCount != null) {
       await supabase
         .from("iterations")
         .update({ page_count: pageCount })
-        .eq("id", iterationRow.id)
+        .eq("id", iterationId)
     }
 
     void requestCreativePreview(inserted.id)
@@ -140,16 +129,15 @@ export async function processCreativeUpload(
     updatedAt: "Just now",
     feedbackCount: inserted.feedback_count ?? 0,
     iteration: inserted.iteration ?? 1,
-    status: (inserted.status as "in_progress" | "completed") ?? "in_progress",
+    status: (inserted.status as CreativePipelineStatus) ?? "qc_pending",
   }
 
   const allCreatives = [...(options.existingCreatives || []), creative]
-  const briefStatus = deriveBriefStatus(allCreatives)
+  const briefStatus = deriveProjectBriefStatusFromCreatives(
+    allCreatives.map((item) => item.status)
+  )
 
-  await supabase
-    .from("projects")
-    .update({ brief_status: briefStatus })
-    .eq("id", projectId)
+  await syncProjectBriefStatusFromCreatives(supabase, projectId)
 
   await touchClientActivityByProjectId(supabase, projectId)
 
