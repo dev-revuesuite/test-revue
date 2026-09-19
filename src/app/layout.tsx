@@ -19,6 +19,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* TEMP: Figma capture instrumentation — remove after capture */}
+        <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async />
+      </head>
       <body>{children}</body>
     </html>
   );

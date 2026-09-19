@@ -53,6 +53,7 @@ import {
 } from "@/contexts/ai-analysis-context";
 import { isActiveAiAnalysisStatus } from "@/types/ai-analysis-job";
 import { PdfPagePager } from "./pdf-page-pager";
+import { usePermission, usePermissions } from "@/contexts/permission-context";
 
 function feedbackPageNumber(f: Feedback): number {
   return f.pageNumber ?? 1;
@@ -174,17 +175,18 @@ export function RevueCanvas({
     [supabase, clientId, projectId, creativeId]
   );
 
-  // Role-based permissions ("admin" is the studio role used elsewhere in the app
-  // and is treated as the organization owner here).
+  const { isOrgOwner } = usePermissions();
+  const canFeedbackUcc = usePermission("feedback_ucc");
+  const canQualityCheck = usePermission("quality_check_tool");
+  const canAddBrief = usePermission("add_brief");
+  const isClientUser = userRole === "client";
+
   const canUploadIterations =
-    userRole === "owner" || userRole === "admin" || userRole === "designer";
-  const canAddFeedback =
-    userRole === "owner" ||
-    userRole === "admin" ||
-    userRole === "client" ||
-    userRole === "designer";
-  const canRunAiAnalysis =
-    userRole === "owner" || userRole === "admin" || userRole === "designer";
+    !isClientUser && (isOrgOwner || canAddBrief);
+  const canAddFeedback = isClientUser || canFeedbackUcc;
+  const canRunAiAnalysis = !isClientUser && canQualityCheck;
+  const canTeamApprove = !isClientUser && (isOrgOwner || canAddBrief);
+  const canShareCreative = canTeamApprove;
   const canUseSidebar = true; // everyone can view
 
   const [zoom, setZoom] = useState(100);
@@ -1220,15 +1222,9 @@ export function RevueCanvas({
   const canApprove =
     canApproveCreative(pipelineStatus) && !isCreativeApproved(pipelineStatus);
   const showApproveButton =
-    canApprove &&
-    (userRole === "client" ||
-      userRole === "owner" ||
-      userRole === "admin" ||
-      userRole === "designer");
+    canApprove && (isClientUser || canTeamApprove);
   const approveLabel =
-    userRole === "client" ? "Approve" : "Mark approved";
-  const canShare =
-    userRole === "owner" || userRole === "admin" || userRole === "designer";
+    isClientUser ? "Approve" : "Mark approved";
 
   const handleApproveCreative = useCallback(async () => {
     if (!creativeId || !projectId || !canApprove || isApproving) return;
@@ -1348,7 +1344,7 @@ export function RevueCanvas({
           activeIterationId={activeIterationId}
           onIterationChange={handleIterationChange}
           onNewIteration={canUploadIterations ? () => setShowNewIterationDialog(true) : undefined}
-          onShare={canShare ? () => setShowShareDialog(true) : undefined}
+          onShare={canShareCreative ? () => setShowShareDialog(true) : undefined}
           onApprove={showApproveButton ? handleApproveCreative : undefined}
           approveLabel={approveLabel}
           approveDisabled={!canApprove || isApproving}
@@ -1399,6 +1395,8 @@ export function RevueCanvas({
           viewMode={viewMode}
           aiSuggestions={currentAiSuggestions}
           aiAnalysisEmptyResult={aiAnalysisEmptyResult}
+          aiAnalysisLoading={aiAnalysisActive}
+          aiAnalysisLoadingKey={activePageAnalysisJob?.id ?? null}
           onIgnoreAISuggestion={handleIgnoreAISuggestion}
           userRole={userRole}
           workmode={workmode}

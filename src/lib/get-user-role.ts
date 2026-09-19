@@ -3,15 +3,28 @@ import {
   getActiveOrganization,
   type UserOrganization,
 } from "./get-active-organization"
+import { getUserPermissions } from "./get-user-permissions"
+import { hasFullInternalPermissions } from "./require-permission"
 
 export type UserRole = "admin" | "designer" | "client"
 
 export function mapOrgRoleToUserRole(
-  org: UserOrganization | null
+  org: UserOrganization | null,
+  options: {
+    isOrgOwner?: boolean
+    hasFullAccess?: boolean
+  } = {}
 ): UserRole {
-  if (!org) return "admin"
-  if (org.role === "admin" || org.role === "owner") return "admin"
+  if (!org) return "designer"
   if (org.role === "client") return "client"
+  if (
+    options.isOrgOwner ||
+    org.role === "admin" ||
+    org.role === "owner" ||
+    options.hasFullAccess
+  ) {
+    return "admin"
+  }
   return "designer"
 }
 
@@ -26,12 +39,15 @@ export async function getUserRole(
       : await getActiveOrganization(supabase, userId)
 
   if (!org) {
-    return { role: "admin", organizationId: null, clientId: null }
+    return { role: "designer", organizationId: null, clientId: null }
   }
 
-  const role = mapOrgRoleToUserRole(org)
+  const permissionsResult = await getUserPermissions(supabase, userId, org.id)
+  const role = mapOrgRoleToUserRole(org, {
+    isOrgOwner: permissionsResult.isOrgOwner,
+    hasFullAccess: hasFullInternalPermissions(permissionsResult.permissions),
+  })
 
-  // Owners/admins never need client_id; designers usually don't either.
   if (role !== "client") {
     return { role, organizationId: org.id, clientId: null }
   }

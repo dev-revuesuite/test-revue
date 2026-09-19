@@ -7,6 +7,7 @@ import { StudioHeader } from "@/components/studio-header"
 import { ZoneContent } from "@/components/zone/zone-content"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
+import { requireInternalPageAccess } from "@/lib/internal-page-access"
 import { fetchZoneProjects } from "@/lib/fetch-zone-projects"
 
 export default async function CreativeZonePage() {
@@ -20,11 +21,9 @@ export default async function CreativeZonePage() {
     redirect("/login")
   }
 
-  const { role: userRole } = await getUserRole(supabase, user.id)
+  await requireInternalPageAccess(supabase, user.id)
 
-  if (userRole === "client") {
-    redirect("/client-portal")
-  }
+  const { role: userRole } = await getUserRole(supabase, user.id)
 
   const { data: profile } = await supabase
     .from("profiles")

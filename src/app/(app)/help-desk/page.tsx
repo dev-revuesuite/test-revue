@@ -6,6 +6,8 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { StudioHeader } from "@/components/studio-header"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
+import { HelpDeskContent } from "@/components/help-desk/help-desk-content"
+import { SUPPORT_INBOX_EMAIL } from "@/lib/support-request-config"
 import { MessageCircleQuestion, BookOpen, Mail, ExternalLink } from "lucide-react"
 
 export default async function HelpDeskPage() {
@@ -41,31 +43,6 @@ export default async function HelpDeskPage() {
   const organization = await getActiveOrganization(supabase, user.id)
   const allOrganizations = await getUserOrganizations(supabase, user.id)
 
-  const helpItems = [
-    {
-      icon: "BookOpen",
-      title: "Getting Started",
-      description: "Learn the basics of using Revue for design reviews and collaboration.",
-      items: [
-        "Create your first client and project",
-        "Upload creatives and share iterations",
-        "Invite team members and assign roles",
-        "Use the feedback tools on the canvas",
-      ],
-    },
-    {
-      icon: "MessageCircleQuestion",
-      title: "FAQs",
-      description: "Quick answers to common questions.",
-      items: [
-        "How do I invite a client to review designs?",
-        "Can I control what clients see?",
-        "How do iterations and versions work?",
-        "What's the difference between Creative and Productive mode?",
-      ],
-    },
-  ]
-
   return (
     <OrgSwitchProvider currentOrgId={organization?.id}>
       <div className="flex flex-col h-svh">
@@ -86,13 +63,15 @@ export default async function HelpDeskPage() {
             <main className="flex-1 overflow-auto bg-background">
           <div className="max-w-3xl mx-auto px-6 py-12">
             <div className="mb-10">
-              <h1 className="text-2xl font-bold text-foreground">Help Desk</h1>
+              <h1 className="text-2xl font-bold text-foreground">Help & Support</h1>
               <p className="text-muted-foreground mt-1">
-                Resources and support to help you get the most out of Revue.
+                Resources and support to help you get the most out of RevueSuite.
               </p>
             </div>
 
-            <div className="grid gap-6">
+            <HelpDeskContent />
+
+            <div className="grid gap-6 mt-10">
               {/* Getting Started */}
               <div className="bg-card border border-border rounded-2xl p-6">
                 <div className="flex items-start gap-4 mb-4">
@@ -154,7 +133,7 @@ export default async function HelpDeskPage() {
                   </li>
                   <li className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                    What's the difference between Creative and Productive mode?
+                    What&apos;s the difference between Creative and Productive mode?
                   </li>
                 </ul>
               </div>
@@ -166,16 +145,16 @@ export default async function HelpDeskPage() {
                     <Mail className="w-5 h-5 text-emerald-500" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Need more help?</h2>
+                    <h2 className="text-lg font-semibold text-foreground">Or email us directly</h2>
                     <p className="text-sm text-muted-foreground mt-0.5 mb-4">
-                      Reach out to our team and we'll get back to you within 24 hours.
+                      Send us an email and our team will get back to you.
                     </p>
                     <a
-                      href="mailto:hello@revue.studio"
+                      href={`mailto:${SUPPORT_INBOX_EMAIL}`}
                       className="inline-flex items-center gap-2 text-sm font-medium text-[#5C6ECD] hover:underline"
                     >
                       <Mail className="w-4 h-4" />
-                      hello@revue.studio
+                      {SUPPORT_INBOX_EMAIL}
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>

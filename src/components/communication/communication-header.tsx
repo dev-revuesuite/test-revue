@@ -23,6 +23,7 @@ import {
   LogOut,
   Loader2,
 } from "lucide-react";
+import { usePermissions } from "@/contexts/permission-context";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,7 @@ export function CommunicationHeader({
   projectName = "",
   creativeName: propCreativeName = "Creative",
 }: CommunicationHeaderProps) {
+  const { isOrgOwner } = usePermissions();
   const router = useRouter();
   const [creativeName, setCreativeName] = useState(propCreativeName);
   const [isEditing, setIsEditing] = useState(false);
@@ -446,13 +448,15 @@ export function CommunicationHeader({
                   <CreditCard className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                   Billing
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => router.push("/account?tab=roles")}
-                  className="gap-3 py-2 px-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] rounded dark:text-white"
-                >
-                  <Shield className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                  Manage Roles
-                </DropdownMenuItem>
+                {isOrgOwner ? (
+                  <DropdownMenuItem
+                    onClick={() => router.push("/account?tab=roles")}
+                    className="gap-3 py-2 px-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] rounded dark:text-white"
+                  >
+                    <Shield className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    Manage Roles
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-gray-200 dark:bg-[#444]" />
               <DropdownMenuGroup>

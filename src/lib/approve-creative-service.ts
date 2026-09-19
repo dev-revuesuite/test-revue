@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { canApproveCreative } from "@/lib/creative-pipeline-status"
 import { getUserRole } from "@/lib/get-user-role"
+import { PermissionDeniedError, requirePermission } from "@/lib/require-permission"
 import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status"
 import { tryAutoCompleteProject } from "@/lib/complete-project-service"
 
@@ -96,11 +97,15 @@ export async function approveCreative(
       organizationId,
       projectId
     )
-  } else if (role !== "admin" && role !== "designer") {
-    throw new ApproveCreativeError(
-      "Only clients, admins, and designers can approve creatives",
-      403
-    )
+  } else {
+    try {
+      await requirePermission(supabase, userId, "add_brief")
+    } catch (error) {
+      if (error instanceof PermissionDeniedError) {
+        throw new ApproveCreativeError(error.message, error.status)
+      }
+      throw error
+    }
   }
 
   if (!canApproveCreative(creative.status)) {

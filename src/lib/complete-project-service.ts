@@ -5,7 +5,7 @@ import {
   isProjectReadyToComplete,
   type ProjectCompletionBlockers,
 } from "@/lib/project-completion"
-import { getUserRole } from "@/lib/get-user-role"
+import { requirePermission } from "@/lib/require-permission"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 
 type ProjectRow = {
@@ -127,17 +127,15 @@ export async function completeProject(
   userId: string,
   projectId: string
 ): Promise<CompleteProjectResult> {
-  const { role, organizationId } = await getUserRole(supabase, userId)
-
-  if (role !== "admin") {
+  let organizationId: string
+  try {
+    const ctx = await requirePermission(supabase, userId, "add_brief")
+    organizationId = ctx.organizationId
+  } catch {
     throw new CompleteProjectError(
-      "Only admins can mark a project as complete",
+      "You do not have permission to mark a project as complete",
       403
     )
-  }
-
-  if (!organizationId) {
-    throw new CompleteProjectError("No active organization", 403)
   }
 
   const loaded = await loadProjectForCompletion(supabase, projectId)

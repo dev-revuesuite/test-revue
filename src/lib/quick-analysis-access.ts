@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { QuickAnalysisRecord } from "@/types/quick-analysis"
 import { resolveIterationMediaType, type MediaType } from "@/lib/media-type"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { hasPermission } from "@/lib/permissions"
 
 export class QuickAnalysisAccessError extends Error {
   constructor(
@@ -37,7 +39,7 @@ async function assertOrgTeamMember(
 
   if (!isMember) {
     throw new QuickAnalysisAccessError(
-      "Only admins and designers can use Quick AI Analysis",
+      "You do not have permission to use Quick AI Analysis",
       403
     )
   }
@@ -70,28 +72,23 @@ export async function assertCanCreateQuickAnalysis(
     throw new QuickAnalysisAccessError("organizationId is required", 400)
   }
 
-  await assertOrgTeamMember(supabase, organizationId)
+  const { permissions, isOrgOwner } = await getUserPermissions(
+    supabase,
+    userId,
+    organizationId
+  )
 
-  const { data: membership } = await supabase
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  const { data: ownedOrg } = await supabase
-    .from("organizations")
-    .select("id")
-    .eq("id", organizationId)
-    .eq("created_by", userId)
-    .maybeSingle()
-
-  if (!ownedOrg && membership?.role === "client") {
+  if (
+    !isOrgOwner &&
+    !hasPermission(permissions, "quality_check_tool")
+  ) {
     throw new QuickAnalysisAccessError(
-      "Only admins and designers can use Quick AI Analysis",
+      "You do not have permission to use Quick AI Analysis",
       403
     )
   }
+
+  await assertOrgTeamMember(supabase, organizationId)
 }
 
 export async function assertCanAccessQuickAnalysis(

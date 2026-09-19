@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { backfillCreativePipelineForOrganization } from "@/lib/backfill-creative-pipeline"
-import { getUserRole } from "@/lib/get-user-role"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { getActiveOrganization } from "@/lib/get-active-organization"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,15 +17,21 @@ export async function POST() {
       return Response.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { role, organizationId } = await getUserRole(supabase, user.id)
+    const organization = await getActiveOrganization(supabase, user.id)
+    if (!organization) {
+      return Response.json({ error: "No active organization" }, { status: 403 })
+    }
 
-    if (role !== "admin") {
+    const permissionsResult = await getUserPermissions(
+      supabase,
+      user.id,
+      organization.id
+    )
+    if (!permissionsResult.isOrgOwner) {
       return Response.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    if (!organizationId) {
-      return Response.json({ error: "No active organization" }, { status: 403 })
-    }
+    const organizationId = organization.id
 
     const result = await backfillCreativePipelineForOrganization(
       supabase,

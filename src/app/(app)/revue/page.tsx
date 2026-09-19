@@ -3,11 +3,14 @@ import { createClient } from "@/lib/supabase/server"
 import { RevueCanvas } from "@/components/communication/communication-canvas"
 import { resolveIterationMediaType } from "@/lib/media-type"
 import { getUserRole } from "@/lib/get-user-role"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { hasPermission } from "@/lib/permissions"
 import {
   buildAiSuggestionMap,
   type AiSuggestionRow,
 } from "@/lib/map-ai-suggestion-rows"
 import { ensureInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
+import { ensureProjectMemberAccess } from "@/lib/ensure-project-member-access"
 
 interface RevuePageProps {
   searchParams: Promise<{
@@ -41,7 +44,13 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     redirect("/login")
   }
 
-  const { role: userRole, organizationId } = await getUserRole(supabase, user.id)
+  const userRoleResult = await getUserRole(supabase, user.id)
+  const { role: userRole, organizationId } = userRoleResult
+  const permissionsResult = await getUserPermissions(
+    supabase,
+    user.id,
+    organizationId
+  )
 
   const { data: project } = await supabase
     .from("projects")
@@ -63,6 +72,18 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   if (!client || !organizationId || client.organization_id !== organizationId) {
     redirect("/studio")
+  }
+
+  if (userRole !== "client") {
+    const canOpenRevue =
+      permissionsResult.isOrgOwner ||
+      hasPermission(permissionsResult.permissions, "add_brief") ||
+      hasPermission(permissionsResult.permissions, "quality_check_tool") ||
+      hasPermission(permissionsResult.permissions, "feedback_ucc")
+
+    if (!canOpenRevue) {
+      redirect("/studio")
+    }
   }
 
   if (userRole === "client") {
@@ -106,6 +127,15 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   if (!creative) {
     redirect("/studio")
+  }
+
+  // Grant project_members row so RLS allows reading iterations/feedback
+  if (userRole !== "client") {
+    try {
+      await ensureProjectMemberAccess(supabase, projectId, user.id)
+    } catch (accessError) {
+      console.error("Failed to ensure project access:", accessError)
+    }
   }
 
   try {

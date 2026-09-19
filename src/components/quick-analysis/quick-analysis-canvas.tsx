@@ -60,6 +60,7 @@ export function QuickAnalysisCanvas({
   const [zoom, setZoom] = useState(100)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [aiAnalysisActive, setAiAnalysisActive] = useState(false)
+  const [aiAnalysisLoadingKey, setAiAnalysisLoadingKey] = useState<string | null>(null)
   const [aiAnalysisEmptyResult, setAiAnalysisEmptyResult] =
     useState<AiAnalysisEmptyResult | null>(null)
   const [showAIAnalysisOptions, setShowAIAnalysisOptions] = useState(false)
@@ -150,6 +151,7 @@ export function QuickAnalysisCanvas({
       }
 
       setAiAnalysisEmptyResult(null)
+      setAiAnalysisLoadingKey(crypto.randomUUID())
       setAiAnalysisActive(true)
 
       try {
@@ -356,6 +358,8 @@ export function QuickAnalysisCanvas({
           viewMode="ai"
           aiSuggestions={suggestions}
           aiAnalysisEmptyResult={aiAnalysisEmptyResult}
+          aiAnalysisLoading={aiAnalysisActive}
+          aiAnalysisLoadingKey={aiAnalysisLoadingKey}
           onIgnoreAISuggestion={handleIgnoreSuggestion}
           showPageLabels={isPdf && effectivePageCount > 1}
         />

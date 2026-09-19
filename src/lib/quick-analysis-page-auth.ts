@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getUserRole } from "@/lib/get-user-role"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { hasPermission } from "@/lib/permissions"
 import {
   getUserOrganizations,
   resolveActiveOrganization,
@@ -63,6 +65,16 @@ export async function requireQuickAnalysisPageContext(): Promise<QuickAnalysisPa
   }
 
   if (!organization) {
+    redirect("/studio")
+  }
+
+  const { permissions, isOrgOwner } = await getUserPermissions(
+    supabase,
+    user.id,
+    organization.id
+  )
+
+  if (!isOrgOwner && !hasPermission(permissions, "quality_check_tool")) {
     redirect("/studio")
   }
 

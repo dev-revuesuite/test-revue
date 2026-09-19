@@ -71,6 +71,9 @@ import {
 } from "@/components/global-search-dialog"
 import type { NotificationItem } from "@/types/notifications"
 import type { MessageItem } from "@/types/messages"
+import { usePermission, usePermissions } from "@/contexts/permission-context"
+import { fetchOrganizationRoles } from "@/lib/organization-roles-service"
+import { inviteInternalMember } from "@/lib/team-member-service"
 
 interface OrgMember {
   id: string
@@ -177,12 +180,27 @@ export function StudioHeader({
 
   useGlobalSearchShortcut(() => setSearchModalOpen(true))
 
+  const { isOrgOwner } = usePermissions()
+  const canAddTeamMember = usePermission("add_team_member")
+  const canAddClient = usePermission("add_client")
+  const canAddBrief = usePermission("add_brief")
+
   // Add Team Member modal state
   const [addMemberModalOpen, setAddMemberModalOpen] = React.useState(false)
   const [newMemberName, setNewMemberName] = React.useState("")
   const [newMemberEmail, setNewMemberEmail] = React.useState("")
-  const [newMemberRole, setNewMemberRole] = React.useState("designer")
+  const [newMemberRoleId, setNewMemberRoleId] = React.useState("")
+  const [orgRoles, setOrgRoles] = React.useState<{ id: string; title: string }[]>([])
   const [addingMember, setAddingMember] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!addMemberModalOpen || !organizationId) return
+    const supabase = createClient()
+    void fetchOrganizationRoles(supabase, organizationId).then((roles) => {
+      setOrgRoles(roles.map((r) => ({ id: r.id, title: r.title })))
+      setNewMemberRoleId((current) => current || roles[0]?.id || "")
+    })
+  }, [addMemberModalOpen, organizationId])
 
   // Theme state
   const [isDark, setIsDark] = React.useState(false)
@@ -275,20 +293,24 @@ export function StudioHeader({
 
   // Add Team Member function
   const handleAddTeamMember = async () => {
-    if (!organizationId || !newMemberName.trim()) return
+    if (!organizationId || !newMemberName.trim() || !newMemberRoleId) return
     setAddingMember(true)
     try {
       const supabase = createClient()
-      await supabase.from("organization_members").insert({
-        organization_id: organizationId,
+      const { error } = await inviteInternalMember(supabase, {
+        organizationId,
         name: newMemberName.trim(),
-        email: newMemberEmail.trim() || null,
-        role: newMemberRole,
+        email: newMemberEmail.trim(),
+        customRoleId: newMemberRoleId,
       })
+      if (error) {
+        console.error("Failed to add team member:", error)
+        return
+      }
       setAddMemberModalOpen(false)
       setNewMemberName("")
       setNewMemberEmail("")
-      setNewMemberRole("designer")
+      setNewMemberRoleId(orgRoles[0]?.id ?? "")
       window.location.reload()
     } catch (err) {
       console.error("Failed to add team member:", err)
@@ -397,8 +419,7 @@ export function StudioHeader({
           </div>
         </button>
 
-        {/* Add Team Member Button - admin only */}
-        {userRole === "admin" && (
+        {canAddTeamMember ? (
           <Button
             variant="outline"
             onClick={() => setAddMemberModalOpen(true)}
@@ -407,10 +428,9 @@ export function StudioHeader({
             <UserPlus className="w-4 h-4" />
             Add Team Member
           </Button>
-        )}
+        ) : null}
 
-        {/* Add New Dropdown - role-based */}
-        {userRole === "admin" && (
+        {(canAddClient || canAddBrief) ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -422,30 +442,36 @@ export function StudioHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-48 p-1.5">
-              <DropdownMenuItem
-                onClick={() => setNewClientDialogOpen(true)}
-                className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
-              >
-                <Users className="w-4 h-4 text-[#5C6ECD]" />
-                <span className="font-medium">Add Client</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setNewBriefDialogOpen(true)}
-                className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
-              >
-                <FolderOpen className="w-4 h-4 text-[#10b981]" />
-                <span className="font-medium">Add Brief</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setNewOrgDialogOpen(true)}
-                className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
-              >
-                <Building2 className="w-4 h-4 text-[#f59e0b]" />
-                <span className="font-medium">Add Organization</span>
-              </DropdownMenuItem>
+              {canAddClient ? (
+                <DropdownMenuItem
+                  onClick={() => setNewClientDialogOpen(true)}
+                  className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+                >
+                  <Users className="w-4 h-4 text-[#5C6ECD]" />
+                  <span className="font-medium">Add Client</span>
+                </DropdownMenuItem>
+              ) : null}
+              {canAddBrief ? (
+                <DropdownMenuItem
+                  onClick={() => setNewBriefDialogOpen(true)}
+                  className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+                >
+                  <FolderOpen className="w-4 h-4 text-[#10b981]" />
+                  <span className="font-medium">Add Brief</span>
+                </DropdownMenuItem>
+              ) : null}
+              {isOrgOwner ? (
+                <DropdownMenuItem
+                  onClick={() => setNewOrgDialogOpen(true)}
+                  className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
+                >
+                  <Building2 className="w-4 h-4 text-[#f59e0b]" />
+                  <span className="font-medium">Add Organization</span>
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
+        ) : null}
         {/* Designer: no add buttons, only upload creatives from project room */}
 
         {/* Fullscreen Toggle */}
@@ -614,13 +640,15 @@ export function StudioHeader({
                 <CreditCard className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => router.push("/account?tab=roles")}
-                className="gap-3 py-2 px-2 text-sm text-[#1a1a1a] dark:text-white cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded"
-              >
-                <Shield className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
-                Manage Roles
-              </DropdownMenuItem>
+              {isOrgOwner ? (
+                <DropdownMenuItem
+                  onClick={() => router.push("/account?tab=roles")}
+                  className="gap-3 py-2 px-2 text-sm text-[#1a1a1a] dark:text-white cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded"
+                >
+                  <Shield className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
+                  Manage Roles
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="bg-[#e6e6e6] dark:bg-[#333]" />
             <DropdownMenuGroup>
@@ -773,31 +801,17 @@ export function StudioHeader({
               <label className="text-sm font-medium text-[#1a1a1a] dark:text-white mb-1.5 block">
                 Role
               </label>
-              <div className="flex gap-2">
-                {[
-                  { id: "admin", label: "Admin", desc: "Full access" },
-                  { id: "designer", label: "Designer", desc: "Design work" },
-                ].map((role) => (
-                  <button
-                    key={role.id}
-                    onClick={() => setNewMemberRole(role.id)}
-                    className={cn(
-                      "flex-1 p-3 rounded-xl border transition-all text-center",
-                      newMemberRole === role.id
-                        ? "border-[#5C6ECD] bg-[#5C6ECD]/5 dark:bg-[#5C6ECD]/10"
-                        : "border-[#e6e6e6] dark:border-[#444] hover:border-[#bbb] dark:hover:border-[#555]"
-                    )}
-                  >
-                    <p className={cn(
-                      "text-sm font-medium",
-                      newMemberRole === role.id ? "text-[#5C6ECD]" : "text-[#1a1a1a] dark:text-white"
-                    )}>
-                      {role.label}
-                    </p>
-                    <p className="text-[10px] text-[#7a7a7a] dark:text-[#999] mt-0.5">{role.desc}</p>
-                  </button>
+              <select
+                value={newMemberRoleId}
+                onChange={(e) => setNewMemberRoleId(e.target.value)}
+                className="w-full h-10 px-4 rounded-xl border border-[#e6e6e6] dark:border-[#444] bg-white dark:bg-[#2a2a2a] text-sm outline-none focus:border-[#5C6ECD] focus:ring-2 focus:ring-[#5C6ECD]/20 text-[#1a1a1a] dark:text-white"
+              >
+                {orgRoles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.title}
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
           </div>
 
@@ -812,7 +826,7 @@ export function StudioHeader({
             </Button>
             <Button
               onClick={handleAddTeamMember}
-              disabled={!newMemberName.trim() || addingMember}
+              disabled={!newMemberName.trim() || !newMemberRoleId || addingMember}
               className="h-10 px-5 rounded-lg bg-[#5C6ECD] hover:bg-[#4A5BC7] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {addingMember ? "Adding..." : "Add Member"}

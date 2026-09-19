@@ -48,6 +48,7 @@ import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 import { downloadReference, downloadAllReferences } from "@/lib/download-references"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
 import { CreativeUploadPlaceholderCard } from "@/components/room/creative-upload-placeholder-card"
+import { usePermission, usePermissions } from "@/contexts/permission-context"
 import {
   useCreativeUploadListener,
   useCreativeUploads,
@@ -557,6 +558,14 @@ export function RoomContent({
   userRole = "admin",
   isRefreshingProjects = false,
 }: RoomContentProps) {
+  const { isOrgOwner } = usePermissions()
+  const canAddBrief = usePermission("add_brief")
+  const canAddClient = usePermission("add_client")
+  const canAddTeamMember = usePermission("add_team_member")
+  const canManageProject = isOrgOwner || canAddBrief
+  const canManageProjectTeam = isOrgOwner || canAddTeamMember
+  const canUploadCreatives =
+    userRole !== "client" && canManageProject
   const router = useRouter()
   const searchParams = useSearchParams()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
@@ -1207,7 +1216,7 @@ export function RoomContent({
             <Layers className="w-4 h-4 text-[#5C6ECD]" />
             <span className="text-sm font-medium text-[#5C6ECD]">Brand Assets</span>
           </button>
-          {userRole === "admin" && (
+          {canAddClient && (
             <button
               type="button"
               aria-label="Edit Client"
@@ -1250,7 +1259,7 @@ export function RoomContent({
                   </div>
                   <p className="text-sm font-medium text-foreground mb-1">No projects yet</p>
                   <p className="text-xs text-muted-foreground mb-4">Create your first project to get started</p>
-                  {userRole === "admin" && (
+                  {canAddBrief && (
                     <button
                       onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
                       className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-lg transition-colors"
@@ -1279,13 +1288,13 @@ export function RoomContent({
               <div className="w-20 h-20 rounded-2xl bg-[#5C6ECD]/10 flex items-center justify-center mx-auto mb-5">
                 <Briefcase className="w-10 h-10 text-[#5C6ECD]" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">{userRole === "admin" ? "Add your first project" : "No projects yet"}</h3>
+              <h3 className="text-xl font-bold text-foreground mb-2">{canAddBrief ? "Add your first project" : "No projects yet"}</h3>
               <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                {userRole === "admin"
+                {canAddBrief
                   ? `Create a project to start managing briefs, deliverables, and creatives for ${client.name}.`
                   : `No projects have been created for ${client.name} yet.`}
               </p>
-              {userRole === "admin" && (
+              {canAddBrief && (
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent("revue:open-add-brief"))}
                   className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-[#5C6ECD] hover:bg-[#4a5bb8] rounded-xl shadow-lg shadow-[#5C6ECD]/25 transition-all"
@@ -1329,7 +1338,7 @@ export function RoomContent({
                     <Button variant="outline" onClick={handleCancel} size="sm"><X className="w-4 h-4 mr-2" />Cancel</Button>
                     <Button onClick={handleSave} size="sm" className="bg-[#5C6ECD] hover:bg-[#4a5bb8]"><FileCheck className="w-4 h-4 mr-2" />Save</Button>
                   </>
-                ) : userRole === "admin" ? (
+                ) : canManageProject ? (
                   <>
                     {data.status !== "completed" && (
                       <Button
@@ -1374,7 +1383,7 @@ export function RoomContent({
                         <p className="text-xs text-muted-foreground">{getDeliverableStats(data.deliverables).completed}/{getDeliverableStats(data.deliverables).total} completed</p>
                       </div>
                     </div>
-                    {userRole === "admin" && (
+                    {canManageProject && (
                       <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}>
                         <Plus className="w-4 h-4 mr-2" />
                         Add Deliverable
@@ -1385,8 +1394,8 @@ export function RoomContent({
                     {data.deliverables.map((deliverable) => (
                       <div
                         key={deliverable.id}
-                        onClick={userRole === "admin" ? () => handleToggleDeliverableStatus(deliverable.id) : undefined}
-                        className={cn("flex items-center justify-between p-3 rounded-lg bg-muted/50 transition-colors group", userRole === "admin" && "hover:bg-muted cursor-pointer")}
+                        onClick={canManageProject ? () => handleToggleDeliverableStatus(deliverable.id) : undefined}
+                        className={cn("flex items-center justify-between p-3 rounded-lg bg-muted/50 transition-colors group", canManageProject && "hover:bg-muted cursor-pointer")}
                       >
                         <div className="flex items-center gap-3">
                           <div className="relative">
@@ -1503,7 +1512,7 @@ export function RoomContent({
                       <h3 className="text-base font-semibold text-foreground">Creatives</h3>
                       <span className="text-sm text-muted-foreground">({creativeCount})</span>
                     </div>
-                    {userRole !== "client" && (
+                    {canUploadCreatives && (
                       <Button
                         size="sm"
                         className="bg-[#5C6ECD] hover:bg-[#4a5bb8] text-white shadow-md shadow-[#5C6ECD]/20"
@@ -1666,7 +1675,7 @@ export function RoomContent({
                         <p className="text-muted-foreground mb-6 max-w-xs mx-auto text-sm">
                           {userRole === "client" ? "No creative assets have been uploaded yet." : "Upload your first creative asset to start collaborating with your team."}
                         </p>
-                        {userRole !== "client" && (
+                        {canUploadCreatives && (
                           <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8] shadow-lg shadow-[#5C6ECD]/20" onClick={() => setAddCreativeOpen(true)}>
                             <Upload className="w-4 h-4 mr-2" />
                             Upload Creative
@@ -1692,7 +1701,7 @@ export function RoomContent({
                     <Users className="w-4 h-4 text-[#5C6ECD]" />
                     Team ({selectedProject.team.length})
                   </h3>
-                  {userRole === "admin" && (
+                  {canManageProjectTeam && (
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTeamModalOpen(true)}>
                       <Plus className="w-3.5 h-3.5" />
                     </Button>
@@ -1700,7 +1709,7 @@ export function RoomContent({
                 </div>
                 <div className="space-y-2">
                   {selectedProject.team.slice(0, 4).map((member) => (
-                    <div key={member.id} className={cn("flex items-center gap-2 p-2 rounded-lg transition-colors", userRole === "admin" && "hover:bg-muted/50 cursor-pointer")} onClick={userRole === "admin" ? () => setTeamModalOpen(true) : undefined}>
+                    <div key={member.id} className={cn("flex items-center gap-2 p-2 rounded-lg transition-colors", canManageProjectTeam && "hover:bg-muted/50 cursor-pointer")} onClick={canManageProjectTeam ? () => setTeamModalOpen(true) : undefined}>
                       <Avatar className="w-8 h-8">
                         <AvatarImage src={member.avatar} alt={member.name} />
                         <AvatarFallback className="bg-[#5C6ECD] text-white text-xs">{member.name.charAt(0)}</AvatarFallback>
@@ -1711,7 +1720,7 @@ export function RoomContent({
                       </div>
                     </div>
                   ))}
-                  {selectedProject.team.length > 4 && userRole === "admin" && (
+                  {selectedProject.team.length > 4 && canManageProjectTeam && (
                     <button onClick={() => setTeamModalOpen(true)} className="w-full text-xs text-[#5C6ECD] hover:underline py-2">
                       View all {selectedProject.team.length} members
                     </button>

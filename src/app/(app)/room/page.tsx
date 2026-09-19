@@ -43,7 +43,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     getUserOrganizations(supabase, user.id),
   ])
 
-  const { role: userRole, clientId: userClientId } = userRoleResult
+  const { role: userRole, clientId: userClientId, organizationId } = userRoleResult
   const { data: profile } = profileResult
 
   const userData = {

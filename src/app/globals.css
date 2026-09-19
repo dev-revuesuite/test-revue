@@ -44,6 +44,9 @@
 }
 
 :root {
+  --font-outfit: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: "JetBrains Mono", ui-monospace, monospace;
+
   /* No radius - sharp corners throughout */
   --radius: 0;
 

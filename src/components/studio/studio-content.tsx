@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useOrgSwitch } from "@/contexts/org-switch-context"
+import { usePermission } from "@/contexts/permission-context"
 import { OrgSwitchMainSkeleton } from "@/components/studio/studio-loading-skeletons"
 import { ClientCard } from "./client-card"
 import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
@@ -96,9 +97,10 @@ export function StudioContent({
   refreshOverlayMessage = "Updating clients...",
 }: StudioContentProps) {
   const { isOrgSwitchLoading } = useOrgSwitch()
+  const canAddClient = usePermission("add_client")
   const [welcomeDismissed, setWelcomeDismissed] = useState(false)
   const showWelcome =
-    clients.length === 0 && userRole === "admin" && !welcomeDismissed
+    clients.length === 0 && canAddClient && !welcomeDismissed
 
   useEffect(() => {
     if (clients.length > 0) {

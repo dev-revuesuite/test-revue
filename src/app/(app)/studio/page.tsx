@@ -2,6 +2,8 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { StudioPageShell } from "@/components/studio/studio-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { hasAnyPermission } from "@/lib/permissions"
 import {
   getUserOrganizations,
   resolveActiveOrganization,
@@ -81,6 +83,17 @@ export default async function StudioPage() {
 
   if (userRole === "client") {
     redirect("/client-portal")
+  }
+
+  if (organization) {
+    const { permissions, isOrgOwner } = await getUserPermissions(
+      supabase,
+      user.id,
+      organization.id
+    )
+    if (!hasAnyPermission(permissions, isOrgOwner)) {
+      redirect("/account")
+    }
   }
 
   const userData = {

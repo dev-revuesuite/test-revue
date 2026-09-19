@@ -7,6 +7,7 @@ import { StudioHeader } from "@/components/studio-header"
 import { MasterDriveContent } from "@/components/master-drive/master-drive-content"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
+import { requireInternalPageAccess } from "@/lib/internal-page-access"
 import { normalizeCreativePipelineStatus } from "@/lib/creative-pipeline-status"
 
 export default async function MasterDrivePage() {
@@ -20,11 +21,9 @@ export default async function MasterDrivePage() {
     redirect("/login")
   }
 
-  const { role: userRole, clientId } = await getUserRole(supabase, user.id)
+  await requireInternalPageAccess(supabase, user.id)
 
-  if (userRole === "client") {
-    redirect("/client-portal")
-  }
+  const { role: userRole, clientId } = await getUserRole(supabase, user.id)
 
   const { data: profile } = await supabase
     .from("profiles")

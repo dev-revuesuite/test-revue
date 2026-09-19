@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { ThinkingState } from "@/components/ai-analysis/thinking-state";
 
 export interface ReplyItem {
   id: string;
@@ -107,6 +108,8 @@ interface CommentsPanelProps {
   viewMode?: "view" | "comments" | "ai";
   aiSuggestions?: AISuggestion[];
   aiAnalysisEmptyResult?: AiAnalysisEmptyResult | null;
+  aiAnalysisLoading?: boolean;
+  aiAnalysisLoadingKey?: string | null;
   onIgnoreAISuggestion?: (id: string) => void;
   userRole?: "owner" | "admin" | "designer" | "client";
   workmode?: "creative" | "productive";
@@ -130,6 +133,8 @@ export function CommentsPanel({
   viewMode = "comments",
   aiSuggestions = [],
   aiAnalysisEmptyResult = null,
+  aiAnalysisLoading = false,
+  aiAnalysisLoadingKey = null,
   onIgnoreAISuggestion,
   userRole = "client",
   workmode = "productive",
@@ -244,9 +249,16 @@ export function CommentsPanel({
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <h2 className="font-semibold text-gray-800 dark:text-white">AI Suggestions</h2>
-                <span className="text-xs bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
-                  {aiSuggestions.length}
-                </span>
+                {aiAnalysisLoading ? (
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-purple-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-purple-500" />
+                  </span>
+                ) : (
+                  <span className="text-xs bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
+                    {aiSuggestions.length}
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -292,7 +304,11 @@ export function CommentsPanel({
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
         {viewMode === "ai" ? (
-          aiSuggestions.length === 0 && !aiAnalysisEmptyResult ? (
+          aiAnalysisLoading ? (
+            <div className="p-4">
+              <ThinkingState key={aiAnalysisLoadingKey ?? "loading"} />
+            </div>
+          ) : aiSuggestions.length === 0 && !aiAnalysisEmptyResult ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 p-8">
               <Sparkles className="w-12 h-12 mb-3 opacity-50" />
               <p className="text-sm font-medium">No AI suggestions</p>

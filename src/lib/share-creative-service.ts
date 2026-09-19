@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { appRoute } from "@/lib/base-path"
 import { getUserRole } from "@/lib/get-user-role"
+import { PermissionDeniedError, requirePermission } from "@/lib/require-permission"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status"
 import type {
@@ -120,6 +121,15 @@ async function loadProjectContext(
 
     if (!clientAccess) {
       throw new ShareCreativeError("You do not have access to this project", 403)
+    }
+  } else {
+    try {
+      await requirePermission(supabase, userId, "add_brief")
+    } catch (error) {
+      if (error instanceof PermissionDeniedError) {
+        throw new ShareCreativeError(error.message, error.status)
+      }
+      throw error
     }
   }
 

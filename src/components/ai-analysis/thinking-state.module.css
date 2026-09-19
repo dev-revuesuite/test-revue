@@ -1,0 +1,211 @@
+.root {
+  --ink: #1a1a1a;
+  --ink-2: #666666;
+  --ink-3: #999999;
+  --line: #e5e5e5;
+  --line-strong: #d4d4d4;
+  --hover: rgba(0, 0, 0, 0.04);
+  --hover-2: rgba(0, 0, 0, 0.06);
+  --accent: #9333ea;
+}
+
+:global(.dark) .root {
+  --ink: #f5f5f5;
+  --ink-2: #aaaaaa;
+  --ink-3: #777777;
+  --line: #444444;
+  --line-strong: #555555;
+  --hover: rgba(255, 255, 255, 0.06);
+  --hover-2: rgba(255, 255, 255, 0.08);
+  --accent: #c084fc;
+}
+
+.root {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  transition: min-height 400ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.headerButton {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  margin-left: -6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background-color 100ms;
+}
+
+.headerButton:hover {
+  background: var(--hover-2);
+}
+
+.starIcon {
+  flex-shrink: 0;
+}
+
+.activeLabel {
+  background-image: linear-gradient(
+    90deg,
+    var(--ink-3) 35%,
+    var(--ink) 50%,
+    var(--ink-3) 65%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 1.4s linear infinite;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.doneLabel {
+  animation: fade-in 350ms ease-out both;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.elapsed {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  animation: fade-in 300ms ease-out both;
+}
+
+.chevron {
+  transition: transform 300ms;
+  flex-shrink: 0;
+}
+
+.chevronExpanded {
+  transform: rotate(180deg);
+}
+
+.traceShell {
+  display: grid;
+  transition:
+    grid-template-rows 400ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 400ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.traceShellExpanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.traceShellCollapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.traceOverflow {
+  overflow: hidden;
+}
+
+.traceInner {
+  position: relative;
+  margin-top: 4px;
+  margin-left: 5px;
+  padding-left: 16px;
+}
+
+.traceLine {
+  position: absolute;
+  left: 3px;
+  top: -8px;
+  width: 1px;
+  background: var(--line);
+  transition: height 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.traceRows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.row {
+  display: flex;
+  min-height: 28px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 2px 6px;
+  animation: fade-up 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.rowPrimary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--ink-2);
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activeLabel {
+    animation: none;
+    -webkit-text-fill-color: var(--ink-2);
+    color: var(--ink-2);
+  }
+
+  .spinner {
+    animation: none;
+  }
+}

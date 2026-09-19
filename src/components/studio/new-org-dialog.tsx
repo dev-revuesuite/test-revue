@@ -380,6 +380,15 @@ export function NewOrganizationDialog({
         console.error("Failed to add owner membership:", memberError)
       }
 
+      try {
+        const { seedDefaultFullAccessRole } = await import(
+          "@/lib/organization-roles-service"
+        )
+        await seedDefaultFullAccessRole(supabase, newOrg.id)
+      } catch (seedError) {
+        console.error("Failed to seed default role:", seedError)
+      }
+
       const switched = await performOrgSwitch(newOrg.id)
       if (!switched) {
         console.error("Failed to auto-switch to new organization")

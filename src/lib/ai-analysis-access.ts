@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { resolveIterationMediaType, type MediaType } from "@/lib/media-type"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { hasPermission } from "@/lib/permissions"
 
 export class AiAnalysisAccessError extends Error {
   constructor(
@@ -42,8 +44,44 @@ async function assertTeamMemberForIteration(
   if (!isMember) {
     throw new AiAnalysisAccessError(
       action === "run"
-        ? "Only admins and designers on this project can run AI analysis"
-        : "Only admins and designers on this project can manage AI suggestions",
+        ? "You do not have permission to run AI analysis"
+        : "You do not have permission to manage AI suggestions",
+      403
+    )
+  }
+}
+
+async function assertQualityCheckPermission(
+  supabase: SupabaseClient,
+  userId: string,
+  iterationId: string
+): Promise<void> {
+  const { data: iteration } = await supabase
+    .from("iterations")
+    .select("creatives(projects(clients(organization_id)))")
+    .eq("id", iterationId)
+    .maybeSingle()
+
+  const creative = iteration?.creatives as unknown as
+    | { projects: { clients: { organization_id: string } | null } | null }
+    | null
+
+  const organizationId =
+    creative?.projects?.clients?.organization_id ?? null
+
+  if (!organizationId) {
+    throw new AiAnalysisAccessError("Organization not found for iteration", 404)
+  }
+
+  const { permissions, isOrgOwner } = await getUserPermissions(
+    supabase,
+    userId,
+    organizationId
+  )
+
+  if (!isOrgOwner && !hasPermission(permissions, "quality_check_tool")) {
+    throw new AiAnalysisAccessError(
+      "You do not have permission to use the Quality Check Tool",
       403
     )
   }
@@ -64,6 +102,7 @@ export async function assertCanRunAiAnalysis(
     throw new AiAnalysisAccessError("Iteration not found", 404)
   }
 
+  await assertQualityCheckPermission(supabase, userId, iterationId)
   await assertTeamMemberForIteration(supabase, iterationId, "run")
 
   if (!iteration.image_url) {
@@ -100,6 +139,7 @@ export async function assertCanManageAiSuggestion(
     throw new AiAnalysisAccessError("AI suggestion not found", 404)
   }
 
+  await assertQualityCheckPermission(supabase, userId, suggestion.iteration_id)
   await assertTeamMemberForIteration(
     supabase,
     suggestion.iteration_id,

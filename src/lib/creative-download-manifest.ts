@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { getCreativeFileSize } from "@/lib/creative-storage"
 import { getUserRole } from "@/lib/get-user-role"
+import { PermissionDeniedError, requireAnyPermission } from "@/lib/require-permission"
 import { resolveIterationMediaType, type MediaType } from "@/lib/media-type"
 
 /**
@@ -78,17 +79,27 @@ async function assertCanDownloadProject(
   brandName: string
   clientName: string
 }> {
-  const { role, organizationId } = await getUserRole(supabase, userId)
+  const { role } = await getUserRole(supabase, userId)
 
   if (role === "client") {
     throw new CreativeDownloadError(
-      "Only admins and designers can download project files",
+      "You do not have permission to download project files",
       403
     )
   }
 
-  if (!organizationId) {
-    throw new CreativeDownloadError("No active organization", 403)
+  let organizationId: string
+  try {
+    const ctx = await requireAnyPermission(supabase, userId, [
+      "add_brief",
+      "quality_check_tool",
+    ])
+    organizationId = ctx.organizationId
+  } catch (error) {
+    if (error instanceof PermissionDeniedError) {
+      throw new CreativeDownloadError(error.message, error.status)
+    }
+    throw error
   }
 
   const { data: project, error } = await supabase

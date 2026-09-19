@@ -18,6 +18,7 @@ import {
   Users,
   Zap,
 } from "lucide-react"
+import { usePermissions } from "@/contexts/permission-context"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -52,6 +53,7 @@ export function QuickAnalysisHeader({
   downloadWithAiBoxesDisabled = false,
   user,
 }: QuickAnalysisHeaderProps) {
+  const { isOrgOwner } = usePermissions()
   const router = useRouter()
   const [isDownloading, setIsDownloading] = useState(false)
   const [isDark, setIsDark] = useState(false)
@@ -249,13 +251,15 @@ export function QuickAnalysisHeader({
                   <CreditCard className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                   Billing
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => router.push(appRoute("/account?tab=roles"))}
-                  className="cursor-pointer gap-3 rounded px-2 py-2 text-sm dark:text-white"
-                >
-                  <Shield className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                  Manage Roles
-                </DropdownMenuItem>
+                {isOrgOwner ? (
+                  <DropdownMenuItem
+                    onClick={() => router.push(appRoute("/account?tab=roles"))}
+                    className="cursor-pointer gap-3 rounded px-2 py-2 text-sm dark:text-white"
+                  >
+                    <Shield className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                    Manage Roles
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-gray-200 dark:bg-[#444]" />
               <DropdownMenuItem

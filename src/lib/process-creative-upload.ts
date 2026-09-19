@@ -15,6 +15,7 @@ import {
 } from "@/lib/creative-pipeline-status"
 import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipeline-status"
 import { createInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
+import { ensureProjectMemberAccess } from "@/lib/ensure-project-member-access"
 import type {
   CompletedCreativeUpload,
   RoomCreativeType,
@@ -58,6 +59,14 @@ export async function processCreativeUpload(
   options.onPhaseChange?.("processing")
   options.onUploadProgress?.(92)
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (user?.id) {
+    await ensureProjectMemberAccess(supabase, projectId, user.id)
+  }
+
   const { data: inserted, error } = await supabase
     .from("creatives")
     .insert({
@@ -70,16 +79,13 @@ export async function processCreativeUpload(
     .single()
 
   if (error || !inserted) {
+    console.error("Creative insert failed:", error)
     throw new CreativeFileUploadError(
       "Could not save the creative. Please try again."
     )
   }
 
   options.onUploadProgress?.(95)
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
   let iterationId: string
   try {

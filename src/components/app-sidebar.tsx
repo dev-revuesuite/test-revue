@@ -6,6 +6,8 @@ import { useRouter, usePathname } from "next/navigation"
 import { LayoutGrid, HardDrive, Palette, Briefcase, Settings, HelpCircle, PanelLeftClose, PanelLeft, Loader2, Sun, Moon, FolderOpen, Zap } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { usePermission, usePermissions } from "@/contexts/permission-context"
+import { hasAnyPermission } from "@/lib/permissions"
 
 type UserRole = "admin" | "designer" | "client"
 
@@ -79,7 +81,35 @@ export function AppSidebar({ user, userRole = "admin", clientId }: AppSidebarPro
   const [isPending, startTransition] = React.useTransition()
   const [pendingUrl, setPendingUrl] = React.useState<string | null>(null)
 
-  const navItems = allNavItems.filter((item) => item.roles.includes(userRole))
+  const { permissions, isOrgOwner } = usePermissions()
+  const canUseQualityCheck = usePermission("quality_check_tool")
+  const hasInternalAccess = hasAnyPermission(permissions, isOrgOwner)
+
+  const internalOnlyUrls = new Set([
+    "/studio",
+    "/master-drive",
+    "/creative-zone",
+    "/productive-zone",
+  ])
+
+  const navItems = allNavItems.filter((item) => {
+    if (!item.roles.includes(userRole)) return false
+    if (
+      userRole !== "client" &&
+      internalOnlyUrls.has(item.url) &&
+      !hasInternalAccess
+    ) {
+      return false
+    }
+    if (
+      item.url === "/quick-analysis" &&
+      userRole !== "client" &&
+      !canUseQualityCheck
+    ) {
+      return false
+    }
+    return true
+  })
 
   React.useEffect(() => {
     setMounted(true)

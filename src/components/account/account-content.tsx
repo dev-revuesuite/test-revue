@@ -19,8 +19,18 @@ import {
   BarChart3,
   Loader2,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { RolesTab } from "@/components/account/roles-tab"
+import {
+  inviteInternalMember,
+  removeOrganizationMembers,
+  updateMemberCustomRole,
+  updateMemberDetails,
+} from "@/lib/team-member-service"
+import { fetchOrganizationRoles } from "@/lib/organization-roles-service"
+import { usePermission, usePermissions } from "@/contexts/permission-context"
 
 interface OrgData {
   id: string
@@ -42,6 +52,14 @@ interface TeamMemberData {
   phone: string
   role: string
   avatar: string
+  customRoleId?: string | null
+  roleTitle?: string
+  isClient?: boolean
+}
+
+interface OrgRoleOption {
+  id: string
+  title: string
 }
 
 interface ProfileData {
@@ -61,21 +79,24 @@ interface AccountContentProps {
   teamMembers?: TeamMemberData[]
   profileData?: ProfileData
   organizationId?: string | null
+  isOrgOwner?: boolean
+  orgRoles?: OrgRoleOption[]
 }
 
-type TabType = "profile" | "settings" | "team" | "organisations"
+type TabType = "profile" | "settings" | "team" | "roles" | "organisations"
 
 // mockTeamMembers removed — now uses real data from props
 
 // mockOrganisations removed — now uses real data from props
 
-export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId }: AccountContentProps) {
+export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId, isOrgOwner = false, orgRoles = [] }: AccountContentProps) {
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
 
   const tabs: { id: TabType; label: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "settings", label: "Settings" },
     { id: "team", label: "Team" },
+    ...(isOrgOwner ? [{ id: "roles" as TabType, label: "Roles" }] : []),
     { id: "organisations", label: "Organisations" },
   ]
 
@@ -114,9 +135,17 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
         <div className="animate-in fade-in duration-200">
           {activeTab === "profile" && <ProfileTab user={user} profileData={profileData} />}
           {activeTab === "settings" && <SettingsTab initialPreferences={profileData?.preferences} />}
-          {activeTab === "team" && <TeamTab initialMembers={teamMembers} organizationId={organizationId ?? null} />}
+          {activeTab === "team" && (
+            <TeamTab
+              initialMembers={teamMembers}
+              organizationId={organizationId ?? null}
+              orgRoles={orgRoles}
+            />
+          )}
+          {activeTab === "roles" && organizationId ? (
+            <RolesTab organizationId={organizationId} isOrgOwner={isOrgOwner} />
+          ) : null}
           {activeTab === "organisations" && <OrganisationsTab initialOrg={organization} />}
-          {/* Manage Roles tab removed */}
         </div>
       </div>
     </main>
@@ -451,6 +480,9 @@ type FullTeamMember = {
   email: string
   phone: string
   role: string
+  customRoleId?: string | null
+  roleTitle?: string
+  isClient?: boolean
   designation: string
   avatar: string
   status: string
@@ -474,7 +506,20 @@ function toFullMember(m: TeamMemberData): FullTeamMember {
   }
 }
 
-function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: TeamMemberData[]; organizationId: string | null }) {
+function TeamTab({
+  initialMembers = [],
+  organizationId,
+  orgRoles = [],
+}: {
+  initialMembers?: TeamMemberData[]
+  organizationId: string | null
+  orgRoles?: OrgRoleOption[]
+}) {
+  const { isOrgOwner } = usePermissions()
+  const canAddTeamMember = usePermission("add_team_member")
+  const canManageTeam = isOrgOwner || canAddTeamMember
+  const [liveOrgRoles, setLiveOrgRoles] = useState<OrgRoleOption[]>(orgRoles)
+  const [rolesLoading, setRolesLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("Active")
   const [groupFilter, setGroupFilter] = useState("All")
@@ -484,8 +529,34 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [performanceMember, setPerformanceMember] = useState<FullTeamMember | null>(null)
   const [editingMember, setEditingMember] = useState<FullTeamMember | null>(null)
+  const [teamActionError, setTeamActionError] = useState<string | null>(null)
+  const router = useRouter()
 
-  const roleOptions = ["Team admin", "Editor", "Viewer", "Member"]
+  const refreshOrgRoles = React.useCallback(async () => {
+    if (!organizationId) return
+    setRolesLoading(true)
+    const supabase = createClient()
+    const roles = await fetchOrganizationRoles(supabase, organizationId)
+    setLiveOrgRoles(roles.map((r) => ({ id: r.id, title: r.title })))
+    setRolesLoading(false)
+  }, [organizationId])
+
+  React.useEffect(() => {
+    setLiveOrgRoles(orgRoles)
+  }, [orgRoles])
+
+  React.useEffect(() => {
+    void refreshOrgRoles()
+  }, [refreshOrgRoles])
+
+  React.useEffect(() => {
+    if (showInviteModal || editingMember) {
+      void refreshOrgRoles()
+    }
+  }, [showInviteModal, editingMember, refreshOrgRoles])
+
+  const roleOptions = liveOrgRoles.map((r) => r.title)
+  const roleIdByTitle = new Map(liveOrgRoles.map((r) => [r.title, r.id]))
 
   const filteredMembers = members.filter((member) => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -517,58 +588,141 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
     }
   }
 
-  const updateMemberRole = async (id: string, newRole: string) => {
-    setMembers(members.map(m => m.id === id ? { ...m, role: newRole } : m))
+  const updateMemberRole = async (id: string, newRoleTitle: string) => {
+    if (!canManageTeam || !organizationId) return
+    const customRoleId = roleIdByTitle.get(newRoleTitle)
+    if (!customRoleId) {
+      setTeamActionError(
+        `Role "${newRoleTitle}" was not found. Refresh the page and try again.`
+      )
+      return
+    }
+
+    const previousMember = members.find((m) => m.id === id)
+    if (!previousMember) return
+
+    setTeamActionError(null)
+    setMembers(
+      members.map((m) =>
+        m.id === id ? { ...m, role: newRoleTitle, customRoleId, roleTitle: newRoleTitle } : m
+      )
+    )
+
     const supabase = createClient()
-    await supabase.from("organization_members").update({ role: newRole }).eq("id", id)
+    const { error } = await updateMemberCustomRole(
+      supabase,
+      organizationId,
+      id,
+      customRoleId
+    )
+
+    if (error) {
+      setMembers((current) =>
+        current.map((m) => (m.id === id ? previousMember : m))
+      )
+      setTeamActionError(error)
+      return
+    }
+
+    router.refresh()
+  }
+
+  const removeMembers = async (ids: string[]) => {
+    if (!canManageTeam || ids.length === 0) return
+
+    const previousMembers = members
+    setTeamActionError(null)
+    setMembers(members.filter((m) => !ids.includes(m.id)))
+    setSelectedMembers((current) => current.filter((id) => !ids.includes(id)))
+
+    const supabase = createClient()
+    const { error } = await removeOrganizationMembers(supabase, ids)
+
+    if (error) {
+      setMembers(previousMembers)
+      setTeamActionError(error)
+      return
+    }
+
+    router.refresh()
   }
 
   const deleteMember = async (id: string) => {
-    setMembers(members.filter(m => m.id !== id))
-    setSelectedMembers(selectedMembers.filter(m => m !== id))
-    const supabase = createClient()
-    await supabase.from("organization_members").delete().eq("id", id)
+    await removeMembers([id])
   }
 
   const bulkDeleteMembers = async (ids: string[]) => {
-    setMembers(members.filter(m => !ids.includes(m.id)))
-    setSelectedMembers([])
-    const supabase = createClient()
-    await supabase.from("organization_members").delete().in("id", ids)
+    await removeMembers(ids)
   }
 
   const updateMember = async (updatedMember: FullTeamMember) => {
-    setMembers(members.map(m => m.id === updatedMember.id ? updatedMember : m))
+    if (!canManageTeam || !organizationId) return
+
+    const previousMember = members.find((m) => m.id === updatedMember.id)
+    if (!previousMember) return
+
+    const customRoleId =
+      updatedMember.customRoleId ??
+      roleIdByTitle.get(updatedMember.roleTitle ?? updatedMember.role) ??
+      null
+
+    if (!updatedMember.isClient && !customRoleId) {
+      setTeamActionError("Select a valid role before saving.")
+      return
+    }
+
+    setTeamActionError(null)
+    setMembers(members.map((m) => (m.id === updatedMember.id ? updatedMember : m)))
+
     const supabase = createClient()
-    await supabase.from("organization_members").update({
+    const { error } = await updateMemberDetails(supabase, {
+      memberId: updatedMember.id,
       name: updatedMember.name,
       email: updatedMember.email,
       phone: updatedMember.phone,
-      role: updatedMember.role,
-    }).eq("id", updatedMember.id)
+      customRoleId: updatedMember.isClient ? null : customRoleId,
+    })
+
+    if (error) {
+      setMembers((current) =>
+        current.map((m) => (m.id === updatedMember.id ? previousMember : m))
+      )
+      setTeamActionError(error)
+      return
+    }
+
+    router.refresh()
   }
 
-  const handleInviteMember = async (data: { name: string; email: string; designation: string; role: string }) => {
+  const handleInviteMember = async (data: {
+    name: string
+    email: string
+    designation: string
+    customRoleId: string
+    roleTitle: string
+  }) => {
     if (!organizationId) return
     const supabase = createClient()
-    const { data: inserted, error } = await supabase.from("organization_members").insert({
-      organization_id: organizationId,
+    const { memberId, error } = await inviteInternalMember(supabase, {
+      organizationId,
       name: data.name,
       email: data.email,
-      phone: "",
-      role: data.role,
-    }).select().single()
-    if (error || !inserted) {
+      customRoleId: data.customRoleId,
+      designation: data.designation,
+    })
+    if (error || !memberId) {
       console.error("Failed to invite member:", error)
       return
     }
     const newMember = toFullMember({
-      id: inserted.id,
-      name: inserted.name || "",
-      email: inserted.email || "",
-      phone: inserted.phone || "",
-      role: inserted.role || "Member",
-      avatar: inserted.avatar_url || "",
+      id: memberId,
+      name: data.name,
+      email: data.email,
+      phone: "",
+      role: data.roleTitle,
+      avatar: "",
+      customRoleId: data.customRoleId,
+      roleTitle: data.roleTitle,
     })
     setMembers([...members, newMember])
     setShowInviteModal(false)
@@ -576,6 +730,11 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
 
   return (
     <div className="w-full">
+      {teamActionError ? (
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {teamActionError}
+        </div>
+      ) : null}
       {/* Filter Bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -605,7 +764,7 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
           />
         </div>
         <div className="flex items-center gap-3">
-          {selectedMembers.length > 0 && (
+          {canManageTeam && selectedMembers.length > 0 && (
             <button
               onClick={() => bulkDeleteMembers(selectedMembers)}
               className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors"
@@ -614,13 +773,16 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
               Delete ({selectedMembers.length})
             </button>
           )}
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Invite Member
-          </button>
+          {canAddTeamMember ? (
+            <button
+              onClick={() => setShowInviteModal(true)}
+              disabled={rolesLoading || liveOrgRoles.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Invite Member
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -629,12 +791,14 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 pr-4 w-8">
-                <Checkbox
-                  checked={selectedMembers.length === sortedMembers.length && sortedMembers.length > 0}
-                  onChange={toggleSelectAll}
-                />
-              </th>
+              {canManageTeam ? (
+                <th className="text-left py-3 pr-4 w-8">
+                  <Checkbox
+                    checked={selectedMembers.length === sortedMembers.length && sortedMembers.length > 0}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+              ) : null}
               <th className="text-left py-3 px-4">
                 <button
                   onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
@@ -653,12 +817,14 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
           <tbody>
             {sortedMembers.map((member) => (
               <tr key={member.id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                <td className="py-3 pr-4">
-                  <Checkbox
-                    checked={selectedMembers.includes(member.id)}
-                    onChange={() => toggleSelect(member.id)}
-                  />
-                </td>
+                {canManageTeam ? (
+                  <td className="py-3 pr-4">
+                    <Checkbox
+                      checked={selectedMembers.includes(member.id)}
+                      onChange={() => toggleSelect(member.id)}
+                    />
+                  </td>
+                ) : null}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-muted overflow-hidden">
@@ -668,11 +834,19 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  <Dropdown
-                    value={member.role}
-                    options={roleOptions}
-                    onChange={(newRole) => updateMemberRole(member.id, newRole)}
-                  />
+                  {member.isClient ? (
+                    <span className="text-sm text-muted-foreground">Client</span>
+                  ) : canManageTeam && roleOptions.length > 0 ? (
+                    <Dropdown
+                      value={member.roleTitle ?? member.role}
+                      options={roleOptions}
+                      onChange={(newRole) => updateMemberRole(member.id, newRole)}
+                    />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      {member.roleTitle ?? member.role}
+                    </span>
+                  )}
                 </td>
                 <td className="py-3 px-4 text-sm text-muted-foreground">{member.email}</td>
                 <td className="py-3 px-4">
@@ -698,20 +872,24 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
                     >
                       <BarChart3 className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => setEditingMember(member)}
-                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                      title="Edit Member"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteMember(member.id)}
-                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                      title="Delete Member"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canManageTeam ? (
+                      <>
+                        <button
+                          onClick={() => setEditingMember(member)}
+                          className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                          title="Edit Member"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteMember(member.id)}
+                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          title="Delete Member"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </td>
               </tr>
@@ -722,7 +900,12 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
 
       {/* Invite Member Modal */}
       {showInviteModal && (
-        <InviteMemberModal onClose={() => setShowInviteModal(false)} onInvite={handleInviteMember} />
+        <InviteMemberModal
+          orgRoles={liveOrgRoles}
+          rolesLoading={rolesLoading}
+          onClose={() => setShowInviteModal(false)}
+          onInvite={handleInviteMember}
+        />
       )}
 
       {/* Performance Modal */}
@@ -741,6 +924,7 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
       {editingMember && (
         <EditMemberModal
           member={editingMember}
+          orgRoles={liveOrgRoles}
           onClose={() => setEditingMember(null)}
           onSave={async (updatedMember) => {
             await updateMember(updatedMember)
@@ -755,10 +939,12 @@ function TeamTab({ initialMembers = [], organizationId }: { initialMembers?: Tea
 // Edit Member Modal
 function EditMemberModal({
   member,
+  orgRoles,
   onClose,
   onSave
 }: {
   member: FullTeamMember
+  orgRoles: OrgRoleOption[]
   onClose: () => void
   onSave: (member: FullTeamMember) => void | Promise<void>
 }) {
@@ -766,9 +952,13 @@ function EditMemberModal({
   const [email, setEmail] = useState(member.email)
   const [phone, setPhone] = useState(member.phone)
   const [designation, setDesignation] = useState(member.designation)
-  const [role, setRole] = useState(member.role)
+  const [customRoleId, setCustomRoleId] = useState(
+    member.customRoleId ?? orgRoles[0]?.id ?? ""
+  )
   const [organisations, setOrganisations] = useState(member.organisations.join(", "))
   const [isSaving, setIsSaving] = useState(false)
+
+  const selectedRole = orgRoles.find((r) => r.id === customRoleId)
 
   const handleSave = async () => {
     if (isSaving || !name.trim() || !email.trim()) return
@@ -780,7 +970,9 @@ function EditMemberModal({
         email,
         phone,
         designation,
-        role,
+        role: selectedRole?.title ?? member.roleTitle ?? member.role,
+        roleTitle: selectedRole?.title ?? member.roleTitle ?? member.role,
+        customRoleId: member.isClient ? null : customRoleId,
         organisations: organisations.split(",").map(i => i.trim()).filter(Boolean)
       })
     } finally {
@@ -845,14 +1037,27 @@ function EditMemberModal({
               className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
-            <Dropdown
-              value={role}
-              options={["Team admin", "Editor", "Viewer", "Member"]}
-              onChange={setRole}
-            />
-          </div>
+          {!member.isClient ? (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
+              <select
+                value={customRoleId}
+                onChange={(e) => setCustomRoleId(e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {orgRoles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
+              <p className="text-sm text-muted-foreground">Client</p>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Organisations</label>
             <input
@@ -896,18 +1101,52 @@ function EditMemberModal({
 }
 
 // Invite Member Modal
-function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvite: (data: { name: string; email: string; designation: string; role: string }) => void | Promise<void> }) {
+function InviteMemberModal({
+  orgRoles,
+  rolesLoading = false,
+  onClose,
+  onInvite,
+}: {
+  orgRoles: OrgRoleOption[]
+  rolesLoading?: boolean
+  onClose: () => void
+  onInvite: (data: {
+    name: string
+    email: string
+    designation: string
+    customRoleId: string
+    roleTitle: string
+  }) => void | Promise<void>
+}) {
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
   const [designation, setDesignation] = useState("")
-  const [role, setRole] = useState("Member")
+  const [customRoleId, setCustomRoleId] = useState(orgRoles[0]?.id ?? "")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  React.useEffect(() => {
+    if (orgRoles.length === 0) {
+      setCustomRoleId("")
+      return
+    }
+    setCustomRoleId((current) =>
+      orgRoles.some((r) => r.id === current) ? current : orgRoles[0].id
+    )
+  }, [orgRoles])
+
+  const selectedRole = orgRoles.find((r) => r.id === customRoleId)
+
   const handleSendInvite = async () => {
-    if (isSubmitting || !email.trim() || !name.trim()) return
+    if (isSubmitting || !email.trim() || !name.trim() || !customRoleId || !selectedRole) return
     setIsSubmitting(true)
     try {
-      await onInvite({ name, email, designation, role })
+      await onInvite({
+        name,
+        email,
+        designation,
+        customRoleId,
+        roleTitle: selectedRole.title,
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -962,12 +1201,32 @@ function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvit
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
-            <Dropdown
-              value={role}
-              options={["Team admin", "Editor", "Viewer", "Member"]}
-              onChange={setRole}
-            />
+            {rolesLoading ? (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading roles...
+              </div>
+            ) : orgRoles.length === 0 ? (
+              <p className="text-sm text-muted-foreground px-1">
+                No roles available. Create a role first under the Roles tab.
+              </p>
+            ) : (
+              <select
+                value={customRoleId}
+                onChange={(e) => setCustomRoleId(e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
+              >
+                {orgRoles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.title}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
+          <p className="text-xs text-muted-foreground">
+            No email is sent — the member must sign up with this exact email address.
+          </p>
         </div>
 
         {/* Footer */}
@@ -981,16 +1240,16 @@ function InviteMemberModal({ onClose, onInvite }: { onClose: () => void; onInvit
           </button>
           <button
             onClick={handleSendInvite}
-            disabled={!email.trim() || !name.trim() || isSubmitting}
+            disabled={!email.trim() || !name.trim() || !customRoleId || isSubmitting || rolesLoading}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Sending...
+                Adding member...
               </>
             ) : (
-              "Send Invite"
+              "Add Member"
             )}
           </button>
         </div>
@@ -1482,6 +1741,10 @@ function Dropdown({
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState(value)
   const dropdownRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    setSelected(value)
+  }, [value])
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

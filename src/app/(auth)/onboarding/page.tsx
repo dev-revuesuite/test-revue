@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
   // Detect role from organization_members (pre-linked via invitation)
   const { data: membership } = await supabase
     .from("organization_members")
-    .select("role, name")
+    .select("role, name, custom_role_id")
     .eq("user_id", user.id)
     .limit(1)
     .single()
@@ -39,6 +39,22 @@ export default async function OnboardingPage() {
     else if (membership.role === "client") detectedRole = "client"
     else detectedRole = "designer"
     if (membership.name && !userName) userName = membership.name
+  }
+
+  // Pre-invited internal member with assigned custom role
+  if (!detectedRole && user.email) {
+    const { data: pendingMember } = await supabase
+      .from("organization_members")
+      .select("role, name, custom_role_id")
+      .eq("email", user.email)
+      .is("user_id", null)
+      .limit(1)
+      .maybeSingle()
+
+    if (pendingMember?.custom_role_id) {
+      detectedRole = pendingMember.role === "client" ? "client" : "designer"
+      if (pendingMember.name && !userName) userName = pendingMember.name
+    }
   }
 
   // Check if user has an invitation pending
