@@ -464,6 +464,7 @@ export function CommentsPanel({
 
                       {/* Action Buttons */}
                       <div className="flex items-center gap-3 mt-2">
+                        {onAddReply && (
                         <button
                           onClick={(e) => { e.stopPropagation(); startReply(feedback.id); }}
                           className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -471,6 +472,7 @@ export function CommentsPanel({
                           <Reply className="w-3.5 h-3.5" />
                           Reply
                         </button>
+                        )}
 
                         {feedback.replies.length > 0 && (
                           <button
@@ -519,7 +521,7 @@ export function CommentsPanel({
                   )}
 
                   {/* Reply Input */}
-                  {(isReplying || isExpanded) && (
+                  {onAddReply && (isReplying || isExpanded) && (
                     <div className="mt-3 ml-12 animate-in fade-in slide-in-from-top-1 duration-200">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-7 w-7 shrink-0">

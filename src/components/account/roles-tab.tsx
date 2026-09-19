@@ -87,6 +87,7 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
 
     const { error } = await deleteOrganizationRole(
       supabase,
+      organizationId,
       deletingRole.id,
       needsReassign ? reassignRoleId : undefined
     )

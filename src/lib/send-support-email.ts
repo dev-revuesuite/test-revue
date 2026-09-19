@@ -28,7 +28,7 @@ interface SupportEmailInput {
   submittedAt: Date
 }
 
-function getInboxEmail(): string {
+export function getInboxEmail(): string {
   return process.env.SUPPORT_INBOX_EMAIL || SUPPORT_INBOX_EMAIL
 }
 
@@ -87,6 +87,7 @@ async function sendViaResend(payload: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
+      signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({
         from,
         to: [payload.to],

@@ -18,7 +18,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { submitSupportRequest } from "@/lib/actions/support-requests"
 import {
-  SUPPORT_INBOX_EMAIL,
   SUPPORT_REQUEST_FORMS,
   type SupportRequestType,
 } from "@/lib/support-request-config"
@@ -59,7 +58,7 @@ const CARDS: Array<{
 
 type Status = "idle" | "submitting" | "success"
 
-export function HelpDeskContent() {
+export function HelpDeskContent({ inboxEmail }: { inboxEmail: string }) {
   const pathname = usePathname()
   const [selectedType, setSelectedType] = React.useState<SupportRequestType | null>(null)
   const [values, setValues] = React.useState<Record<string, string>>({})
@@ -137,7 +136,7 @@ export function HelpDeskContent() {
     } catch {
       setStatus("idle")
       setError(
-        `Something went wrong while sending your request. Please try again, or email ${SUPPORT_INBOX_EMAIL} directly.`
+        `Something went wrong while sending your request. Please try again, or email ${inboxEmail} directly.`
       )
     }
   }
@@ -217,10 +216,10 @@ export function HelpDeskContent() {
                 <p className="text-sm text-muted-foreground mt-2">
                   Your request was sent to{" "}
                   <a
-                    href={`mailto:${SUPPORT_INBOX_EMAIL}`}
+                    href={`mailto:${inboxEmail}`}
                     className="font-medium text-[#5C6ECD] hover:underline"
                   >
-                    {SUPPORT_INBOX_EMAIL}
+                    {inboxEmail}
                   </a>
                   .
                 </p>
@@ -228,10 +227,10 @@ export function HelpDeskContent() {
                 <p className="text-sm text-muted-foreground mt-2">
                   Contact{" "}
                   <a
-                    href={`mailto:${SUPPORT_INBOX_EMAIL}`}
+                    href={`mailto:${inboxEmail}`}
                     className="font-medium text-[#5C6ECD] hover:underline"
                   >
-                    {SUPPORT_INBOX_EMAIL}
+                    {inboxEmail}
                   </a>{" "}
                   if you need a quick reply.
                 </p>
@@ -334,7 +333,7 @@ export function HelpDeskContent() {
                 )}
               </Button>
               <span className="text-xs text-muted-foreground">
-                Goes to {SUPPORT_INBOX_EMAIL}
+                Goes to {inboxEmail}
               </span>
             </div>
           </form>

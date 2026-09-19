@@ -85,15 +85,17 @@ export default async function StudioPage() {
     redirect("/client-portal")
   }
 
-  if (organization) {
-    const { permissions, isOrgOwner } = await getUserPermissions(
-      supabase,
-      user.id,
-      organization.id
-    )
-    if (!hasAnyPermission(permissions, isOrgOwner)) {
-      redirect("/account")
-    }
+  if (!organization) {
+    redirect("/account")
+  }
+
+  const { permissions, isOrgOwner } = await getUserPermissions(
+    supabase,
+    user.id,
+    organization.id
+  )
+  if (!hasAnyPermission(permissions, isOrgOwner)) {
+    redirect("/account")
   }
 
   const userData = {

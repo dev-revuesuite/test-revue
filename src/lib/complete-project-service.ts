@@ -5,7 +5,7 @@ import {
   isProjectReadyToComplete,
   type ProjectCompletionBlockers,
 } from "@/lib/project-completion"
-import { requirePermission } from "@/lib/require-permission"
+import { PermissionDeniedError, requirePermission } from "@/lib/require-permission"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 
 type ProjectRow = {
@@ -131,11 +131,14 @@ export async function completeProject(
   try {
     const ctx = await requirePermission(supabase, userId, "add_brief")
     organizationId = ctx.organizationId
-  } catch {
-    throw new CompleteProjectError(
-      "You do not have permission to mark a project as complete",
-      403
-    )
+  } catch (error) {
+    if (error instanceof PermissionDeniedError) {
+      throw new CompleteProjectError(
+        "You do not have permission to mark a project as complete",
+        403
+      )
+    }
+    throw error
   }
 
   const loaded = await loadProjectForCompletion(supabase, projectId)

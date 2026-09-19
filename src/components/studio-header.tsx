@@ -198,7 +198,9 @@ export function StudioHeader({
     const supabase = createClient()
     void fetchOrganizationRoles(supabase, organizationId).then((roles) => {
       setOrgRoles(roles.map((r) => ({ id: r.id, title: r.title })))
-      setNewMemberRoleId((current) => current || roles[0]?.id || "")
+      setNewMemberRoleId((current) =>
+        roles.some((r) => r.id === current) ? current : roles[0]?.id || ""
+      )
     })
   }, [addMemberModalOpen, organizationId])
 

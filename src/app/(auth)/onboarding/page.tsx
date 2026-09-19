@@ -41,33 +41,36 @@ export default async function OnboardingPage() {
     if (membership.name && !userName) userName = membership.name
   }
 
-  // Pre-invited internal member with assigned custom role
+  // Pre-invited internal member with assigned custom role.
+  // Do not pick an arbitrary row: only auto-detect when exactly one pending
+  // membership exists. Multiple orgs require the user to choose a path in
+  // OnboardingForm (role selection) instead of inheriting the wrong org.
   if (!detectedRole && user.email) {
-    const { data: pendingMember } = await supabase
+    const { data: pendingMembers } = await supabase
       .from("organization_members")
       .select("role, name, custom_role_id")
       .eq("email", user.email)
       .is("user_id", null)
-      .limit(1)
-      .maybeSingle()
 
-    if (pendingMember?.custom_role_id) {
-      detectedRole = pendingMember.role === "client" ? "client" : "designer"
-      if (pendingMember.name && !userName) userName = pendingMember.name
+    if (pendingMembers?.length === 1) {
+      const pendingMember = pendingMembers[0]
+      if (pendingMember.custom_role_id) {
+        detectedRole = pendingMember.role === "client" ? "client" : "designer"
+        if (pendingMember.name && !userName) userName = pendingMember.name
+      }
     }
   }
 
-  // Check if user has an invitation pending
+  // Invitation lookup — same uniqueness rule as pending memberships.
   if (!detectedRole && user.email) {
-    const { data: invitation } = await supabase
+    const { data: invitations } = await supabase
       .from("invitations")
       .select("role, name")
       .eq("email", user.email)
       .eq("status", "pending")
-      .limit(1)
-      .single()
 
-    if (invitation) {
+    if (invitations?.length === 1) {
+      const invitation = invitations[0]
       detectedRole = invitation.role as "designer" | "client"
       if (invitation.name && !userName) userName = invitation.name
     }

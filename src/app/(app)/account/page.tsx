@@ -96,7 +96,7 @@ export default async function AccountPage({
           .order("name"),
         getUserRole(supabase, user.id, activeOrg),
       ])
-    : [[], { data: [] }, { role: "admin" as const, organizationId: null, clientId: null }]
+    : [[], { data: [] }, { role: "designer" as const, organizationId: null, clientId: null }]
 
   const teamMembers =
     membersResult.data?.map((m) => {

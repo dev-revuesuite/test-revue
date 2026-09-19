@@ -41,6 +41,16 @@ export async function processCreativeUpload(
 
   options.onPhaseChange?.("uploading")
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user?.id) {
+    throw new CreativeFileUploadError("Please sign in and try again.")
+  }
+
+  await ensureProjectMemberAccess(supabase, projectId, user.id)
+
   const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-")
   const path = `${projectId}/${Date.now()}-${safeName}`
 
@@ -58,14 +68,6 @@ export async function processCreativeUpload(
 
   options.onPhaseChange?.("processing")
   options.onUploadProgress?.(92)
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (user?.id) {
-    await ensureProjectMemberAccess(supabase, projectId, user.id)
-  }
 
   const { data: inserted, error } = await supabase
     .from("creatives")

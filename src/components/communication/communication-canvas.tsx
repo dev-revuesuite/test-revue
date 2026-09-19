@@ -186,7 +186,9 @@ export function RevueCanvas({
   const canAddFeedback = isClientUser || canFeedbackUcc;
   const canRunAiAnalysis = !isClientUser && canQualityCheck;
   const canTeamApprove = !isClientUser && (isOrgOwner || canAddBrief);
-  const canShareCreative = canTeamApprove;
+  // Server-side share flow supports client actors (scoped to their own
+  // project access), so clients keep the share entry point.
+  const canShareCreative = isClientUser || canTeamApprove;
   const canUseSidebar = true; // everyone can view
 
   const [zoom, setZoom] = useState(100);
@@ -848,6 +850,7 @@ export function RevueCanvas({
 
   // Add reply to feedback
   const handleAddReply = (feedbackId: string, reply: ReplyItem) => {
+    if (!canAddFeedback) return;
     // Generate a real UUID so the optimistic id, DB id, and realtime payload id all match.
     // This makes dedupe robust (was previously keyed on feedback_id + content, which collides).
     const replyId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
@@ -1294,7 +1297,7 @@ export function RevueCanvas({
         markers={markers}
         highlightedMarker={highlightedFeedback}
         onMarkerClick={handleMarkerClick}
-        onAddReply={handleCanvasReply}
+        onAddReply={canAddFeedback ? handleCanvasReply : undefined}
         imageUrl={currentIteration?.imageUrl || ""}
         iterationId={activeIterationId}
         mediaType={currentIteration?.mediaType ?? "image"}
@@ -1389,7 +1392,7 @@ export function RevueCanvas({
       {showComments && !compareMode && !isFullscreen && (
         <CommentsPanel
           feedbacks={panelFeedbacks}
-          onAddReply={handleAddReply}
+          onAddReply={canAddFeedback ? handleAddReply : undefined}
           onFeedbackClick={handleFeedbackClick}
           openFeedbackId={openFeedbackId}
           viewMode={viewMode}

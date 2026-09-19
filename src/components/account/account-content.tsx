@@ -712,8 +712,10 @@ function TeamTab({
     })
     if (error || !memberId) {
       console.error("Failed to invite member:", error)
+      setTeamActionError(error || "Failed to invite member. Please try again.")
       return
     }
+    setTeamActionError(null)
     const newMember = toFullMember({
       id: memberId,
       name: data.name,

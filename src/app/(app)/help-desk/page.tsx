@@ -7,7 +7,7 @@ import { StudioHeader } from "@/components/studio-header"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { HelpDeskContent } from "@/components/help-desk/help-desk-content"
-import { SUPPORT_INBOX_EMAIL } from "@/lib/support-request-config"
+import { getInboxEmail } from "@/lib/send-support-email"
 import { MessageCircleQuestion, BookOpen, Mail, ExternalLink } from "lucide-react"
 
 export default async function HelpDeskPage() {
@@ -42,6 +42,7 @@ export default async function HelpDeskPage() {
   // Get active organization and all user orgs for the switcher
   const organization = await getActiveOrganization(supabase, user.id)
   const allOrganizations = await getUserOrganizations(supabase, user.id)
+  const inboxEmail = getInboxEmail()
 
   return (
     <OrgSwitchProvider currentOrgId={organization?.id}>
@@ -69,7 +70,7 @@ export default async function HelpDeskPage() {
               </p>
             </div>
 
-            <HelpDeskContent />
+            <HelpDeskContent inboxEmail={inboxEmail} />
 
             <div className="grid gap-6 mt-10">
               {/* Getting Started */}
@@ -150,11 +151,11 @@ export default async function HelpDeskPage() {
                       Send us an email and our team will get back to you.
                     </p>
                     <a
-                      href={`mailto:${SUPPORT_INBOX_EMAIL}`}
+                      href={`mailto:${inboxEmail}`}
                       className="inline-flex items-center gap-2 text-sm font-medium text-[#5C6ECD] hover:underline"
                     >
                       <Mail className="w-4 h-4" />
-                      {SUPPORT_INBOX_EMAIL}
+                      {inboxEmail}
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>

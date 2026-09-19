@@ -65,11 +65,19 @@ export async function submitSupportRequest(
 
   // Basic abuse guard: cap submissions per user per hour.
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from("support_requests")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
     .gte("created_at", oneHourAgo)
+
+  if (countError) {
+    console.error("[support-requests] Rate-limit check failed:", countError)
+    return {
+      success: false,
+      error: `Something went wrong while sending your request. Please try again, or email ${SUPPORT_INBOX_EMAIL} directly.`,
+    }
+  }
 
   if ((count ?? 0) >= MAX_REQUESTS_PER_HOUR) {
     return {

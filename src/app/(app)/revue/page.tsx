@@ -131,10 +131,9 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   // Grant project_members row so RLS allows reading iterations/feedback
   if (userRole !== "client") {
-    try {
-      await ensureProjectMemberAccess(supabase, projectId, user.id)
-    } catch (accessError) {
-      console.error("Failed to ensure project access:", accessError)
+    const granted = await ensureProjectMemberAccess(supabase, projectId, user.id)
+    if (!granted) {
+      redirect("/studio")
     }
   }
 

@@ -56,11 +56,15 @@ async function assertQualityCheckPermission(
   userId: string,
   iterationId: string
 ): Promise<void> {
-  const { data: iteration } = await supabase
+  const { data: iteration, error: iterationError } = await supabase
     .from("iterations")
     .select("creatives(projects(clients(organization_id)))")
     .eq("id", iterationId)
     .maybeSingle()
+
+  if (iterationError) {
+    throw new AiAnalysisAccessError("Failed to verify project access", 500)
+  }
 
   const creative = iteration?.creatives as unknown as
     | { projects: { clients: { organization_id: string } | null } | null }

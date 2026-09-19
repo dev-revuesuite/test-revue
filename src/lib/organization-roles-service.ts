@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { PermissionKey } from "@/lib/permissions"
+import { assertRoleBelongsToOrg } from "@/lib/team-member-service"
 
 export interface OrganizationRole {
   id: string
@@ -132,36 +133,42 @@ export async function updateOrganizationRole(
 
   if (error) return { error: error.message }
 
-  await supabase
-    .from("organization_role_permissions")
-    .delete()
-    .eq("role_id", input.roleId)
+  // Atomic delete+insert inside one DB transaction; a failed insert can no
+  // longer leave the role stripped of its previous permissions.
+  const { error: permError } = await supabase.rpc(
+    "replace_organization_role_permissions",
+    {
+      p_role_id: input.roleId,
+      p_permission_keys: input.permissionKeys,
+    }
+  )
 
-  if (input.permissionKeys.length > 0) {
-    const { error: permError } = await supabase
-      .from("organization_role_permissions")
-      .insert(
-        input.permissionKeys.map((key) => ({
-          role_id: input.roleId,
-          permission_key: key,
-        }))
-      )
-
-    if (permError) return { error: permError.message }
-  }
+  if (permError) return { error: permError.message }
 
   return { error: null }
 }
 
 export async function deleteOrganizationRole(
   supabase: SupabaseClient,
+  organizationId: string,
   roleId: string,
   reassignToRoleId?: string
 ): Promise<{ error: string | null }> {
   if (reassignToRoleId) {
+    const belongs = await assertRoleBelongsToOrg(
+      supabase,
+      organizationId,
+      reassignToRoleId
+    )
+
+    if (!belongs) {
+      return { error: "Reassignment role not found in this organization" }
+    }
+
     const { error: reassignError } = await supabase
       .from("organization_members")
       .update({ custom_role_id: reassignToRoleId })
+      .eq("organization_id", organizationId)
       .eq("custom_role_id", roleId)
 
     if (reassignError) return { error: reassignError.message }
