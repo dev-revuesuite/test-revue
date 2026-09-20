@@ -9,6 +9,7 @@ import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { requireInternalPageAccess } from "@/lib/internal-page-access"
 import { fetchZoneProjects } from "@/lib/fetch-zone-projects"
+import { getRequestTimeZone } from "@/lib/get-request-timezone"
 
 export default async function CreativeZonePage() {
   const supabase = await createClient()
@@ -27,7 +28,7 @@ export default async function CreativeZonePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name,avatar_url")
+    .select("full_name,avatar_url,preferences")
     .eq("id", user.id)
     .single()
 
@@ -84,7 +85,10 @@ export default async function CreativeZonePage() {
     clientIds,
     clientMap,
     clientLogoMap,
-    "creative"
+    "creative",
+    await getRequestTimeZone(
+      (profile?.preferences as Record<string, unknown> | null)?.timezone
+    )
   )
 
   return (

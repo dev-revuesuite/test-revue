@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useTimezone } from "@/contexts/timezone-context"
 import { mapMessageRow, sortMessages } from "@/lib/messages/utils"
 import type { MessageItem, MessageRow } from "@/types/messages"
 
@@ -50,6 +51,7 @@ export function useMessages(
   options: UseMessagesOptions = {}
 ): UseMessagesResult {
   const { previewLimit = 20, enabled = true, userId: userIdProp } = options
+  const { timeZone } = useTimezone()
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(
     userIdProp ?? null
   )
@@ -59,6 +61,7 @@ export function useMessages(
   const [fetchError, setFetchError] = useState<string | null>(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+  const fetchGenerationRef = useRef(0)
 
   const userId = userIdProp ?? resolvedUserId
 
@@ -70,7 +73,7 @@ export function useMessages(
 
   const upsertFromRow = useCallback(
     (row: MessageRow) => {
-      const item = mapMessageRow(row)
+      const item = mapMessageRow(row, timeZone)
       setMessages((prev) => {
         const idx = prev.findIndex((m) => m.id === item.id)
         const next =
@@ -80,7 +83,7 @@ export function useMessages(
         return sortMessages(next).slice(0, previewLimit)
       })
     },
-    [previewLimit]
+    [previewLimit, timeZone]
   )
 
   const fetchUnreadCount = useCallback(async (uid: string, orgId: string) => {
@@ -101,7 +104,10 @@ export function useMessages(
   }, [])
 
   const fetchMessages = useCallback(async () => {
+    const generation = ++fetchGenerationRef.current
+
     if (!enabled || !organizationId || !userId) {
+      if (generation !== fetchGenerationRef.current) return
       setMessages([])
       setUnreadCount(0)
       setFetchError(null)
@@ -124,6 +130,8 @@ export function useMessages(
       fetchUnreadCount(userId, organizationId),
     ])
 
+    if (generation !== fetchGenerationRef.current) return
+
     if (listResult.error) {
       logSupabaseError("Failed to fetch messages:", listResult.error)
       const err = listResult.error as { message?: string }
@@ -134,11 +142,11 @@ export function useMessages(
       setMessages([])
     } else {
       const rows = (listResult.data ?? []) as MessageRow[]
-      setMessages(sortMessages(rows.map(mapMessageRow)))
+      setMessages(sortMessages(rows.map((row) => mapMessageRow(row, timeZone))))
     }
 
     setLoading(false)
-  }, [enabled, organizationId, userId, previewLimit, fetchUnreadCount])
+  }, [enabled, organizationId, userId, previewLimit, fetchUnreadCount, timeZone])
 
   useEffect(() => {
     if (userIdProp) return

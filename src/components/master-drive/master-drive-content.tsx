@@ -28,6 +28,8 @@ import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 import { useDownloadManifest } from "@/hooks/use-download-manifest"
 import { DownloadAllButton } from "@/components/master-drive/download-all-button"
 import { formatBytes } from "@/lib/download-utils"
+import { useTimezone } from "@/contexts/timezone-context"
+import { formatDisplayDate } from "@/lib/timezone-preference"
 import {
   CREATIVE_PIPELINE_STATUS_LABELS,
   normalizeCreativePipelineStatus,
@@ -748,6 +750,7 @@ function CreativeRow({
   isOpening?: boolean
   isBlocked?: boolean
 }) {
+  const { timeZone } = useTimezone()
   const creativeType = toCreativeType(item.creativeType)
   const TypeIcon = creativeTypeIcons[creativeType]
   const pipelineStatus = normalizeCreativePipelineStatus(item.status)
@@ -799,13 +802,7 @@ function CreativeRow({
       </span>
 
       <span className="w-32 text-right text-xs text-muted-foreground">
-        {item.createdAt
-          ? new Date(item.createdAt).toLocaleDateString("en-US", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })
-          : "—"}
+        {formatDisplayDate(item.createdAt, timeZone)}
       </span>
     </div>
   )
@@ -825,6 +822,7 @@ function CreativeCard({
   isOpening?: boolean
   isBlocked?: boolean
 }) {
+  const { timeZone } = useTimezone()
   const pipelineStatus = normalizeCreativePipelineStatus(item.status)
   const statusLabel = CREATIVE_PIPELINE_STATUS_LABELS[pipelineStatus]
   const statusDot = statusColors[pipelineStatus]
@@ -901,11 +899,7 @@ function CreativeCard({
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
             <Calendar className="w-3 h-3" />
             <span>
-              {new Date(item.createdAt).toLocaleDateString("en-US", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
+              {formatDisplayDate(item.createdAt, timeZone)}
             </span>
           </div>
         )}

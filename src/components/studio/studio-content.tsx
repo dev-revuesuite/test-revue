@@ -3,11 +3,12 @@
 import { publicPath } from "@/lib/base-path"
 
 import { useEffect, useState } from "react"
-import { format } from "date-fns"
 import { Users, FolderOpen, MessageSquare, AlertCircle, RefreshCw, ArrowRight, Plus, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useOrgSwitch } from "@/contexts/org-switch-context"
 import { usePermission } from "@/contexts/permission-context"
+import { useTimezone } from "@/contexts/timezone-context"
+import { formatDisplayDate, greetingInTimeZone } from "@/lib/timezone-preference"
 import { OrgSwitchMainSkeleton } from "@/components/studio/studio-loading-skeletons"
 import { ClientCard } from "./client-card"
 import type { StudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
@@ -71,20 +72,8 @@ const getStats = (clientsData: StudioClient[], dashboardStats: StudioDashboardSt
   ]
 }
 
-function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return "Good Morning"
-  if (hour < 17) return "Good Afternoon"
-  return "Good Evening"
-}
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "—"
-  try {
-    return format(new Date(value), "d MMM")
-  } catch {
-    return "—"
-  }
+function getGreeting(timeZone: string) {
+  return greetingInTimeZone(timeZone)
 }
 
 export function StudioContent({
@@ -98,6 +87,7 @@ export function StudioContent({
 }: StudioContentProps) {
   const { isOrgSwitchLoading } = useOrgSwitch()
   const canAddClient = usePermission("add_client")
+  const { timeZone } = useTimezone()
   const [welcomeDismissed, setWelcomeDismissed] = useState(false)
   const showWelcome =
     clients.length === 0 && canAddClient && !welcomeDismissed
@@ -119,7 +109,7 @@ export function StudioContent({
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold mb-1 text-foreground">
-              {getGreeting()}, {user.name}
+              {getGreeting(timeZone)}, {user.name}
             </h1>
             <p className="text-foreground/60">
               Here is what&apos;s happening with your clients today
@@ -166,9 +156,18 @@ export function StudioContent({
                 <ClientCard
                   client={{
                     ...client,
-                    createdOn: formatDate(client.createdAt),
-                    interactionDate: formatDate(client.interactionDate),
-                    feedbackDate: formatDate(client.feedbackDate),
+                    createdOn: formatDisplayDate(client.createdAt, timeZone, {
+                      day: "numeric",
+                      month: "short",
+                    }),
+                    interactionDate: formatDisplayDate(client.interactionDate, timeZone, {
+                      day: "numeric",
+                      month: "short",
+                    }),
+                    feedbackDate: formatDisplayDate(client.feedbackDate, timeZone, {
+                      day: "numeric",
+                      month: "short",
+                    }),
                   }}
                 />
               </div>

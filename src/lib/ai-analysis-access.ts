@@ -27,30 +27,6 @@ export interface AiAnalysisAccessContext {
   iteration: IterationForAnalysis
 }
 
-async function assertTeamMemberForIteration(
-  supabase: SupabaseClient,
-  iterationId: string,
-  action: "run" | "manage"
-): Promise<void> {
-  const { data: isMember, error } = await supabase.rpc(
-    "user_is_team_member_for_iteration",
-    { p_iteration_id: iterationId }
-  )
-
-  if (error) {
-    throw new AiAnalysisAccessError("Failed to verify project access", 500)
-  }
-
-  if (!isMember) {
-    throw new AiAnalysisAccessError(
-      action === "run"
-        ? "You do not have permission to run AI analysis"
-        : "You do not have permission to manage AI suggestions",
-      403
-    )
-  }
-}
-
 async function assertQualityCheckPermission(
   supabase: SupabaseClient,
   userId: string,
@@ -107,7 +83,6 @@ export async function assertCanRunAiAnalysis(
   }
 
   await assertQualityCheckPermission(supabase, userId, iterationId)
-  await assertTeamMemberForIteration(supabase, iterationId, "run")
 
   if (!iteration.image_url) {
     throw new AiAnalysisAccessError("Iteration has no creative file", 400)
@@ -144,11 +119,6 @@ export async function assertCanManageAiSuggestion(
   }
 
   await assertQualityCheckPermission(supabase, userId, suggestion.iteration_id)
-  await assertTeamMemberForIteration(
-    supabase,
-    suggestion.iteration_id,
-    "manage"
-  )
 
   return {
     suggestionId: suggestion.id,

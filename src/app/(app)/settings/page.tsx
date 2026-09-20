@@ -7,6 +7,8 @@ import { StudioHeader } from "@/components/studio-header"
 import { AccountContent } from "@/components/account/account-content"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
 import { getUserRole } from "@/lib/get-user-role"
+import { ensureOrganizationOwnerMember } from "@/lib/ensure-organization-owner-member"
+import { isOrgOwner as checkIsOrgOwner } from "@/lib/is-org-owner"
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -51,7 +53,7 @@ export default async function SettingsPage() {
   const { data: organization } = orgId
     ? await supabase
         .from("organizations")
-        .select("id,name,logo_url,email,phone,website,industry,size,country,state")
+        .select("id,name,logo_url,email,phone,website,industry,size,country,state,created_by")
         .eq("id", orgId)
         .single()
     : { data: null }
@@ -71,23 +73,69 @@ export default async function SettingsPage() {
       }
     : null
 
+  const isOrgOwner = organization?.created_by
+    ? await checkIsOrgOwner(supabase, user.id, organization.id)
+    : false
+
+  if (organization?.created_by === user.id) {
+    await ensureOrganizationOwnerMember(supabase, {
+      organizationId: organization.id,
+      ownerUserId: user.id,
+      name: userData.name,
+      email: user.email || "",
+      avatar: userData.avatar,
+      phone: profileData.phone,
+    })
+  }
+
   const { data: membersRaw } = organization
     ? await supabase
         .from("organization_members")
-        .select("id,name,email,phone,avatar_url,role")
+        .select("id,user_id,name,email,phone,avatar_url,role,custom_role_id,organization_roles:custom_role_id(title)")
         .eq("organization_id", organization.id)
+        .neq("role", "client")
         .order("name")
     : { data: [] }
 
   const teamMembers =
-    membersRaw?.map((m) => ({
-      id: m.id,
-      name: m.name || "",
-      email: m.email || "",
-      phone: m.phone || "",
-      role: m.role || "Member",
-      avatar: m.avatar_url || "",
-    })) ?? []
+    membersRaw?.map((m) => {
+      const roleJoin = m.organization_roles as
+        | { title: string }
+        | { title: string }[]
+        | null
+      const roleTitle = Array.isArray(roleJoin)
+        ? roleJoin[0]?.title
+        : roleJoin?.title
+
+      return {
+        id: m.id,
+        userId: m.user_id ?? null,
+        name: m.name || "",
+        email: m.email || "",
+        phone: m.phone || "",
+        role: m.role || "member",
+        avatar: m.avatar_url || "",
+        customRoleId: m.custom_role_id ?? null,
+        roleTitle: roleTitle || (m.role === "owner" ? "Owner" : "Unassigned"),
+      }
+    }) ?? []
+
+  if (
+    organization?.created_by === user.id &&
+    !teamMembers.some((member) => member.userId === user.id)
+  ) {
+    teamMembers.unshift({
+      id: `owner:${user.id}`,
+      userId: user.id,
+      name: userData.name,
+      email: user.email || "",
+      phone: profileData.phone,
+      role: "owner",
+      avatar: userData.avatar,
+      customRoleId: null,
+      roleTitle: "Owner",
+    })
+  }
 
   return (
     <OrgSwitchProvider currentOrgId={organization?.id}>
@@ -112,6 +160,8 @@ export default async function SettingsPage() {
               teamMembers={teamMembers}
               profileData={profileData}
               organizationId={organization?.id ?? null}
+              isOrgOwner={isOrgOwner}
+              currentUserId={user.id}
             />
           </OrgSwitchAwareMain>
         </div>

@@ -2,6 +2,10 @@
 
 import { authRedirectUrl, withBasePath } from "@/lib/base-path"
 import { applyThemePreference } from "@/lib/theme-preference"
+import {
+  persistResolvedTimeZone,
+  resolveTimeZone,
+} from "@/lib/timezone-preference"
 
 import { useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
@@ -92,9 +96,13 @@ export function LoginForm({
     }
 
     const savedTheme = (profile.preferences as { theme?: string })?.theme
-    if (savedTheme === "dark" || savedTheme === "light") {
+    if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "system") {
       applyThemePreference(savedTheme)
     }
+
+    persistResolvedTimeZone(
+      resolveTimeZone((profile.preferences as { timezone?: string })?.timezone)
+    )
 
     const { data: membership } = await supabase
       .from("organization_members")

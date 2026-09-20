@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { normalizeProjectBriefStatus } from "@/lib/creative-pipeline-status"
+import { daysUntilDate } from "@/lib/timezone-preference"
 import type { ZoneProject } from "@/components/zone/zone-content"
 
 type ProjectRow = {
@@ -23,7 +24,8 @@ export async function fetchZoneProjects(
   clientIds: string[],
   clientMap: Record<string, string>,
   clientLogoMap: Record<string, string | null | undefined>,
-  workmode: "creative" | "productive"
+  workmode: "creative" | "productive",
+  timeZone = "UTC"
 ): Promise<ZoneProject[]> {
   if (clientIds.length === 0) {
     return []
@@ -85,17 +87,7 @@ export async function fetchZoneProjects(
 
   return projectRows.map((project) => {
     const creativeStatuses = creativesByProject.get(project.id) ?? []
-    const endDate = project.end_date
-      ? new Date(project.end_date + "T00:00:00")
-      : null
-    const daysLeft = endDate
-      ? Math.max(
-          0,
-          Math.ceil(
-            (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-          )
-        )
-      : 0
+    const daysLeft = daysUntilDate(project.end_date, timeZone, today)
 
     return {
       id: project.id,

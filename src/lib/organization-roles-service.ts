@@ -1,7 +1,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { PermissionKey } from "@/lib/permissions"
-import { assertRoleBelongsToOrg } from "@/lib/team-member-service"
+
+function formatRoleError(message: string | null | undefined, fallback: string) {
+  const text = (message ?? "").toLowerCase()
+  if (
+    text.includes("duplicate") ||
+    text.includes("unique") ||
+    text.includes("organization_roles_organization_id_title")
+  ) {
+    return "A role with this title already exists."
+  }
+  if (
+    text.includes("foreign key") ||
+    text.includes("restrict") ||
+    text.includes("custom_role_id")
+  ) {
+    return "This role is still assigned to members. Reassign them on the Team tab first."
+  }
+  const trimmed = (message ?? "").trim()
+  return trimmed || fallback
+}
 
 export interface OrganizationRole {
   id: string
@@ -84,7 +103,10 @@ export async function createOrganizationRole(
     .single()
 
   if (error || !role) {
-    return { role: null, error: error?.message ?? "Failed to create role" }
+    return {
+      role: null,
+      error: formatRoleError(error?.message, "Failed to create role"),
+    }
   }
 
   if (input.permissionKeys.length > 0) {
@@ -99,7 +121,10 @@ export async function createOrganizationRole(
 
     if (permError) {
       await supabase.from("organization_roles").delete().eq("id", role.id)
-      return { role: null, error: permError.message }
+      return {
+        role: null,
+        error: formatRoleError(permError.message, "Failed to save role permissions"),
+      }
     }
   }
 
@@ -131,7 +156,7 @@ export async function updateOrganizationRole(
     })
     .eq("id", input.roleId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: formatRoleError(error.message, "Failed to update role") }
 
   // Atomic delete+insert inside one DB transaction; a failed insert can no
   // longer leave the role stripped of its previous permissions.
@@ -143,7 +168,9 @@ export async function updateOrganizationRole(
     }
   )
 
-  if (permError) return { error: permError.message }
+  if (permError) {
+    return { error: formatRoleError(permError.message, "Failed to update role permissions") }
+  }
 
   return { error: null }
 }
@@ -151,27 +178,26 @@ export async function updateOrganizationRole(
 export async function deleteOrganizationRole(
   supabase: SupabaseClient,
   organizationId: string,
-  roleId: string,
-  reassignToRoleId?: string
+  roleId: string
 ): Promise<{ error: string | null }> {
-  if (reassignToRoleId) {
-    const belongs = await assertRoleBelongsToOrg(
-      supabase,
-      organizationId,
-      reassignToRoleId
-    )
+  const { count, error: countError } = await supabase
+    .from("organization_members")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("custom_role_id", roleId)
 
-    if (!belongs) {
-      return { error: "Reassignment role not found in this organization" }
+  if (countError) {
+    return { error: formatRoleError(countError.message, "Could not delete this role.") }
+  }
+
+  const assignedCount = count ?? 0
+  if (assignedCount > 0) {
+    return {
+      error:
+        assignedCount === 1
+          ? "This role is still assigned to 1 member. Reassign them on the Team tab first."
+          : `This role is still assigned to ${assignedCount} members. Reassign them on the Team tab first.`,
     }
-
-    const { error: reassignError } = await supabase
-      .from("organization_members")
-      .update({ custom_role_id: reassignToRoleId })
-      .eq("organization_id", organizationId)
-      .eq("custom_role_id", roleId)
-
-    if (reassignError) return { error: reassignError.message }
   }
 
   const { error } = await supabase
@@ -179,7 +205,11 @@ export async function deleteOrganizationRole(
     .delete()
     .eq("id", roleId)
 
-  return { error: error?.message ?? null }
+  if (error) {
+    return { error: formatRoleError(error.message, "Could not delete this role.") }
+  }
+
+  return { error: null }
 }
 
 export async function seedDefaultFullAccessRole(

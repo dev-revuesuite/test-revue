@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { format } from "date-fns"
 import {
   Search,
   Palette,
@@ -21,6 +20,11 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useTimezone } from "@/contexts/timezone-context"
+import {
+  formatDateRangeInZone,
+  formatDisplayDate,
+} from "@/lib/timezone-preference"
 import {
   CREATIVE_PIPELINE_STATUS_LABELS,
   getZoneStatusBucket,
@@ -182,6 +186,7 @@ function ListSkeleton() {
 
 export function ZoneContent({ zone, projects }: ZoneContentProps) {
   const router = useRouter()
+  const { timeZone } = useTimezone()
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [selectedProject, setSelectedProject] = useState<ZoneProject | null>(null)
@@ -255,25 +260,11 @@ export function ZoneContent({ zone, projects }: ZoneContentProps) {
           ).length,
   }))
 
-  const formatDate = (value?: string | null) => {
-    if (!value) return "—"
-    try {
-      return format(new Date(value), "d MMM yyyy")
-    } catch {
-      return "—"
-    }
-  }
+  const formatDate = (value?: string | null) =>
+    formatDisplayDate(value, timeZone)
 
-  const formatDateRange = (start?: string | null, end?: string | null) => {
-    try {
-      const s = start ? format(new Date(start), "MMM d") : null
-      const e = end ? format(new Date(end), "MMM d") : null
-      if (s && e) return `${s} - ${e}`
-      if (s) return `From ${s}`
-      if (e) return `Until ${e}`
-    } catch { /* ignore */ }
-    return "No dates set"
-  }
+  const formatDateRange = (start?: string | null, end?: string | null) =>
+    formatDateRangeInZone(start, end, timeZone)
 
   const totalRefs = (p: ZoneProject) => (p.references?.length || 0) + (p.externalLinks?.length || 0)
 

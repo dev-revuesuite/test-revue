@@ -15,12 +15,15 @@ export async function assertRoleBelongsToOrg(
   return !error && !!data
 }
 
+function escapeIlike(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
+}
+
 export interface InviteInternalMemberInput {
   organizationId: string
   name: string
   email: string
   customRoleId: string
-  designation?: string
 }
 
 export async function inviteInternalMember(
@@ -29,6 +32,11 @@ export async function inviteInternalMember(
 ): Promise<{ memberId: string | null; error: string | null }> {
   if (!input.customRoleId) {
     return { memberId: null, error: "A role must be selected" }
+  }
+
+  const email = input.email.trim()
+  if (!email) {
+    return { memberId: null, error: "Email is required" }
   }
 
   const roleValid = await assertRoleBelongsToOrg(
@@ -40,12 +48,23 @@ export async function inviteInternalMember(
     return { memberId: null, error: "Selected role is not valid for this organization" }
   }
 
+  const { data: existing } = await supabase
+    .from("organization_members")
+    .select("id")
+    .eq("organization_id", input.organizationId)
+    .ilike("email", escapeIlike(email))
+    .limit(1)
+
+  if (existing && existing.length > 0) {
+    return { memberId: null, error: "A member with this email already exists." }
+  }
+
   const { data, error } = await supabase
     .from("organization_members")
     .insert({
       organization_id: input.organizationId,
       name: input.name.trim(),
-      email: input.email.trim(),
+      email,
       phone: "",
       role: "member",
       custom_role_id: input.customRoleId,

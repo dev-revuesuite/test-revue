@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Pencil, Plus, Shield, Trash2 } from "lucide-react"
+import { Loader2, Pencil, Plus, Shield, Trash2, X } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -31,7 +31,7 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
   const [deletingRole, setDeletingRole] = React.useState<OrganizationRole | null>(
     null
   )
-  const [reassignRoleId, setReassignRoleId] = React.useState("")
+  const [isDeleting, setIsDeleting] = React.useState(false)
   const [actionError, setActionError] = React.useState<string | null>(null)
 
   const loadRoles = React.useCallback(async () => {
@@ -76,30 +76,34 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
   }
 
   const handleDelete = async () => {
-    if (!deletingRole) return
-    setActionError(null)
-    const supabase = createClient()
-    const needsReassign = (deletingRole.member_count ?? 0) > 0
-    if (needsReassign && !reassignRoleId) {
-      setActionError("Select a role to reassign members before deleting")
-      return
-    }
+    if (!deletingRole || isDeleting) return
+    if ((deletingRole.member_count ?? 0) > 0) return
 
-    const { error } = await deleteOrganizationRole(
-      supabase,
-      organizationId,
-      deletingRole.id,
-      needsReassign ? reassignRoleId : undefined
-    )
-    if (error) {
-      setActionError(error)
-      return
+    setIsDeleting(true)
+    setActionError(null)
+    try {
+      const supabase = createClient()
+      const { error } = await deleteOrganizationRole(
+        supabase,
+        organizationId,
+        deletingRole.id
+      )
+
+      if (error) {
+        setActionError(error)
+        return
+      }
+
+      setDeletingRole(null)
+      await loadRoles()
+      router.refresh()
+    } finally {
+      setIsDeleting(false)
     }
-    setDeletingRole(null)
-    setReassignRoleId("")
-    await loadRoles()
-    router.refresh()
   }
+
+  const assignedCount = deletingRole?.member_count ?? 0
+  const isAssignedWarning = Boolean(deletingRole && assignedCount > 0)
 
   if (loading) {
     return (
@@ -111,7 +115,7 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Roles</h2>
@@ -122,7 +126,7 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
         {isOrgOwner ? (
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add New Role
@@ -134,7 +138,10 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
         <div className="border border-dashed border-border rounded-xl p-10 text-center">
           <Shield className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">
-            No roles yet. {isOrgOwner ? "Create your first role to get started." : "Ask the organization owner to create roles."}
+            No roles yet.{" "}
+            {isOrgOwner
+              ? "Create your first role to get started."
+              : "Ask the organization owner to create roles."}
           </p>
         </div>
       ) : (
@@ -160,24 +167,25 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
                   </p>
                 </div>
                 {isOrgOwner ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => setEditingRole(role)}
-                      className="p-2 hover:bg-muted rounded-lg transition-colors"
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                      title="Edit Role"
                       aria-label={`Edit ${role.title}`}
                     >
-                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                      <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => {
                         setDeletingRole(role)
-                        setReassignRoleId("")
                         setActionError(null)
                       }}
-                      className="p-2 hover:bg-muted rounded-lg transition-colors"
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete Role"
                       aria-label={`Delete ${role.title}`}
                     >
-                      <Trash2 className="w-4 h-4 text-muted-foreground" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ) : null}
@@ -208,48 +216,83 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
         />
       ) : null}
 
-      {deletingRole ? (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              Delete role?
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {deletingRole.member_count
-                ? `"${deletingRole.title}" is assigned to ${deletingRole.member_count} member(s). Reassign them first.`
-                : `Delete "${deletingRole.title}" permanently?`}
-            </p>
-            {deletingRole.member_count ? (
-              <select
-                value={reassignRoleId}
-                onChange={(e) => setReassignRoleId(e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm mb-4"
-              >
-                <option value="">Select replacement role</option>
-                {roles
-                  .filter((r) => r.id !== deletingRole.id)
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.title}
-                    </option>
-                  ))}
-              </select>
-            ) : null}
-            {actionError ? (
-              <p className="text-sm text-destructive mb-4">{actionError}</p>
-            ) : null}
-            <div className="flex justify-end gap-3">
+      {deletingRole && isAssignedWarning ? (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">
+                Role still assigned
+              </h2>
               <button
                 onClick={() => setDeletingRole(null)}
-                className="px-4 py-2 text-sm hover:bg-muted rounded-lg"
+                className="p-1 hover:bg-muted rounded transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-muted-foreground">
+                {assignedCount === 1
+                  ? `“${deletingRole.title}” is still assigned to 1 member. Reassign them on the Team tab first.`
+                  : `“${deletingRole.title}” is still assigned to ${assignedCount} members. Reassign them on the Team tab first.`}
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+              <button
+                onClick={() => setDeletingRole(null)}
+                className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deletingRole && !isAssignedWarning ? (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Delete role</h2>
+              <button
+                onClick={() => {
+                  if (!isDeleting) setDeletingRole(null)
+                }}
+                disabled={isDeleting}
+                className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-muted-foreground">
+                Delete “{deletingRole.title}” permanently? This cannot be undone.
+              </p>
+              {actionError ? (
+                <p className="text-sm text-destructive mt-3">{actionError}</p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+              <button
+                onClick={() => setDeletingRole(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={() => void handleDelete()}
-                className="px-4 py-2 text-sm bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90"
+                disabled={isDeleting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </button>
             </div>
           </div>

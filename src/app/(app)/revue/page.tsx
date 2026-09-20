@@ -11,6 +11,8 @@ import {
 } from "@/lib/map-ai-suggestion-rows"
 import { ensureInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
 import { ensureProjectMemberAccess } from "@/lib/ensure-project-member-access"
+import { getRequestTimeZone } from "@/lib/get-request-timezone"
+import { formatRelativeTimeInZone } from "@/lib/timezone-preference"
 
 interface RevuePageProps {
   searchParams: Promise<{
@@ -210,7 +212,7 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
 
   const { data: profilesRaw } = await supabase
     .from("profiles")
-    .select("id, full_name, avatar_url")
+    .select("id, full_name, avatar_url, preferences")
     .in("id", Array.from(allUserIds))
 
   const profileMap: Record<string, { name: string; avatar?: string }> = {}
@@ -270,6 +272,10 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     }
   }
 
+  const currentUserPrefs = profilesRaw?.find((p) => p.id === user.id)
+    ?.preferences as Record<string, unknown> | null
+  const timeZone = await getRequestTimeZone(currentUserPrefs?.timezone)
+
   const getUserDisplay = (userId: string) => {
     const profile = profileMap[userId]
     return {
@@ -279,20 +285,8 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     }
   }
 
-  // Format relative time
-  const formatRelativeTime = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    if (diffMins < 1) return "Just now"
-    if (diffMins < 60) return `${diffMins} min ago`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
-    const diffDays = Math.floor(diffHours / 24)
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-  }
+  const formatRelativeTime = (dateStr: string) =>
+    formatRelativeTimeInZone(dateStr, timeZone)
 
   // Build iterations data for the component
   const iterations = (iterationsRaw || []).map((iter) => {

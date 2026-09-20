@@ -8,6 +8,8 @@ import { normalizeExternalUrl } from "@/lib/external-link"
 import { normalizeCreativePipelineStatus, normalizeProjectBriefStatus } from "@/lib/creative-pipeline-status"
 import type { BrandColor } from "@/components/shared/brand-color-swatch"
 import { brandImageUrlsToEntries } from "@/lib/upload-client-brand-images"
+import { getRequestTimeZone } from "@/lib/get-request-timezone"
+import { daysUntilDate, formatDisplayDate } from "@/lib/timezone-preference"
 
 export const dynamic = "force-dynamic"
 
@@ -35,7 +37,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   const [profileResult, userRoleResult, organization, allOrganizations] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name,avatar_url")
+      .select("full_name,avatar_url,preferences")
       .eq("id", user.id)
       .single(),
     getUserRole(supabase, user.id),
@@ -243,7 +245,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
 
   const fontsRaw = (client.fonts as { label: string; font_name: string; font_url: string | null }[]) || []
   const colorsRaw = (client.colors as { hex: string; font_label: string | null; name: string | null }[]) || []
-  const today = new Date()
+  const timeZone = await getRequestTimeZone(
+    (profile?.preferences as Record<string, unknown> | null)?.timezone
+  )
 
   const clientData = {
     id: client.id,
@@ -259,15 +263,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     fonts: fontsRaw.map((f) => ({ label: f.label, fontName: f.font_name, fontUrl: f.font_url })),
     brandImages: ((client.brand_image_urls as string[]) || []),
     projects: (projects || []).map((p) => {
-      const endDate = p.end_date ? new Date(p.end_date + "T00:00:00") : null
-      const daysLeft = endDate
-        ? Math.max(
-          0,
-          Math.ceil(
-            (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-          )
-        )
-        : 0
+      const daysLeft = daysUntilDate(p.end_date, timeZone)
       const createdDate = p.created_at ? new Date(p.created_at) : new Date()
 
       return {
@@ -276,12 +272,12 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
         type: p.project_type || "Other",
         description: p.description || "",
         clientName: client.name,
-        createdOn: createdDate.toLocaleDateString("en-US", {
+        createdOn: formatDisplayDate(createdDate, timeZone, {
           day: "numeric",
           month: "short",
         }),
-        deadline: endDate
-          ? endDate.toLocaleDateString("en-US", {
+        deadline: p.end_date
+          ? formatDisplayDate(p.end_date, timeZone, {
             day: "2-digit",
             month: "short",
             year: "numeric",
@@ -363,7 +359,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
             mediaType,
             pageCount: meta?.pageCount ?? null,
             updatedAt: c.updated_at
-              ? new Date(c.updated_at).toLocaleDateString("en-US", { day: "numeric", month: "short" })
+              ? formatDisplayDate(c.updated_at, timeZone, { day: "numeric", month: "short" })
               : "Recently",
             feedbackCount: c.feedback_count || 0,
             iteration: c.iteration || 1,

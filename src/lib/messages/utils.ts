@@ -1,25 +1,9 @@
 import type { MessageItem, MessageRow } from "@/types/messages"
 
-export function formatMessageTime(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
+import { formatRelativeTimeInZone } from "@/lib/timezone-preference"
 
-  if (diffMins < 1) return "Just now"
-  if (diffMins < 60) return `${diffMins} min ago`
-
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
-
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
+export function formatMessageTime(dateStr: string, timeZone?: string): string {
+  return formatRelativeTimeInZone(dateStr, timeZone ?? "UTC")
 }
 
 function getMetadataString(
@@ -49,7 +33,7 @@ export function getMessageDisplayTitle(row: MessageRow): string {
   return row.title
 }
 
-export function mapMessageRow(row: MessageRow): MessageItem {
+export function mapMessageRow(row: MessageRow, timeZone?: string): MessageItem {
   const timestamp = row.updated_at || row.created_at
   const metadata = row.metadata ?? {}
 
@@ -57,7 +41,7 @@ export function mapMessageRow(row: MessageRow): MessageItem {
     id: row.id,
     title: getMessageDisplayTitle(row),
     description: row.body?.trim() || row.title,
-    time: formatMessageTime(timestamp),
+    time: formatMessageTime(timestamp, timeZone),
     read: row.read_at !== null,
     link: row.link,
     count: row.count,

@@ -16,17 +16,23 @@ import {
   X,
   Pencil,
   ArrowUpDown,
-  BarChart3,
   Loader2,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { useTimezone } from "@/contexts/timezone-context"
+import {
+  parseTimezonePreference,
+  timezoneDropdownOptions,
+  timezoneOptionLabel,
+} from "@/lib/timezone-preference"
+import { appRoute } from "@/lib/base-path"
 import { createClient } from "@/lib/supabase/client"
 import { RolesTab } from "@/components/account/roles-tab"
 import {
   inviteInternalMember,
   removeOrganizationMembers,
-  updateMemberCustomRole,
   updateMemberDetails,
 } from "@/lib/team-member-service"
 import { fetchOrganizationRoles } from "@/lib/organization-roles-service"
@@ -52,9 +58,9 @@ interface TeamMemberData {
   phone: string
   role: string
   avatar: string
+  userId: string | null
   customRoleId?: string | null
   roleTitle?: string
-  isClient?: boolean
 }
 
 interface OrgRoleOption {
@@ -80,6 +86,7 @@ interface AccountContentProps {
   profileData?: ProfileData
   organizationId?: string | null
   isOrgOwner?: boolean
+  currentUserId?: string | null
   orgRoles?: OrgRoleOption[]
 }
 
@@ -89,7 +96,8 @@ type TabType = "profile" | "settings" | "team" | "roles" | "organisations"
 
 // mockOrganisations removed — now uses real data from props
 
-export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId, isOrgOwner = false, orgRoles = [] }: AccountContentProps) {
+export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId, isOrgOwner = false, currentUserId = null, orgRoles = [] }: AccountContentProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
 
   const tabs: { id: TabType; label: string }[] = [
@@ -99,6 +107,11 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
     ...(isOrgOwner ? [{ id: "roles" as TabType, label: "Roles" }] : []),
     { id: "organisations", label: "Organisations" },
   ]
+
+  const handleTabChange = (id: TabType) => {
+    setActiveTab(id)
+    router.replace(appRoute(`/account?tab=${id}`))
+  }
 
   return (
     <main className="flex-1 overflow-auto bg-background">
@@ -114,7 +127,7 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={cn(
                   "px-4 py-2.5 text-sm transition-colors relative",
                   activeTab === tab.id
@@ -140,12 +153,15 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
               initialMembers={teamMembers}
               organizationId={organizationId ?? null}
               orgRoles={orgRoles}
+              currentUserId={currentUserId ?? null}
             />
           )}
           {activeTab === "roles" && organizationId ? (
             <RolesTab organizationId={organizationId} isOrgOwner={isOrgOwner} />
           ) : null}
-          {activeTab === "organisations" && <OrganisationsTab initialOrg={organization} />}
+          {activeTab === "organisations" && (
+            <OrganisationsTab initialOrg={organization} isOrgOwner={isOrgOwner} />
+          )}
         </div>
       </div>
     </main>
@@ -167,16 +183,22 @@ function EditableRow({
   label,
   value,
   onSave,
-  type = "text"
+  type = "text",
+  canEdit = true,
 }: {
   label: string
   value: string
   onSave: (value: string) => void | Promise<void>
   type?: "text" | "email" | "tel"
+  canEdit?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(value)
   const [isSaving, setIsSaving] = useState(false)
+
+  React.useEffect(() => {
+    setEditValue(value)
+  }, [value])
 
   const handleSave = async () => {
     if (isSaving) return
@@ -184,6 +206,8 @@ function EditableRow({
     try {
       await onSave(editValue)
       setIsEditing(false)
+    } catch {
+      // Stay in edit mode so the user can retry after the error banner.
     } finally {
       setIsSaving(false)
     }
@@ -233,10 +257,12 @@ function EditableRow({
           </div>
         ) : (
           <>
-            <span className="text-sm text-muted-foreground">{value}</span>
-            <button onClick={() => setIsEditing(true)} className="text-sm text-foreground hover:text-muted-foreground font-medium">
-              Edit
-            </button>
+            <span className="text-sm text-muted-foreground">{value || "—"}</span>
+            {canEdit ? (
+              <button onClick={() => setIsEditing(true)} className="text-sm text-foreground hover:text-muted-foreground font-medium">
+                Edit
+              </button>
+            ) : null}
           </>
         )}
       </div>
@@ -388,37 +414,144 @@ function ProfileTab({ user, profileData }: { user: { name: string; email: string
 }
 
 // Settings Tab
+function themeFromAppearance(appearance: string): "light" | "dark" | "system" {
+  if (appearance === "Light") return "light"
+  if (appearance === "Dark") return "dark"
+  return "system"
+}
+
+function appearanceLabelFromTheme(theme: string | undefined) {
+  if (theme === "light") return "Light"
+  if (theme === "dark") return "Dark"
+  if (theme === "system") return "System"
+  return null
+}
+
+function appearanceFromPrefs(prefs?: Record<string, unknown>) {
+  const stored = prefs?.theme
+  if (stored === "light") return "Light"
+  if (stored === "dark") return "Dark"
+  if (stored === "system") return "System"
+  const appearance = prefs?.appearance
+  if (appearance === "Light" || appearance === "Dark" || appearance === "System") {
+    return appearance
+  }
+  return "System"
+}
+
 function SettingsTab({ initialPreferences }: { initialPreferences?: Record<string, unknown> }) {
+  const { theme, setTheme } = useTheme()
+  const { timeZone, setPreference: setTimezonePreference } = useTimezone()
   const [settings, setSettings] = useState({
-    appearance: (initialPreferences?.appearance as string) || "System",
-    timezone: (initialPreferences?.timezone as string) || "(GMT +05:30) India Standard Time",
+    appearance: appearanceFromPrefs(initialPreferences),
+    timezone: parseTimezonePreference(initialPreferences?.timezone),
     emailNotifications: initialPreferences?.emailNotifications !== false,
     pushNotifications: initialPreferences?.pushNotifications !== false,
   })
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [showComingSoon, setShowComingSoon] = useState(false)
+  const timezoneOptions = timezoneDropdownOptions(settings.timezone)
 
-  const persistPreferences = async (updated: typeof settings) => {
+  React.useEffect(() => {
+    setSettings((current) => ({
+      ...current,
+      timezone: parseTimezonePreference(initialPreferences?.timezone),
+      emailNotifications: initialPreferences?.emailNotifications !== false,
+      pushNotifications: initialPreferences?.pushNotifications !== false,
+    }))
+  }, [initialPreferences])
+
+  React.useEffect(() => {
+    if (!theme) return
+    const label = appearanceLabelFromTheme(theme)
+    if (!label) return
+    setSettings((current) =>
+      current.appearance === label ? current : { ...current, appearance: label }
+    )
+  }, [theme])
+
+  const persistPreferencesPatch = async (patch: Record<string, unknown>) => {
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from("profiles").update({
-      preferences: {
-        appearance: updated.appearance,
-        timezone: updated.timezone,
-        emailNotifications: updated.emailNotifications,
-        pushNotifications: updated.pushNotifications,
-      }
-    }).eq("id", user.id)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      throw new Error("You must be signed in to save settings.")
+    }
+
+    const { data: profile, error: readError } = await supabase
+      .from("profiles")
+      .select("preferences")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (readError) {
+      throw new Error(readError.message)
+    }
+
+    const current =
+      (profile?.preferences as Record<string, unknown> | null) ?? {}
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        preferences: {
+          ...current,
+          ...patch,
+        },
+      })
+      .eq("id", user.id)
+
+    if (error) {
+      throw new Error(error.message)
+    }
   }
 
-  const updateSetting = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => {
+  const updateSetting = async <K extends keyof typeof settings>(
+    key: K,
+    value: (typeof settings)[K]
+  ) => {
+    const previous = settings
     const updated = { ...settings, [key]: value }
     setSettings(updated)
-    persistPreferences(updated)
+    setActionError(null)
+
+    const previousTheme = themeFromAppearance(previous.appearance)
+    if (key === "appearance") {
+      setTheme(themeFromAppearance(String(value)))
+    }
+    if (key === "timezone") {
+      setTimezonePreference(String(value))
+    }
+
+    try {
+      const patch: Record<string, unknown> = { [key]: value }
+      if (key === "appearance") {
+        patch.theme = themeFromAppearance(String(value))
+        patch.appearance = value
+      }
+      await persistPreferencesPatch(patch)
+    } catch (err) {
+      setSettings(previous)
+      if (key === "appearance") {
+        setTheme(previousTheme)
+      }
+      if (key === "timezone") {
+        setTimezonePreference(previous.timezone)
+      }
+      setActionError(
+        err instanceof Error ? err.message : "Could not save settings."
+      )
+    }
   }
 
   return (
     <div className="w-full">
-      {/* Preferences */}
+      {actionError ? (
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      ) : null}
+
       <SectionHeader title="Preferences" icon={<Settings className="w-4 h-4 text-muted-foreground" />} />
       <div className="border-t border-border">
         <div className="flex items-center justify-between py-3 border-b border-border">
@@ -426,39 +559,50 @@ function SettingsTab({ initialPreferences }: { initialPreferences?: Record<strin
           <Dropdown
             value={settings.appearance}
             options={["System", "Light", "Dark"]}
-            onChange={(v) => updateSetting("appearance", v)}
+            onChange={(v) => void updateSetting("appearance", v)}
           />
         </div>
         <div className="flex items-center justify-between py-3 border-b border-border">
-          <span className="text-sm text-foreground">Timezone</span>
+          <div>
+            <span className="text-sm text-foreground">Timezone</span>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {settings.timezone === "system"
+                ? `Using your device time (${timeZone.replace(/_/g, " ")})`
+                : `Times shown in ${timezoneOptionLabel(settings.timezone)}`}
+            </p>
+          </div>
           <Dropdown
-            value={settings.timezone}
-            options={["(GMT +05:30) India Standard Time", "(GMT +00:00) UTC", "(GMT -05:00) Eastern Time", "(GMT -08:00) Pacific Time"]}
-            onChange={(v) => updateSetting("timezone", v)}
+            value={timezoneOptionLabel(settings.timezone)}
+            options={timezoneOptions.map((option) => option.label)}
+            onChange={(label) => {
+              const selected =
+                timezoneOptions.find((option) => option.label === label)?.id ??
+                "system"
+              void updateSetting("timezone", selected)
+            }}
+            wide
           />
         </div>
       </div>
 
-      {/* Notifications */}
       <SectionHeader title="Notifications" />
       <div className="border-t border-border">
         <div className="flex items-center justify-between py-3 border-b border-border">
           <div>
             <span className="text-sm text-foreground">Email notifications</span>
-            <p className="text-xs text-muted-foreground mt-0.5">Receive email updates about activity</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Coming soon — preference is saved for later</p>
           </div>
-          <Toggle checked={settings.emailNotifications} onChange={(v) => updateSetting("emailNotifications", v)} />
+          <Toggle checked={settings.emailNotifications} onChange={(v) => void updateSetting("emailNotifications", v)} />
         </div>
         <div className="flex items-center justify-between py-3 border-b border-border">
           <div>
             <span className="text-sm text-foreground">Push notifications</span>
-            <p className="text-xs text-muted-foreground mt-0.5">Receive push notifications on your devices</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Coming soon — preference is saved for later</p>
           </div>
-          <Toggle checked={settings.pushNotifications} onChange={(v) => updateSetting("pushNotifications", v)} />
+          <Toggle checked={settings.pushNotifications} onChange={(v) => void updateSetting("pushNotifications", v)} />
         </div>
       </div>
 
-      {/* Security */}
       <SectionHeader title="Security" icon={<Shield className="w-4 h-4 text-muted-foreground" />} />
       <div className="border-t border-border">
         <div className="flex items-center justify-between py-3 border-b border-border">
@@ -466,14 +610,50 @@ function SettingsTab({ initialPreferences }: { initialPreferences?: Record<strin
             <span className="text-sm text-foreground">Two-factor authentication</span>
             <p className="text-xs text-muted-foreground mt-0.5">Add an extra layer of security to your account</p>
           </div>
-          <button className="text-sm text-foreground hover:text-muted-foreground font-medium">Set up</button>
+          <button
+            type="button"
+            onClick={() => setShowComingSoon(true)}
+            className="text-sm text-foreground hover:text-muted-foreground font-medium"
+          >
+            Coming soon
+          </button>
         </div>
       </div>
+
+      {showComingSoon ? (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">Coming soon</h2>
+              <button
+                type="button"
+                onClick={() => setShowComingSoon(false)}
+                className="p-1 hover:bg-muted rounded transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-muted-foreground">
+                Two-factor authentication is not available yet. We will add it in a later update.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowComingSoon(false)}
+                className="px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
 
-// Team Tab - Matching the reference design
 type FullTeamMember = {
   id: string
   name: string
@@ -482,38 +662,51 @@ type FullTeamMember = {
   role: string
   customRoleId?: string | null
   roleTitle?: string
-  isClient?: boolean
-  designation: string
+  userId: string | null
   avatar: string
-  status: string
-  organisations: string[]
-  stats: { qcMistake: { current: number; total: number }; avgTime: { current: number; total: number }; feedback: { current: number; total: number } }
-  mostBriefFrom: string
-  mostCommonIssue: string
-  workingOn: { client: string; projects: string[] }[]
+  status: "active" | "inactive"
 }
 
 function toFullMember(m: TeamMemberData): FullTeamMember {
   return {
     ...m,
-    designation: "",
-    status: "active",
-    organisations: [],
-    stats: { qcMistake: { current: 0, total: 0 }, avgTime: { current: 0, total: 0 }, feedback: { current: 0, total: 0 } },
-    mostBriefFrom: "",
-    mostCommonIssue: "",
-    workingOn: [],
+    userId: m.userId ?? null,
+    status: m.userId ? "active" : "inactive",
   }
+}
+
+function getInitials(name: string) {
+  const initials = name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+  return initials || "?"
+}
+
+function isOwnerMember(member: FullTeamMember) {
+  return member.role === "owner"
+}
+
+function isSelfMember(member: FullTeamMember, currentUserId: string | null) {
+  return !!member.userId && !!currentUserId && member.userId === currentUserId
+}
+
+function isPersistedMember(member: FullTeamMember) {
+  return !member.id.startsWith("owner:")
 }
 
 function TeamTab({
   initialMembers = [],
   organizationId,
   orgRoles = [],
+  currentUserId = null,
 }: {
   initialMembers?: TeamMemberData[]
   organizationId: string | null
   orgRoles?: OrgRoleOption[]
+  currentUserId?: string | null
 }) {
   const { isOrgOwner } = usePermissions()
   const canAddTeamMember = usePermission("add_team_member")
@@ -521,14 +714,15 @@ function TeamTab({
   const [liveOrgRoles, setLiveOrgRoles] = useState<OrgRoleOption[]>(orgRoles)
   const [rolesLoading, setRolesLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("Active")
+  const [statusFilter, setStatusFilter] = useState("All")
   const [groupFilter, setGroupFilter] = useState("All")
   const [members, setMembers] = useState<FullTeamMember[]>(initialMembers.map(toFullMember))
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [performanceMember, setPerformanceMember] = useState<FullTeamMember | null>(null)
   const [editingMember, setEditingMember] = useState<FullTeamMember | null>(null)
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
   const [teamActionError, setTeamActionError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -546,6 +740,10 @@ function TeamTab({
   }, [orgRoles])
 
   React.useEffect(() => {
+    setMembers(initialMembers.map(toFullMember))
+  }, [initialMembers])
+
+  React.useEffect(() => {
     void refreshOrgRoles()
   }, [refreshOrgRoles])
 
@@ -555,8 +753,8 @@ function TeamTab({
     }
   }, [showInviteModal, editingMember, refreshOrgRoles])
 
-  const roleOptions = liveOrgRoles.map((r) => r.title)
   const roleIdByTitle = new Map(liveOrgRoles.map((r) => [r.title, r.id]))
+  const groupOptions = ["All", ...liveOrgRoles.map((r) => r.title)]
 
   const filteredMembers = members.filter((member) => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -564,7 +762,10 @@ function TeamTab({
     const matchesStatus = statusFilter === "All" ||
       (statusFilter === "Active" && member.status === "active") ||
       (statusFilter === "Inactive" && member.status === "inactive")
-    return matchesSearch && matchesStatus
+    const matchesGroup =
+      groupFilter === "All" ||
+      (member.roleTitle ?? member.role) === groupFilter
+    return matchesSearch && matchesStatus && matchesGroup
   })
 
   const sortedMembers = [...filteredMembers].sort((a, b) => {
@@ -572,11 +773,21 @@ function TeamTab({
     return b.name.localeCompare(a.name)
   })
 
+  const canDeleteMember = (member: FullTeamMember) =>
+    canManageTeam && !isOwnerMember(member) && !isSelfMember(member, currentUserId)
+
+  const deletableSortedIds = sortedMembers
+    .filter((member) => canDeleteMember(member))
+    .map((member) => member.id)
+
   const toggleSelectAll = () => {
-    if (selectedMembers.length === sortedMembers.length) {
+    const allDeletableSelected =
+      deletableSortedIds.length > 0 &&
+      deletableSortedIds.every((id) => selectedMembers.includes(id))
+    if (allDeletableSelected) {
       setSelectedMembers([])
     } else {
-      setSelectedMembers(sortedMembers.map(m => m.id))
+      setSelectedMembers(deletableSortedIds)
     }
   }
 
@@ -588,47 +799,37 @@ function TeamTab({
     }
   }
 
-  const updateMemberRole = async (id: string, newRoleTitle: string) => {
-    if (!canManageTeam || !organizationId) return
-    const customRoleId = roleIdByTitle.get(newRoleTitle)
-    if (!customRoleId) {
-      setTeamActionError(
-        `Role "${newRoleTitle}" was not found. Refresh the page and try again.`
-      )
+  const requestDelete = (ids: string[]) => {
+    const removable = ids.filter((id) => {
+      const member = members.find((m) => m.id === id)
+      return member ? canDeleteMember(member) : false
+    })
+
+    if (removable.length === 0) {
+      setTeamActionError("You cannot remove the owner or yourself.")
       return
     }
 
-    const previousMember = members.find((m) => m.id === id)
-    if (!previousMember) return
-
-    setTeamActionError(null)
-    setMembers(
-      members.map((m) =>
-        m.id === id ? { ...m, role: newRoleTitle, customRoleId, roleTitle: newRoleTitle } : m
-      )
-    )
-
-    const supabase = createClient()
-    const { error } = await updateMemberCustomRole(
-      supabase,
-      organizationId,
-      id,
-      customRoleId
-    )
-
-    if (error) {
-      setMembers((current) =>
-        current.map((m) => (m.id === id ? previousMember : m))
-      )
-      setTeamActionError(error)
-      return
+    if (removable.length !== ids.length) {
+      setTeamActionError("The owner and your own account were skipped.")
+    } else {
+      setTeamActionError(null)
     }
 
-    router.refresh()
+    setPendingDeleteIds(removable)
   }
 
   const removeMembers = async (ids: string[]) => {
     if (!canManageTeam || ids.length === 0) return
+
+    const blocked = ids.some((id) => {
+      const member = members.find((m) => m.id === id)
+      return !member || !canDeleteMember(member)
+    })
+    if (blocked) {
+      setTeamActionError("You cannot remove the owner or yourself.")
+      return
+    }
 
     const previousMembers = members
     setTeamActionError(null)
@@ -647,28 +848,31 @@ function TeamTab({
     router.refresh()
   }
 
-  const deleteMember = async (id: string) => {
-    await removeMembers([id])
+  const confirmPendingDelete = async () => {
+    if (isDeleting || pendingDeleteIds.length === 0) return
+    setIsDeleting(true)
+    try {
+      await removeMembers(pendingDeleteIds)
+      setPendingDeleteIds([])
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
-  const bulkDeleteMembers = async (ids: string[]) => {
-    await removeMembers(ids)
-  }
-
-  const updateMember = async (updatedMember: FullTeamMember) => {
-    if (!canManageTeam || !organizationId) return
+  const updateMember = async (updatedMember: FullTeamMember): Promise<boolean> => {
+    if (!canManageTeam || !organizationId) return false
 
     const previousMember = members.find((m) => m.id === updatedMember.id)
-    if (!previousMember) return
+    if (!previousMember) return false
 
     const customRoleId =
       updatedMember.customRoleId ??
       roleIdByTitle.get(updatedMember.roleTitle ?? updatedMember.role) ??
       null
 
-    if (!updatedMember.isClient && !customRoleId) {
+    if (!customRoleId) {
       setTeamActionError("Select a valid role before saving.")
-      return
+      return false
     }
 
     setTeamActionError(null)
@@ -680,7 +884,7 @@ function TeamTab({
       name: updatedMember.name,
       email: updatedMember.email,
       phone: updatedMember.phone,
-      customRoleId: updatedMember.isClient ? null : customRoleId,
+      customRoleId,
     })
 
     if (error) {
@@ -688,32 +892,31 @@ function TeamTab({
         current.map((m) => (m.id === updatedMember.id ? previousMember : m))
       )
       setTeamActionError(error)
-      return
+      return false
     }
 
     router.refresh()
+    return true
   }
 
   const handleInviteMember = async (data: {
     name: string
     email: string
-    designation: string
     customRoleId: string
     roleTitle: string
-  }) => {
-    if (!organizationId) return
+  }): Promise<string | null> => {
+    if (!organizationId) return "Organization not found."
     const supabase = createClient()
     const { memberId, error } = await inviteInternalMember(supabase, {
       organizationId,
       name: data.name,
       email: data.email,
       customRoleId: data.customRoleId,
-      designation: data.designation,
     })
     if (error || !memberId) {
-      console.error("Failed to invite member:", error)
-      setTeamActionError(error || "Failed to invite member. Please try again.")
-      return
+      const message = error || "Failed to invite member. Please try again."
+      setTeamActionError(message)
+      return message
     }
     setTeamActionError(null)
     const newMember = toFullMember({
@@ -721,13 +924,17 @@ function TeamTab({
       name: data.name,
       email: data.email,
       phone: "",
-      role: data.roleTitle,
+      role: "member",
       avatar: "",
+      userId: null,
       customRoleId: data.customRoleId,
       roleTitle: data.roleTitle,
     })
     setMembers([...members, newMember])
+    setStatusFilter("All")
     setShowInviteModal(false)
+    router.refresh()
+    return null
   }
 
   return (
@@ -761,14 +968,14 @@ function TeamTab({
           <FilterDropdown
             label="Group"
             value={groupFilter}
-            options={["All", "Admins", "Editors", "Viewers"]}
+            options={groupOptions}
             onChange={setGroupFilter}
           />
         </div>
         <div className="flex items-center gap-3">
           {canManageTeam && selectedMembers.length > 0 && (
             <button
-              onClick={() => bulkDeleteMembers(selectedMembers)}
+              onClick={() => requestDelete(selectedMembers)}
               className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -796,7 +1003,10 @@ function TeamTab({
               {canManageTeam ? (
                 <th className="text-left py-3 pr-4 w-8">
                   <Checkbox
-                    checked={selectedMembers.length === sortedMembers.length && sortedMembers.length > 0}
+                    checked={
+                      deletableSortedIds.length > 0 &&
+                      deletableSortedIds.every((id) => selectedMembers.includes(id))
+                    }
                     onChange={toggleSelectAll}
                   />
                 </th>
@@ -812,12 +1022,23 @@ function TeamTab({
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Role</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Email</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Organisations</th>
               <th className="text-left py-3 px-4 w-32 text-sm font-medium text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {sortedMembers.map((member) => (
+            {sortedMembers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={canManageTeam ? 5 : 4}
+                  className="py-10 px-4 text-center text-sm text-muted-foreground"
+                >
+                  {members.length === 0
+                    ? "No team members yet."
+                    : "No team members match these filters."}
+                </td>
+              </tr>
+            ) : (
+              sortedMembers.map((member) => (
               <tr key={member.id} className="border-b border-border hover:bg-muted/30 transition-colors">
                 {canManageTeam ? (
                   <td className="py-3 pr-4">
@@ -829,73 +1050,60 @@ function TeamTab({
                 ) : null}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-muted overflow-hidden">
-                      <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                    <div className="w-9 h-9 rounded-full bg-muted overflow-hidden flex items-center justify-center">
+                      {member.avatar ? (
+                        <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {getInitials(member.name)}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm font-medium text-foreground">{member.name}</p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
+                      {member.status === "inactive" ? (
+                        <span className="shrink-0 px-1.5 py-0.5 text-[11px] font-medium rounded bg-muted text-muted-foreground border border-border">
+                          Pending
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  {member.isClient ? (
-                    <span className="text-sm text-muted-foreground">Client</span>
-                  ) : canManageTeam && roleOptions.length > 0 ? (
-                    <Dropdown
-                      value={member.roleTitle ?? member.role}
-                      options={roleOptions}
-                      onChange={(newRole) => updateMemberRole(member.id, newRole)}
-                    />
-                  ) : (
-                    <span className="text-sm text-muted-foreground">
-                      {member.roleTitle ?? member.role}
-                    </span>
-                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {member.roleTitle ?? member.role}
+                  </span>
                 </td>
                 <td className="py-3 px-4 text-sm text-muted-foreground">{member.email}</td>
                 <td className="py-3 px-4">
-                  <div className="flex flex-wrap gap-1 max-w-[200px]">
-                    {member.organisations.slice(0, 2).map((org, idx) => (
-                      <span key={idx} className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-border">
-                        {org}
-                      </span>
-                    ))}
-                    {member.organisations.length > 2 && (
-                      <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border border-border">
-                        +{member.organisations.length - 2}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-3 px-4">
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPerformanceMember(member)}
-                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                      title="View Performance"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                    </button>
                     {canManageTeam ? (
                       <>
-                        <button
-                          onClick={() => setEditingMember(member)}
-                          className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                          title="Edit Member"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => deleteMember(member.id)}
-                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                          title="Delete Member"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {isPersistedMember(member) ? (
+                          <button
+                            onClick={() => setEditingMember(member)}
+                            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                            title="Edit Member"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                        {canDeleteMember(member) ? (
+                          <button
+                            onClick={() => requestDelete([member.id])}
+                            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                            title="Delete Member"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                       </>
                     ) : null}
                   </div>
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -910,18 +1118,6 @@ function TeamTab({
         />
       )}
 
-      {/* Performance Modal */}
-      {performanceMember && (
-        <PerformanceModal
-          member={performanceMember}
-          onClose={() => setPerformanceMember(null)}
-          onDelete={async () => {
-            await deleteMember(performanceMember.id)
-            setPerformanceMember(null)
-          }}
-        />
-      )}
-
       {/* Edit Member Modal */}
       {editingMember && (
         <EditMemberModal
@@ -929,11 +1125,22 @@ function TeamTab({
           orgRoles={liveOrgRoles}
           onClose={() => setEditingMember(null)}
           onSave={async (updatedMember) => {
-            await updateMember(updatedMember)
-            setEditingMember(null)
+            const saved = await updateMember(updatedMember)
+            if (saved) setEditingMember(null)
           }}
         />
       )}
+
+      {pendingDeleteIds.length > 0 ? (
+        <ConfirmDeleteModal
+          count={pendingDeleteIds.length}
+          isDeleting={isDeleting}
+          onClose={() => {
+            if (!isDeleting) setPendingDeleteIds([])
+          }}
+          onConfirm={confirmPendingDelete}
+        />
+      ) : null}
     </div>
   )
 }
@@ -953,17 +1160,15 @@ function EditMemberModal({
   const [name, setName] = useState(member.name)
   const [email, setEmail] = useState(member.email)
   const [phone, setPhone] = useState(member.phone)
-  const [designation, setDesignation] = useState(member.designation)
   const [customRoleId, setCustomRoleId] = useState(
     member.customRoleId ?? orgRoles[0]?.id ?? ""
   )
-  const [organisations, setOrganisations] = useState(member.organisations.join(", "))
   const [isSaving, setIsSaving] = useState(false)
 
   const selectedRole = orgRoles.find((r) => r.id === customRoleId)
 
   const handleSave = async () => {
-    if (isSaving || !name.trim() || !email.trim()) return
+    if (isSaving || !name.trim() || !email.trim() || !customRoleId) return
     setIsSaving(true)
     try {
       await onSave({
@@ -971,11 +1176,9 @@ function EditMemberModal({
         name,
         email,
         phone,
-        designation,
         role: selectedRole?.title ?? member.roleTitle ?? member.role,
         roleTitle: selectedRole?.title ?? member.roleTitle ?? member.role,
-        customRoleId: member.isClient ? null : customRoleId,
-        organisations: organisations.split(",").map(i => i.trim()).filter(Boolean)
+        customRoleId,
       })
     } finally {
       setIsSaving(false)
@@ -1030,46 +1233,18 @@ function EditMemberModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Designation</label>
-            <input
-              type="text"
-              value={designation}
-              onChange={(e) => setDesignation(e.target.value)}
-              placeholder="e.g. Graphic Designer"
+            <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
+            <select
+              value={customRoleId}
+              onChange={(e) => setCustomRoleId(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          {!member.isClient ? (
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
-              <select
-                value={customRoleId}
-                onChange={(e) => setCustomRoleId(e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {orgRoles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
-              <p className="text-sm text-muted-foreground">Client</p>
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Organisations</label>
-            <input
-              type="text"
-              value={organisations}
-              onChange={(e) => setOrganisations(e.target.value)}
-              placeholder="e.g. Revue Studios, Design Labs"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Separate multiple organisations with commas</p>
+            >
+              {orgRoles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.title}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -1084,7 +1259,7 @@ function EditMemberModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={!name.trim() || !email.trim() || isSaving}
+            disabled={!name.trim() || !email.trim() || !customRoleId || isSaving}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? (
@@ -1115,16 +1290,15 @@ function InviteMemberModal({
   onInvite: (data: {
     name: string
     email: string
-    designation: string
     customRoleId: string
     roleTitle: string
-  }) => void | Promise<void>
+  }) => Promise<string | null> | string | null
 }) {
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
-  const [designation, setDesignation] = useState("")
   const [customRoleId, setCustomRoleId] = useState(orgRoles[0]?.id ?? "")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
 
   React.useEffect(() => {
     if (orgRoles.length === 0) {
@@ -1141,14 +1315,15 @@ function InviteMemberModal({
   const handleSendInvite = async () => {
     if (isSubmitting || !email.trim() || !name.trim() || !customRoleId || !selectedRole) return
     setIsSubmitting(true)
+    setInviteError(null)
     try {
-      await onInvite({
+      const error = await onInvite({
         name,
         email,
-        designation,
         customRoleId,
         roleTitle: selectedRole.title,
       })
+      if (error) setInviteError(error)
     } finally {
       setIsSubmitting(false)
     }
@@ -1192,16 +1367,6 @@ function InviteMemberModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Designation</label>
-            <input
-              type="text"
-              value={designation}
-              onChange={(e) => setDesignation(e.target.value)}
-              placeholder="e.g. Graphic Designer"
-              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Role</label>
             {rolesLoading ? (
               <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
@@ -1227,8 +1392,11 @@ function InviteMemberModal({
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            No email is sent — the member must sign up with this exact email address.
+            The member must sign up with this exact email address.
           </p>
+          {inviteError ? (
+            <p className="text-sm text-destructive">{inviteError}</p>
+          ) : null}
         </div>
 
         {/* Footer */}
@@ -1260,317 +1428,393 @@ function InviteMemberModal({
   )
 }
 
-// Performance Modal
-function PerformanceModal({
-  member,
+function ConfirmDeleteModal({
+  count,
+  isDeleting,
   onClose,
-  onDelete
+  onConfirm,
 }: {
-  member: FullTeamMember
+  count: number
+  isDeleting: boolean
   onClose: () => void
-  onDelete: () => void | Promise<void>
+  onConfirm: () => void | Promise<void>
 }) {
-  const [isRemoving, setIsRemoving] = useState(false)
-
-  const handleRemove = async () => {
-    if (isRemoving) return
-    setIsRemoving(true)
-    try {
-      await onDelete()
-    } finally {
-      setIsRemoving(false)
-    }
-  }
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
+      <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-md mx-4">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-muted overflow-hidden">
-              <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <span className="text-base font-semibold text-foreground">{member.name}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Building2 className="w-3.5 h-3.5" />
-                <span>{member.designation}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{member.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{member.phone}</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRemove}
-              disabled={isRemoving}
-              className="inline-flex items-center gap-1.5 text-sm text-destructive hover:text-destructive/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isRemoving ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  REMOVING...
-                </>
-              ) : (
-                "REMOVE"
-              )}
-            </button>
-            <button
-              onClick={onClose}
-              disabled={isRemoving}
-              className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <X className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
+          <h2 className="text-lg font-semibold text-foreground">Remove team member{count > 1 ? "s" : ""}</h2>
+          <button
+            onClick={onClose}
+            disabled={isDeleting}
+            className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto px-6 py-4">
-          {/* Organisation Tags */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            {member.organisations.map((org, idx) => (
-              <span
-                key={idx}
-                className="px-3 py-1.5 text-sm bg-background border border-border rounded-full text-foreground"
-              >
-                {org}
-              </span>
-            ))}
-          </div>
-
-          {/* Brief & Issue Info */}
-          <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-            <div>
-              <span className="text-muted-foreground">Most brief from :</span>
-              <a href="#" className="ml-2 text-[#5C6ECD] hover:underline">{member.mostBriefFrom}</a>
-            </div>
-            <div className="text-right">
-              <span className="text-muted-foreground">Most common QC issue :</span>
-              <span className="ml-2 text-foreground">{member.mostCommonIssue}</span>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-6 mb-8">
-            <div className="text-center">
-              <div className="flex items-end justify-center gap-1 mb-2">
-                <div className="w-12 bg-muted rounded-t-lg relative overflow-hidden" style={{ height: '80px' }}>
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-[#5C6ECD] rounded-t-lg"
-                    style={{ height: `${(member.stats.qcMistake.current / member.stats.qcMistake.total) * 100}%` }}
-                  />
-                </div>
-              </div>
-              <p className="text-lg font-semibold text-foreground">
-                {member.stats.qcMistake.current}/{member.stats.qcMistake.total}
-              </p>
-              <p className="text-xs text-muted-foreground">Average QC Mistake<br />per Iteration</p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-end justify-center gap-1 mb-2">
-                <div className="w-12 bg-muted rounded-t-lg relative overflow-hidden" style={{ height: '80px' }}>
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-[#5C6ECD] rounded-t-lg flex items-center justify-center"
-                    style={{ height: `${(member.stats.avgTime.current / member.stats.avgTime.total) * 100}%` }}
-                  >
-                    <span className="text-white text-xs font-medium">{member.stats.avgTime.current}m</span>
-                  </div>
-                </div>
-              </div>
-              <p className="text-lg font-semibold text-foreground">
-                {member.stats.avgTime.current}m/{member.stats.avgTime.total}
-              </p>
-              <p className="text-xs text-muted-foreground">Average Time for<br />per feedback</p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-end justify-center gap-1 mb-2">
-                <div className="w-12 bg-muted rounded-t-lg relative overflow-hidden" style={{ height: '80px' }}>
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-[#5C6ECD] rounded-t-lg"
-                    style={{ height: `${(member.stats.feedback.current / member.stats.feedback.total) * 100}%` }}
-                  />
-                </div>
-              </div>
-              <p className="text-lg font-semibold text-foreground">
-                {member.stats.feedback.current}/{member.stats.feedback.total}
-              </p>
-              <p className="text-xs text-muted-foreground">Average feedback<br />received</p>
-            </div>
-          </div>
-
-          {/* Working On */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#5C6ECD] mb-3">Working on :</h3>
-            <div className="border border-border rounded-lg divide-y divide-border">
-              {member.workingOn.map((work, idx) => (
-                <div key={idx} className="flex items-center justify-between px-4 py-3">
-                  <span className="text-sm font-medium text-foreground">{work.client}</span>
-                  <span className="text-sm text-muted-foreground text-right">
-                    {work.projects.join(", ")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="px-6 py-4">
+          <p className="text-sm text-muted-foreground">
+            {count === 1
+              ? "This member will be removed from the organization. This cannot be undone."
+              : `${count} members will be removed from the organization. This cannot be undone.`}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+          <button
+            onClick={onClose}
+            disabled={isDeleting}
+            className="px-4 py-2 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Removing...
+              </>
+            ) : (
+              "Remove"
+            )}
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-// Organisations Tab
-function OrganisationsTab({ initialOrg }: { initialOrg?: OrgData | null }) {
-  const [org, setOrg] = useState(initialOrg || {
-    id: "",
-    name: "",
-    email: "",
-    phone: "",
-    website: "",
-    industry: "Design & Creative",
-    size: "1-10",
-    country: "India",
-    state: "",
-    logo: ""
-  })
-  const [isLogoUploading, setIsLogoUploading] = useState(false)
+const orgIndustryOptions = [
+  "Design & Creative",
+  "Technology",
+  "Marketing",
+  "Finance",
+  "Healthcare",
+  "Education",
+]
 
-  const updateOrg = async (field: string, value: string) => {
-    setOrg({ ...org, [field]: value })
-    if (!org.id) return
+const orgSizeOptions = ["1-10", "11-50", "51-200", "201-500", "500+"]
+
+const orgCountryOptions = [
+  "India",
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "Australia",
+]
+
+const orgStateOptionsByCountry: Record<string, string[]> = {
+  India: [
+    "Uttar Pradesh",
+    "Maharashtra",
+    "Karnataka",
+    "Tamil Nadu",
+    "Delhi",
+    "Rajasthan",
+    "Gujarat",
+    "West Bengal",
+    "Madhya Pradesh",
+    "Kerala",
+  ],
+  "United States": [
+    "California",
+    "New York",
+    "Texas",
+    "Florida",
+    "Illinois",
+    "Washington",
+    "Massachusetts",
+    "Colorado",
+  ],
+  "United Kingdom": ["England", "Scotland", "Wales", "Northern Ireland"],
+  Canada: ["Ontario", "Quebec", "British Columbia", "Alberta", "Manitoba"],
+  Australia: [
+    "New South Wales",
+    "Victoria",
+    "Queensland",
+    "Western Australia",
+    "South Australia",
+  ],
+}
+
+function withCurrentOption(options: string[], current: string) {
+  if (!current || options.includes(current)) return options
+  return [current, ...options]
+}
+
+function OrganisationsTab({
+  initialOrg,
+  isOrgOwner,
+}: {
+  initialOrg?: OrgData | null
+  isOrgOwner: boolean
+}) {
+  const router = useRouter()
+  const [org, setOrg] = useState<OrgData | null>(initialOrg ?? null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [isLogoBusy, setIsLogoBusy] = useState(false)
+
+  React.useEffect(() => {
+    setOrg(initialOrg ?? null)
+  }, [initialOrg])
+
+  const canEdit = isOrgOwner && Boolean(org?.id)
+
+  const persistOrg = async (patch: Partial<OrgData>) => {
+    if (!org?.id || !canEdit) {
+      const message = "You do not have permission to edit this organisation."
+      setActionError(message)
+      throw new Error(message)
+    }
+
+    const previous = org
+    const next = { ...org, ...patch }
+    setOrg(next)
+
+    const dbPatch: Record<string, string | null> = {}
+    if (patch.name !== undefined) dbPatch.name = patch.name
+    if (patch.email !== undefined) dbPatch.email = patch.email
+    if (patch.phone !== undefined) dbPatch.phone = patch.phone
+    if (patch.website !== undefined) dbPatch.website = patch.website
+    if (patch.industry !== undefined) dbPatch.industry = patch.industry
+    if (patch.size !== undefined) dbPatch.size = patch.size
+    if (patch.country !== undefined) dbPatch.country = patch.country
+    if (patch.state !== undefined) dbPatch.state = patch.state
+    if (patch.logo !== undefined) dbPatch.logo_url = patch.logo || null
+
     const supabase = createClient()
-    const dbField = field === "logo" ? "logo_url" : field
-    await supabase.from("organizations").update({ [dbField]: value }).eq("id", org.id)
+    const { error } = await supabase
+      .from("organizations")
+      .update(dbPatch)
+      .eq("id", org.id)
+
+    if (error) {
+      setOrg(previous)
+      setActionError(error.message)
+      throw new Error(error.message)
+    }
+
+    setActionError(null)
+    if (patch.name !== undefined || patch.logo !== undefined) {
+      router.refresh()
+    }
   }
 
-  const handleLogoUpload = async () => {
-    if (!org.id || isLogoUploading) return
+  const savePatch = (patch: Partial<OrgData>) => {
+    void persistOrg(patch).catch(() => {})
+  }
+
+  const handleLogoUpload = () => {
+    if (!canEdit || !org?.id || isLogoBusy) return
     const input = document.createElement("input")
     input.type = "file"
     input.accept = "image/*"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
-      setIsLogoUploading(true)
+      setIsLogoBusy(true)
+      setActionError(null)
       try {
         const supabase = createClient()
         const ext = (file.name.split(".").pop() || "").replace(/[^A-Za-z0-9]+/g, "")
-        const path = `${org.id}/${Date.now()}-logo${ext ? `.${ext}` : ""}`
-        const { error: uploadErr } = await supabase.storage.from("org-logos").upload(path, file)
+        const path = `org-logos/${org.id}/${Date.now()}-logo${ext ? `.${ext}` : ""}`
+        const { error: uploadErr } = await supabase.storage
+          .from("client-assets")
+          .upload(path, file)
         if (uploadErr) {
-          console.error("Logo upload failed:", uploadErr)
+          setActionError(uploadErr.message || "Logo upload failed.")
           return
         }
-        const { data: urlData } = supabase.storage.from("org-logos").getPublicUrl(path)
-        const logoUrl = urlData.publicUrl
-        await supabase.from("organizations").update({ logo_url: logoUrl }).eq("id", org.id)
-        setOrg({ ...org, logo: logoUrl })
+        const { data: urlData } = supabase.storage
+          .from("client-assets")
+          .getPublicUrl(path)
+        await persistOrg({ logo: urlData.publicUrl })
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Logo upload failed.")
       } finally {
-        setIsLogoUploading(false)
+        setIsLogoBusy(false)
       }
     }
     input.click()
   }
 
-  return (
-    <div className="w-full">
-      {/* Header */}
-      <div className="mb-6">
-        <div>
+  const handleLogoRemove = async () => {
+    if (!canEdit || !org?.id || isLogoBusy || !org.logo) return
+    setIsLogoBusy(true)
+    try {
+      await persistOrg({ logo: "" })
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not remove logo.")
+    } finally {
+      setIsLogoBusy(false)
+    }
+  }
+
+  const handleCountryChange = (country: string) => {
+    const states = orgStateOptionsByCountry[country] ?? []
+    const nextState = states.includes(org?.state ?? "") ? org?.state ?? "" : ""
+    savePatch({ country, state: nextState })
+  }
+
+  if (!org?.id) {
+    return (
+      <div className="w-full">
+        <div className="mb-6">
           <h2 className="text-lg font-semibold text-foreground">Organisation</h2>
-          <p className="text-sm text-muted-foreground">Manage your organisation details</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage your organisation details
+          </p>
+        </div>
+        <div className="border border-dashed border-border rounded-xl p-10 text-center">
+          <Building2 className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">
+            No organisation yet. Create one to manage its details here.
+          </p>
         </div>
       </div>
+    )
+  }
 
-      {/* Organisation Details */}
-      <div>
-        {/* Organisation Logo */}
-        <SectionHeader title="Organisation Logo" />
-        <div className="border-t border-border">
-          <div className="flex items-center justify-between py-4 border-b border-border">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
-                {org.logo ? (
-                  <img src={org.logo} alt={org.name} className="w-full h-full object-cover rounded-lg" />
-                ) : (
-                  <Building2 className="w-8 h-8 text-muted-foreground" />
-                )}
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Upload your organisation logo</p>
-              </div>
+  const stateOptions = withCurrentOption(
+    orgStateOptionsByCountry[org.country] ?? [],
+    org.state
+  )
+  const countryOptions = withCurrentOption(orgCountryOptions, org.country)
+  const industryOptions = withCurrentOption(orgIndustryOptions, org.industry)
+  const sizeOptions = withCurrentOption(orgSizeOptions, org.size)
+
+  return (
+    <div className="w-full">
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-foreground">Organisation</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          {canEdit
+            ? "Manage your organisation details"
+            : "Organisation details. Only the owner can make changes."}
+        </p>
+      </div>
+
+      {actionError ? (
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      ) : null}
+
+      <SectionHeader title="Organisation Logo" />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-4 border-b border-border">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+              {org.logo ? (
+                <img src={org.logo} alt={org.name} className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                <Building2 className="w-8 h-8 text-muted-foreground" />
+              )}
             </div>
-            <div className="flex items-center gap-2">
+            <p className="text-sm text-muted-foreground">
+              {canEdit ? "Upload your organisation logo" : "Organisation logo"}
+            </p>
+          </div>
+          {canEdit ? (
+            <div className="flex items-center gap-3">
+              {org.logo ? (
+                <button
+                  onClick={() => void handleLogoRemove()}
+                  disabled={isLogoBusy}
+                  className="text-sm text-destructive hover:text-destructive/80 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Remove
+                </button>
+              ) : null}
               <button
                 onClick={handleLogoUpload}
-                disabled={isLogoUploading}
+                disabled={isLogoBusy}
                 className="inline-flex items-center gap-1.5 text-sm text-foreground hover:text-muted-foreground font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLogoUploading ? (
+                {isLogoBusy ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Uploading...
+                    Saving...
                   </>
                 ) : (
                   "Upload"
                 )}
               </button>
             </div>
-          </div>
+          ) : null}
         </div>
+      </div>
 
-        {/* Organisation Information */}
-        <SectionHeader title="Organisation Information" icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
-        <div className="border-t border-border">
-          <EditableRow label="Organisation Name" value={org.name} onSave={(v) => updateOrg("name", v)} />
-          <EditableRow label="Email Address" value={org.email} onSave={(v) => updateOrg("email", v)} type="email" />
-          <EditableRow label="Phone Number" value={org.phone} onSave={(v) => updateOrg("phone", v)} type="tel" />
-          <EditableRow label="Website" value={org.website} onSave={(v) => updateOrg("website", v)} />
-          <div className="flex items-center justify-between py-3 border-b border-border">
-            <span className="text-sm text-foreground">Industry</span>
-            <Dropdown
-              value={org.industry}
-              options={["Design & Creative", "Technology", "Marketing", "Finance", "Healthcare", "Education"]}
-              onChange={(v) => updateOrg("industry", v)}
-            />
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-border">
-            <span className="text-sm text-foreground">Organisation Size</span>
-            <Dropdown
-              value={org.size}
-              options={["1-10", "11-50", "51-200", "201-500", "500+"]}
-              onChange={(v) => updateOrg("size", v)}
-            />
-          </div>
+      <SectionHeader title="Organisation Information" icon={<Building2 className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <EditableRow
+          label="Organisation Name"
+          value={org.name}
+          canEdit={canEdit}
+          onSave={(v) => persistOrg({ name: v })}
+        />
+        <EditableRow
+          label="Email Address"
+          value={org.email}
+          canEdit={canEdit}
+          type="email"
+          onSave={(v) => persistOrg({ email: v })}
+        />
+        <EditableRow
+          label="Phone Number"
+          value={org.phone}
+          canEdit={canEdit}
+          type="tel"
+          onSave={(v) => persistOrg({ phone: v })}
+        />
+        <EditableRow
+          label="Website"
+          value={org.website}
+          canEdit={canEdit}
+          onSave={(v) => persistOrg({ website: v })}
+        />
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Industry</span>
+          <Dropdown
+            value={org.industry}
+            options={industryOptions}
+            disabled={!canEdit}
+            onChange={(v) => savePatch({ industry: v })}
+          />
         </div>
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Organisation Size</span>
+          <Dropdown
+            value={org.size}
+            options={sizeOptions}
+            disabled={!canEdit}
+            onChange={(v) => savePatch({ size: v })}
+          />
+        </div>
+      </div>
 
-        {/* Location */}
-        <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
-        <div className="border-t border-border">
-          <div className="flex items-center justify-between py-3 border-b border-border">
-            <span className="text-sm text-foreground">Country</span>
-            <Dropdown
-              value={org.country}
-              options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
-              onChange={(v) => updateOrg("country", v)}
-            />
-          </div>
-          <div className="flex items-center justify-between py-3 border-b border-border">
-            <span className="text-sm text-foreground">State</span>
-            <Dropdown
-              value={org.state}
-              options={["Uttar Pradesh", "Maharashtra", "Karnataka", "Tamil Nadu", "Delhi", "London"]}
-              onChange={(v) => updateOrg("state", v)}
-            />
-          </div>
+      <SectionHeader title="Location" icon={<MapPin className="w-4 h-4 text-muted-foreground" />} />
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">Country</span>
+          <Dropdown
+            value={org.country}
+            options={countryOptions}
+            disabled={!canEdit}
+            onChange={handleCountryChange}
+          />
+        </div>
+        <div className="flex items-center justify-between py-3 border-b border-border">
+          <span className="text-sm text-foreground">State</span>
+          <Dropdown
+            value={org.state}
+            options={stateOptions.length > 0 ? stateOptions : ["—"]}
+            disabled={!canEdit || stateOptions.length === 0}
+            onChange={(v) => savePatch({ state: v })}
+          />
         </div>
       </div>
     </div>
@@ -1734,11 +1978,15 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange: () => voi
 function Dropdown({
   value,
   options,
-  onChange
+  onChange,
+  disabled = false,
+  wide = false,
 }: {
   value: string
   options: string[]
   onChange: (value: string) => void
+  disabled?: boolean
+  wide?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState(value)
@@ -1761,14 +2009,27 @@ function Dropdown({
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-background text-sm text-foreground hover:bg-muted/50 transition-colors"
+        onClick={() => {
+          if (!disabled) setOpen(!open)
+        }}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-background text-sm text-foreground transition-colors",
+          disabled
+            ? "opacity-70 cursor-default"
+            : "hover:bg-muted/50"
+        )}
       >
-        {selected}
-        <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+        {selected || "—"}
+        {!disabled ? (
+          <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+        ) : null}
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 min-w-[180px] bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
+      {open && !disabled && (
+        <div className={cn(
+          "absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-10 py-1 animate-in fade-in slide-in-from-top-2 duration-150",
+          wide ? "min-w-[220px]" : "min-w-[180px]"
+        )}>
           {options.map((option) => (
             <button
               key={option}

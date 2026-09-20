@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useTimezone } from "@/contexts/timezone-context"
 import {
   mapNotificationRow,
   sortNotifications,
@@ -53,6 +54,7 @@ export function useNotifications(
   options: UseNotificationsOptions = {}
 ): UseNotificationsResult {
   const { previewLimit = 20, enabled = true, userId: userIdProp } = options
+  const { timeZone } = useTimezone()
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(
     userIdProp ?? null
   )
@@ -61,6 +63,7 @@ export function useNotifications(
   const [loading, setLoading] = useState(true)
   const notificationsRef = useRef(notifications)
   notificationsRef.current = notifications
+  const fetchGenerationRef = useRef(0)
 
   const userId = userIdProp ?? resolvedUserId
 
@@ -72,7 +75,7 @@ export function useNotifications(
 
   const upsertFromRow = useCallback(
     (row: NotificationRow) => {
-      const item = mapNotificationRow(row)
+      const item = mapNotificationRow(row, timeZone)
       setNotifications((prev) => {
         const idx = prev.findIndex((n) => n.id === item.id)
         const next =
@@ -82,7 +85,7 @@ export function useNotifications(
         return sortNotifications(next).slice(0, previewLimit)
       })
     },
-    [previewLimit]
+    [previewLimit, timeZone]
   )
 
   const fetchUnreadCount = useCallback(
@@ -106,7 +109,10 @@ export function useNotifications(
   )
 
   const fetchNotifications = useCallback(async () => {
+    const generation = ++fetchGenerationRef.current
+
     if (!enabled || !organizationId || !userId) {
+      if (generation !== fetchGenerationRef.current) return
       setNotifications([])
       setUnreadCount(0)
       setLoading(false)
@@ -127,12 +133,14 @@ export function useNotifications(
       fetchUnreadCount(userId, organizationId),
     ])
 
+    if (generation !== fetchGenerationRef.current) return
+
     if (listResult.error) {
       logSupabaseError("Failed to fetch notifications:", listResult.error)
       setNotifications([])
     } else {
       const rows = (listResult.data ?? []) as NotificationRow[]
-      setNotifications(sortNotifications(rows.map(mapNotificationRow)))
+      setNotifications(sortNotifications(rows.map((row) => mapNotificationRow(row, timeZone))))
     }
 
     setLoading(false)
@@ -142,6 +150,7 @@ export function useNotifications(
     userId,
     previewLimit,
     fetchUnreadCount,
+    timeZone,
   ])
 
   useEffect(() => {

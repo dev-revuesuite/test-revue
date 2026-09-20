@@ -874,34 +874,57 @@ export function RevueCanvas({
     // Track locally by real id to prevent realtime duplicate echo
     localReplyIdsRef.current.add(replyId);
 
-    // Persist reply to DB (use same id so realtime broadcast matches the optimistic row)
-    if (creativeId) {
-      supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-        if (!authUser) return;
-        supabase.from("feedback_replies").insert({
-          id: replyId,
-          feedback_id: feedbackId,
-          user_id: authUser.id,
-          content: reply.content,
-        }).then(({ error }) => {
-          if (error) {
-            console.error("Failed to save reply:", {
-              message: error.message,
-              details: error.details,
-              hint: error.hint,
-              code: error.code,
-            });
-          } else {
-            recordClientActivity(INTERACTION_AND_FEEDBACK);
-            if (userRole === "client") {
-              maybeAdvanceToFeedbackReceived();
-            } else {
-              maybeAdvanceToReviewQc();
+    const revertReply = () => {
+      localReplyIdsRef.current.delete(replyId);
+      setIterations(prev => prev.map(iteration =>
+        iteration.id === activeIterationId
+          ? {
+              ...iteration,
+              feedbacks: iteration.feedbacks.map(f =>
+                f.id === feedbackId
+                  ? { ...f, replies: f.replies.filter(r => r.id !== replyId) }
+                  : f
+              )
             }
-          }
-        });
-      });
+          : iteration
+      ));
+    };
+
+    // Persist reply to DB (use same id so realtime broadcast matches the optimistic row)
+    if (!creativeId) {
+      revertReply();
+      return;
     }
+
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (!authUser) {
+        revertReply();
+        return;
+      }
+      supabase.from("feedback_replies").insert({
+        id: replyId,
+        feedback_id: feedbackId,
+        user_id: authUser.id,
+        content: reply.content,
+      }).then(({ error }) => {
+        if (error) {
+          console.error("Failed to save reply:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          revertReply();
+        } else {
+          recordClientActivity(INTERACTION_AND_FEEDBACK);
+          if (userRole === "client") {
+            maybeAdvanceToFeedbackReceived();
+          } else {
+            maybeAdvanceToReviewQc();
+          }
+        }
+      });
+    });
   };
 
   // Handle feedback click from panel
