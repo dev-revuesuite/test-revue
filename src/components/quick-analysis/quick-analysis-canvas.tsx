@@ -24,6 +24,7 @@ import { CommentsPanel } from "@/components/communication/comments-panel"
 import { ZoomControls } from "@/components/communication/zoom-controls"
 import { PdfPagePager } from "@/components/communication/pdf-page-pager"
 import { QuickAnalysisHeader } from "@/components/quick-analysis/quick-analysis-header"
+import { QuickAnalysisOpening } from "@/components/quick-analysis/quick-analysis-opening"
 
 function aiSuggestionPageNumber(s: AISuggestion): number {
   return s.pageNumber ?? 1
@@ -68,6 +69,7 @@ export function QuickAnalysisCanvas({
   const [toast, setToast] = useState<{ message: string; tone: "info" | "error" } | null>(
     null
   )
+  const [fileReady, setFileReady] = useState(false)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isPdf = mediaType === "pdf"
@@ -322,6 +324,11 @@ export function QuickAnalysisCanvas({
         aiSuggestions={pageFilteredSuggestions}
         canRunAiAnalysis={false}
         overlaysPeekHidden={overlaysPeekHidden}
+        onMediaDisplayed={() => setFileReady(true)}
+        onMediaError={(error) => {
+          setFileReady(true)
+          showToast(error.message, "error")
+        }}
       />
 
       {!isFullscreen && (
@@ -383,6 +390,8 @@ export function QuickAnalysisCanvas({
         onToggleFullscreen={handleToggleFullscreen}
         isFullscreen={isFullscreen}
       />
+
+      {!fileReady && <QuickAnalysisOpening />}
 
       {toast && (
         <div className="fixed bottom-6 left-6 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-300">

@@ -6,11 +6,13 @@ import {
   decodeClientAnalysisImage,
   type ClientAnalysisImageInput,
 } from "@/lib/ai-analysis-client-image"
+import { updateInferenceLogSuggestionCount } from "@/lib/ai-inference-logger"
 import {
   callGramcheck,
   callLineheight,
   callWordspace,
   InferenceApiError,
+  type InferenceLogContext,
 } from "@/lib/inference-api"
 import { normalizeAnalysisImageForInference } from "@/lib/normalize-analysis-image"
 import {
@@ -91,20 +93,28 @@ async function finalizeAnalysisImage(input: {
 
 async function callAnalysisApi(
   analysisType: PersistedAiAnalysisType,
-  image: PreparedAnalysisImage
-): Promise<unknown> {
+  image: PreparedAnalysisImage,
+  logContext: InferenceLogContext
+): Promise<{ rawResponse: unknown; logId: string | null }> {
   const options = {
     filename: image.filename,
     mimeType: image.mimeType,
+    logContext,
   }
 
   switch (analysisType) {
-    case "spelling":
-      return callGramcheck(image.buffer, options)
-    case "lineheight":
-      return callLineheight(image.buffer, options)
-    case "spacing":
-      return callWordspace(image.buffer, options)
+    case "spelling": {
+      const result = await callGramcheck(image.buffer, options)
+      return { rawResponse: result.data, logId: result.logId }
+    }
+    case "lineheight": {
+      const result = await callLineheight(image.buffer, options)
+      return { rawResponse: result.data, logId: result.logId }
+    }
+    case "spacing": {
+      const result = await callWordspace(image.buffer, options)
+      return { rawResponse: result.data, logId: result.logId }
+    }
   }
 }
 
@@ -286,9 +296,26 @@ export async function runQuickAnalysis(
     bytes: image.buffer.byteLength,
   })
 
+  const inferenceLogContext: InferenceLogContext = {
+    source: "quick_analysis",
+    userId,
+    organizationId: analysis.organization_id,
+    quickAnalysisId,
+    pageNumber,
+    imageWidth: image.width,
+    imageHeight: image.height,
+  }
+
   let rawResponse: unknown
+  let inferenceLogId: string | null = null
   try {
-    rawResponse = await callAnalysisApi(analysisType, image)
+    const inference = await callAnalysisApi(
+      analysisType,
+      image,
+      inferenceLogContext
+    )
+    rawResponse = inference.rawResponse
+    inferenceLogId = inference.logId
   } catch (error) {
     if (error instanceof InferenceApiError) {
       throw new QuickAnalysisServiceError(
@@ -301,6 +328,7 @@ export async function runQuickAnalysis(
   }
 
   const parsed = parseAnalysisResponse(analysisType, rawResponse)
+  void updateInferenceLogSuggestionCount(inferenceLogId, parsed.length)
 
   if (AI_ANALYSIS_DEBUG_LOG) {
     console.log("[Quick AI Analysis] EC2 response", {

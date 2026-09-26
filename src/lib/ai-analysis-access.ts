@@ -24,6 +24,7 @@ export interface IterationForAnalysis {
 
 export interface AiAnalysisAccessContext {
   userId: string
+  organizationId: string
   iteration: IterationForAnalysis
 }
 
@@ -31,7 +32,7 @@ async function assertQualityCheckPermission(
   supabase: SupabaseClient,
   userId: string,
   iterationId: string
-): Promise<void> {
+): Promise<string> {
   const { data: iteration, error: iterationError } = await supabase
     .from("iterations")
     .select("creatives(projects(clients(organization_id)))")
@@ -65,6 +66,8 @@ async function assertQualityCheckPermission(
       403
     )
   }
+
+  return organizationId
 }
 
 export async function assertCanRunAiAnalysis(
@@ -82,7 +85,11 @@ export async function assertCanRunAiAnalysis(
     throw new AiAnalysisAccessError("Iteration not found", 404)
   }
 
-  await assertQualityCheckPermission(supabase, userId, iterationId)
+  const organizationId = await assertQualityCheckPermission(
+    supabase,
+    userId,
+    iterationId
+  )
 
   if (!iteration.image_url) {
     throw new AiAnalysisAccessError("Iteration has no creative file", 400)
@@ -90,6 +97,7 @@ export async function assertCanRunAiAnalysis(
 
   return {
     userId,
+    organizationId,
     iteration: {
       id: iteration.id,
       creative_id: iteration.creative_id,

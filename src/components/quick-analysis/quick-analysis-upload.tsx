@@ -35,7 +35,8 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
+  const [phase, setPhase] = useState<"idle" | "uploading" | "opening">("idle")
+  const isBusy = phase !== "idle"
 
   const handleFile = async (file: File) => {
     setErrorMessage(null)
@@ -53,7 +54,7 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
       return
     }
 
-    setIsUploading(true)
+    setPhase("uploading")
 
     try {
       const quickAnalysisId = crypto.randomUUID()
@@ -103,13 +104,15 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
         throw new Error(payload?.error || "Failed to create quick analysis")
       }
 
+      // Stay on this spinner until the detail route replaces the page.
+      // Clearing here flashes the idle upload UI while the next page loads.
+      setPhase("opening")
       router.push(`/quick-analysis/${quickAnalysisId}`)
     } catch (error) {
+      setPhase("idle")
       setErrorMessage(
         error instanceof Error ? error.message : "Upload failed. Please try again."
       )
-    } finally {
-      setIsUploading(false)
     }
   }
 
@@ -159,17 +162,17 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
             event.preventDefault()
             setIsDragging(false)
             const file = event.dataTransfer.files?.[0]
-            if (file && !isUploading) void handleFile(file)
+            if (file && !isBusy) void handleFile(file)
           }}
           onClick={() => {
-            if (!isUploading) fileInputRef.current?.click()
+            if (!isBusy) fileInputRef.current?.click()
           }}
           className={cn(
             "cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-colors",
             isDragging
               ? "border-[#DBFE52] bg-[#DBFE52]/10"
               : "border-border hover:border-[#DBFE52]/60 hover:bg-accent/40",
-            isUploading && "pointer-events-none opacity-70"
+            isBusy && "pointer-events-none opacity-70"
           )}
         >
           <input
@@ -178,11 +181,11 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
             accept="image/*,.pdf,application/pdf"
             className="hidden"
             onChange={onInputChange}
-            disabled={isUploading}
+            disabled={isBusy}
           />
 
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            {isUploading ? (
+            {isBusy ? (
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             ) : (
               <CloudUpload className="h-6 w-6 text-muted-foreground" />
@@ -190,7 +193,11 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
           </div>
 
           <p className="text-base font-medium">
-            {isUploading ? "Uploading..." : "Drop your file here"}
+            {phase === "uploading"
+              ? "Uploading..."
+              : phase === "opening"
+                ? "Opening..."
+                : "Drop your file here"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             or click to browse
@@ -210,7 +217,7 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
             </span>
           </div>
 
-          {!isUploading && (
+          {!isBusy && (
             <Button type="button" className="mt-6" variant="secondary">
               <Upload className="mr-2 h-4 w-4" />
               Choose file

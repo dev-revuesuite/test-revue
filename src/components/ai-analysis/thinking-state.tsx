@@ -1,9 +1,8 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { Check } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Check, ChevronDown, Loader2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
-import styles from "./thinking-state.module.css"
 
 const GENERIC_STEPS = [
   "Capturing the creative",
@@ -25,8 +24,6 @@ export function ThinkingState() {
   const [visible, setVisible] = useState(0)
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null)
   const expanded = manualExpanded ?? true
-  const traceRef = useRef<HTMLDivElement>(null)
-  const [lineHeight, setLineHeight] = useState(0)
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
@@ -40,84 +37,75 @@ export function ThinkingState() {
     }
   }, [])
 
-  useLayoutEffect(() => {
-    if (traceRef.current) {
-      setLineHeight(traceRef.current.offsetHeight)
-    }
-  }, [visible, expanded])
-
   return (
-    <div className={styles.root}>
+    <div className="flex w-full flex-col">
       <button
         type="button"
         aria-expanded={expanded}
         onClick={() => setManualExpanded((current) => !(current ?? true))}
-        className={styles.headerButton}
+        className="flex w-fit items-center gap-2 py-1 text-left"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="var(--ink-2)"
-          className={styles.starIcon}
+        <Sparkles
+          className="h-4 w-4 shrink-0 text-purple-500 dark:text-purple-400"
           aria-hidden
+        />
+        <span
+          role="status"
+          className="text-sm font-medium text-gray-800 dark:text-white"
         >
-          <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
-        </svg>
-        <span role="status" className="contents">
-          <span className={styles.activeLabel}>Thinking</span>
+          Thinking
         </span>
-        {elapsed >= 3 && <span className={styles.elapsed}>{elapsed}s</span>}
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--ink-3)"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={cn(styles.chevron, expanded && styles.chevronExpanded)}
+        {elapsed >= 3 && (
+          <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">
+            {elapsed}s
+          </span>
+        )}
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform dark:text-gray-500",
+            expanded && "rotate-180"
+          )}
           aria-hidden
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        />
       </button>
 
       <div
         className={cn(
-          styles.traceShell,
-          expanded ? styles.traceShellExpanded : styles.traceShellCollapsed
+          "grid transition-[grid-template-rows,opacity] duration-300",
+          expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         )}
       >
-        <div className={styles.traceOverflow}>
-          <div className={styles.traceInner}>
-            <span
-              aria-hidden
-              className={styles.traceLine}
-              style={{ height: lineHeight ? lineHeight - 2 : 0 }}
-            />
-            <div ref={traceRef} className={styles.traceRows}>
-              {GENERIC_STEPS.slice(0, visible).map((label, index) => {
-                // Only completed steps get a check; the newest revealed step
-                // spins until the next reveal (or unmount for the last one).
-                const isCurrent = index === visible - 1
-                return (
-                  <div key={label} className={styles.row}>
-                    {isCurrent ? (
-                      <span className={styles.spinner} aria-hidden />
-                    ) : (
-                      <Check
-                        className="h-3.5 w-3.5 shrink-0 text-[var(--ink-3)]"
-                        strokeWidth={2.5}
-                        aria-hidden
-                      />
+        <div className="overflow-hidden">
+          <div className="mt-2 flex flex-col gap-1 border-l border-gray-200 pl-3 dark:border-[#444]">
+            {GENERIC_STEPS.slice(0, visible).map((label, index) => {
+              const isCurrent = index === visible - 1
+              return (
+                <div key={label} className="flex min-h-7 items-center gap-2">
+                  {isCurrent ? (
+                    <Loader2
+                      className="h-3.5 w-3.5 shrink-0 animate-spin text-purple-500 motion-reduce:animate-none dark:text-purple-400"
+                      aria-hidden
+                    />
+                  ) : (
+                    <Check
+                      className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500"
+                      strokeWidth={2.5}
+                      aria-hidden
+                    />
+                  )}
+                  <span
+                    className={cn(
+                      "truncate text-xs",
+                      isCurrent
+                        ? "font-medium text-gray-800 dark:text-gray-100"
+                        : "text-gray-500 dark:text-gray-400"
                     )}
-                    <span className={styles.rowPrimary}>{label}</span>
-                  </div>
-                )
-              })}
-            </div>
+                  >
+                    {label}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

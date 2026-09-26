@@ -12,11 +12,13 @@ import {
   type IterationForAnalysis,
 } from "@/lib/ai-analysis-access"
 import { downloadCreativeFile, CreativeStorageError } from "@/lib/creative-storage"
+import { updateInferenceLogSuggestionCount } from "@/lib/ai-inference-logger"
 import {
   callGramcheck,
   callLineheight,
   callWordspace,
   InferenceApiError,
+  type InferenceLogContext,
 } from "@/lib/inference-api"
 import {
   normalizeAnalysisImageForInference,
@@ -102,14 +104,6 @@ async function finalizeAnalysisImage(
   }
 }
 
-function analysisTypeToEndpoint(
-  analysisType: PersistedAiAnalysisType
-): "gramcheck" | "wordspace" | "lineheight" {
-  if (analysisType === "spelling") return "gramcheck"
-  if (analysisType === "lineheight") return "lineheight"
-  return "wordspace"
-}
-
 async function prepareAnalysisImage(
   iteration: IterationForAnalysis,
   pageNumber: number,
@@ -153,20 +147,28 @@ async function prepareAnalysisImage(
 
 async function callAnalysisApi(
   analysisType: PersistedAiAnalysisType,
-  image: PreparedAnalysisImage
-): Promise<unknown> {
+  image: PreparedAnalysisImage,
+  logContext: InferenceLogContext
+): Promise<{ rawResponse: unknown; logId: string | null }> {
   const options = {
     filename: image.filename,
     mimeType: image.mimeType,
+    logContext,
   }
 
   switch (analysisType) {
-    case "spelling":
-      return callGramcheck(image.buffer, options)
-    case "lineheight":
-      return callLineheight(image.buffer, options)
-    case "spacing":
-      return callWordspace(image.buffer, options)
+    case "spelling": {
+      const result = await callGramcheck(image.buffer, options)
+      return { rawResponse: result.data, logId: result.logId }
+    }
+    case "lineheight": {
+      const result = await callLineheight(image.buffer, options)
+      return { rawResponse: result.data, logId: result.logId }
+    }
+    case "spacing": {
+      const result = await callWordspace(image.buffer, options)
+      return { rawResponse: result.data, logId: result.logId }
+    }
   }
 }
 
@@ -265,9 +267,27 @@ export async function runAiAnalysis(
     mimeType: image.mimeType,
   })
 
+  const inferenceLogContext: InferenceLogContext = {
+    source: "studio_analysis",
+    userId,
+    organizationId: access.organizationId,
+    iterationId,
+    creativeId: access.iteration.creative_id,
+    pageNumber,
+    imageWidth: image.width,
+    imageHeight: image.height,
+  }
+
   let rawResponse: unknown
+  let inferenceLogId: string | null = null
   try {
-    rawResponse = await callAnalysisApi(analysisType, image)
+    const inference = await callAnalysisApi(
+      analysisType,
+      image,
+      inferenceLogContext
+    )
+    rawResponse = inference.rawResponse
+    inferenceLogId = inference.logId
   } catch (error) {
     if (error instanceof InferenceApiError) {
       throw new AiAnalysisServiceError(
@@ -280,6 +300,7 @@ export async function runAiAnalysis(
   }
 
   const parsed = parseAnalysisResponse(analysisType, rawResponse)
+  void updateInferenceLogSuggestionCount(inferenceLogId, parsed.length)
 
   if (AI_ANALYSIS_DEBUG_LOG) {
     console.log("[AI Analysis] EC2 response", {

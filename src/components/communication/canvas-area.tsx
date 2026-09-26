@@ -102,6 +102,9 @@ interface CanvasAreaProps {
   canRunAiAnalysis?: boolean;
   /** While true, temporarily hide mode-specific canvas overlays (hold eye button) */
   overlaysPeekHidden?: boolean;
+  /** Fired when the primary image or PDF page has painted. */
+  onMediaDisplayed?: () => void;
+  onMediaError?: (error: Error) => void;
 }
 
 // Helper: build SVG path "d" attribute from pointer points using quadratic smoothing
@@ -184,6 +187,8 @@ export function CanvasArea({
   onShowAIAnalysisOptions,
   canRunAiAnalysis = false,
   overlaysPeekHidden = false,
+  onMediaDisplayed,
+  onMediaError,
 }: CanvasAreaProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
@@ -814,6 +819,8 @@ export function CanvasArea({
               alt="Creative Preview"
               className="w-[350px] lg:w-[420px] xl:w-[500px]"
               onPdfReady={onPdfDocumentReady}
+              onLayoutChange={onMediaDisplayed}
+              onMediaError={onMediaError}
             />
 
             <svg

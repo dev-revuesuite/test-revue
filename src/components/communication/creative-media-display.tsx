@@ -16,6 +16,7 @@ interface CreativeMediaDisplayProps {
   onPdfError?: (error: Error) => void
   /** Called when image loads or PDF page finishes rendering (overlay layout sync). */
   onLayoutChange?: () => void
+  onMediaError?: (error: Error) => void
 }
 
 /** Renders image or PDF page for Revue canvas (matches prior img layout classes). */
@@ -30,6 +31,7 @@ export function CreativeMediaDisplay({
   onPdfReady,
   onPdfError,
   onLayoutChange,
+  onMediaError,
 }: CreativeMediaDisplayProps) {
   if (!url) {
     return (
@@ -54,7 +56,10 @@ export function CreativeMediaDisplay({
         displayWidth={displayWidth}
         className={className}
         onReady={onPdfReady}
-        onError={onPdfError}
+        onError={(error) => {
+          onPdfError?.(error)
+          onMediaError?.(error)
+        }}
         onPageRendered={onLayoutChange}
       />
     )
@@ -70,6 +75,9 @@ export function CreativeMediaDisplay({
       data-creative-media
       data-creative-media-image
       onLoad={() => onLayoutChange?.()}
+      onError={() =>
+        onMediaError?.(new Error("Could not open this file"))
+      }
     />
   )
 }

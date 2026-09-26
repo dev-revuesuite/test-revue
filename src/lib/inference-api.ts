@@ -2,6 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import {
+  completeInferenceLog,
+  failInferenceLog,
+  startInferenceLog,
+  type InferenceLogContext,
+} from "@/lib/ai-inference-logger"
+import {
   getInferenceApiBaseUrl,
   getInferenceApiTimeoutMs,
   getMaxInferenceFileBytes,
@@ -34,6 +40,19 @@ async function dumpOutgoingInferenceImage(
 }
 
 export type InferenceEndpoint = "gramcheck" | "wordspace" | "lineheight"
+
+export type { InferenceLogContext }
+
+export interface InferenceCallOptions {
+  filename?: string
+  mimeType?: string
+  logContext?: InferenceLogContext
+}
+
+export interface InferenceCallResult {
+  data: unknown
+  logId: string | null
+}
 
 export class InferenceApiError extends Error {
   constructor(
@@ -90,8 +109,8 @@ function formatFetchError(error: unknown, timeoutMs: number): string {
 export async function callInferenceApi(
   endpoint: InferenceEndpoint,
   imageBuffer: Buffer,
-  options?: { filename?: string; mimeType?: string }
-): Promise<unknown> {
+  options?: InferenceCallOptions
+): Promise<InferenceCallResult> {
   if (imageBuffer.byteLength > getMaxInferenceFileBytes()) {
     throw new InferenceApiError("Image exceeds 50 MB inference limit", 413)
   }
@@ -119,6 +138,16 @@ export async function callInferenceApi(
 
   await dumpOutgoingInferenceImage(endpoint, imageBuffer, filename)
 
+  const logContext = options?.logContext
+  const logId =
+    logContext != null
+      ? await startInferenceLog(endpoint, logContext, {
+          buffer: imageBuffer,
+          mimeType,
+        })
+      : null
+
+  const startedAt = Date.now()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -130,29 +159,55 @@ export async function callInferenceApi(
     })
 
     const responseText = await response.text()
+    const durationMs = Date.now() - startedAt
 
     if (!response.ok) {
-      throw new InferenceApiError(
+      const apiError = new InferenceApiError(
         `Inference API returned ${response.status}: ${responseText.slice(0, 300)}`,
         response.status
       )
+      if (logId) {
+        await failInferenceLog(logId, {
+          message: apiError.message,
+          status: apiError.status,
+          durationMs,
+        })
+      }
+      throw apiError
     }
 
     try {
-      return JSON.parse(responseText) as unknown
+      const data = JSON.parse(responseText) as unknown
+      if (logId) {
+        await completeInferenceLog(logId, { response: data, durationMs })
+      }
+      return { data, logId }
     } catch (parseError) {
-      throw new InferenceApiError(
+      const apiError = new InferenceApiError(
         "Inference API returned non-JSON response",
         response.status,
         parseError
       )
+      if (logId) {
+        await failInferenceLog(logId, {
+          message: apiError.message,
+          status: apiError.status,
+          durationMs,
+        })
+      }
+      throw apiError
     }
   } catch (error) {
     if (error instanceof InferenceApiError) throw error
 
+    const durationMs = Date.now() - startedAt
     const message = formatFetchError(error, timeoutMs)
     const status =
       error instanceof Error && error.name === "AbortError" ? 504 : 502
+
+    if (logId) {
+      await failInferenceLog(logId, { message, status, durationMs })
+    }
 
     throw new InferenceApiError(message, status, error)
   } finally {
@@ -162,21 +217,21 @@ export async function callInferenceApi(
 
 export async function callGramcheck(
   imageBuffer: Buffer,
-  options?: { filename?: string; mimeType?: string }
-): Promise<unknown> {
+  options?: InferenceCallOptions
+): Promise<InferenceCallResult> {
   return callInferenceApi("gramcheck", imageBuffer, options)
 }
 
 export async function callWordspace(
   imageBuffer: Buffer,
-  options?: { filename?: string; mimeType?: string }
-): Promise<unknown> {
+  options?: InferenceCallOptions
+): Promise<InferenceCallResult> {
   return callInferenceApi("wordspace", imageBuffer, options)
 }
 
 export async function callLineheight(
   imageBuffer: Buffer,
-  options?: { filename?: string; mimeType?: string }
-): Promise<unknown> {
+  options?: InferenceCallOptions
+): Promise<InferenceCallResult> {
   return callInferenceApi("lineheight", imageBuffer, options)
 }
