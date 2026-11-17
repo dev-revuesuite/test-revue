@@ -91,7 +91,10 @@ export async function POST(
     return Response.json(result)
   } catch (error) {
     if (error instanceof ShareCreativeError) {
-      return Response.json({ error: error.message }, { status: error.status })
+      return Response.json(
+        { error: error.message, code: error.code },
+        { status: error.status }
+      )
     }
 
     console.error("Share creative failed:", error)

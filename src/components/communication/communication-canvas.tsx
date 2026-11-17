@@ -19,7 +19,6 @@ import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count";
 import { requestPdfLinearization } from "@/lib/request-pdf-linearization";
 import { captureCreativeMediaForAnalysis } from "@/lib/capture-creative-media";
 import { apiPath } from "@/lib/base-path";
-import { CREATIVE_FILE_CACHE_CONTROL } from "@/lib/creative-storage";
 import { downloadCreativeInBrowser } from "@/lib/download-creative-client";
 import {
   downloadCreativeWithAiBoxesInBrowser,
@@ -52,8 +51,20 @@ import {
   useAiAnalysisListener,
 } from "@/contexts/ai-analysis-context";
 import { isActiveAiAnalysisStatus } from "@/types/ai-analysis-job";
+import {
+  isQcPlanBlockCode,
+  QcLimitDialog,
+  type QcPlanBlock,
+} from "@/components/plans/qc-limit-dialog";
+import {
+  isStorageUploadBlocked,
+  showTrialExpiredDialog,
+  uploadWithQuota,
+  type UploadWithQuotaResult,
+} from "@/lib/upload-with-quota";
 import { PdfPagePager } from "./pdf-page-pager";
 import { usePermission, usePermissions } from "@/contexts/permission-context";
+import { useTrialExpired } from "@/contexts/plan-features-context";
 
 function feedbackPageNumber(f: Feedback): number {
   return f.pageNumber ?? 1;
@@ -176,6 +187,9 @@ export function RevueCanvas({
   );
 
   const { isOrgOwner } = usePermissions();
+  // After the free trial the canvas is view-only: adding comments, replies or
+  // drawings shows the upgrade dialog instead (the database refuses them too).
+  const trialExpired = useTrialExpired();
   const canFeedbackUcc = usePermission("feedback_ucc");
   const canQualityCheck = usePermission("quality_check_tool");
   const canAddBrief = usePermission("add_brief");
@@ -322,6 +336,7 @@ export function RevueCanvas({
 
   // Bottom-left toast notification
   const [toast, setToast] = useState<{ message: string; tone: "info" | "error" } | null>(null);
+  const [qcPlanBlock, setQcPlanBlock] = useState<QcPlanBlock | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback(
     (message: string, tone: "info" | "error" = "info") => {
@@ -342,7 +357,14 @@ export function RevueCanvas({
   useAiAnalysisListener((event) => {
     if (event.type === "failed") {
       if (event.job.creativeId === creativeIdRef.current) {
-        showToast(event.job.error || "AI analysis failed", "error");
+        if (event.job.errorCode && isQcPlanBlockCode(event.job.errorCode)) {
+          setQcPlanBlock({
+            code: event.job.errorCode,
+            message: event.job.error || "QC runs aren't available right now.",
+          });
+        } else {
+          showToast(event.job.error || "AI analysis failed", "error");
+        }
       }
       return;
     }
@@ -693,7 +715,11 @@ export function RevueCanvas({
       setCompareMode(!compareMode);
       if (!compareMode && iterations.length > 1) {
         // Default to previous iteration
-        const prevIteration = iterations.find(i => i.version === (currentIteration?.version || 0) - 1);
+        // Closest older version; numbers can have gaps after old versions are deleted.
+        const currentVersion = currentIteration?.version || 0;
+        const prevIteration = iterations
+          .filter(i => i.version < currentVersion)
+          .sort((a, b) => b.version - a.version)[0];
         setCompareIterationId(prevIteration?.id || iterations[1]?.id || null);
       }
       setSelectedTool("pointer");
@@ -717,6 +743,10 @@ export function RevueCanvas({
     drawing?: DrawingPath;
   }) => {
     if (!canAddFeedback) return;
+    if (trialExpired) {
+      showTrialExpiredDialog();
+      return;
+    }
 
     const newFeedback: Feedback = {
       id: feedback.id,
@@ -758,9 +788,19 @@ export function RevueCanvas({
             drawing_id: feedback.drawing?.id || null,
             user_id: authUser.id,
             page_number: isPdfIteration ? currentPage : 1,
-          }).then(({ error }) => {
+          }).select("number").single().then(({ data: saved, error }) => {
             if (error) console.error("Failed to save feedback:", error);
             else {
+              // The database keeps numbers unique per version (comments this
+              // user can't see may already use one); show the saved number.
+              if (saved?.number && saved.number !== feedback.number) {
+                setIterations(prev => prev.map(iteration => ({
+                  ...iteration,
+                  feedbacks: iteration.feedbacks.map(f =>
+                    f.id === feedback.id ? { ...f, number: saved.number } : f
+                  ),
+                })));
+              }
               recordClientActivity(INTERACTION_AND_FEEDBACK);
               if (feedbackSource === "team") {
                 maybeAdvanceToReviewQc();
@@ -776,6 +816,16 @@ export function RevueCanvas({
 
   // Update drawings for current iteration (merge other PDF pages when filtering)
   const handleDrawingsChange = (newPageDrawings: DrawingPath[]) => {
+    if (trialExpired) {
+      const knownIds = new Set(
+        (iterationsRef.current.find((i) => i.id === activeIterationId)?.drawings || []).map((d) => d.id)
+      );
+      if (newPageDrawings.some((d) => !knownIds.has(d.id))) {
+        showTrialExpiredDialog();
+        return;
+      }
+    }
+
     setIterations((prev) =>
       prev.map((iteration) => {
         if (iteration.id !== activeIterationId) return iteration;
@@ -851,6 +901,10 @@ export function RevueCanvas({
   // Add reply to feedback
   const handleAddReply = (feedbackId: string, reply: ReplyItem) => {
     if (!canAddFeedback) return;
+    if (trialExpired) {
+      showTrialExpiredDialog();
+      return;
+    }
     // Generate a real UUID so the optimistic id, DB id, and realtime payload id all match.
     // This makes dedupe robust (was previously keyed on feedback_id + content, which collides).
     const replyId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
@@ -1004,7 +1058,22 @@ export function RevueCanvas({
 
   // Handle new iteration upload
   const handleNewIterationUpload = async (file: File) => {
-    const newVersion = iterations.length + 1;
+    // Highest version + 1, not a count: older versions can be deleted by the
+    // plan's version-history retention, which leaves gaps in the numbers.
+    let newVersion =
+      iterations.reduce((max, iter) => Math.max(max, iter.version), 0) + 1;
+    if (creativeId) {
+      const { data: latestVersionRow } = await supabase
+        .from("iterations")
+        .select("version")
+        .eq("creative_id", creativeId)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestVersionRow?.version != null) {
+        newVersion = Math.max(newVersion, latestVersionRow.version + 1);
+      }
+    }
     let imageUrl = URL.createObjectURL(file);
     let newId = crypto.randomUUID();
     const mediaType = getMediaTypeFromFile(file);
@@ -1014,23 +1083,28 @@ export function RevueCanvas({
     if (creativeId) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
-        // Upload file to storage (image or PDF)
-        const filePath = `iterations/${creativeId}/${newId}/${file.name}`;
-        const { data: uploadData } = await supabase.storage
-          .from("revue-assets")
-          .upload(filePath, file, {
-            cacheControl: CREATIVE_FILE_CACHE_CONTROL,
+        // Upload through the app server (permission + the plan's storage
+        // limit). Never save a version that points at a local blob: URL.
+        let upload: UploadWithQuotaResult;
+        try {
+          upload = await uploadWithQuota(supabase, {
+            category: "version",
+            file,
+            target: { creativeId, iterationId: newId },
           });
-
-        if (uploadData) {
-          const { data: urlData } = supabase.storage
-            .from("revue-assets")
-            .getPublicUrl(filePath);
-          imageUrl = urlData.publicUrl;
+        } catch (uploadError) {
+          // A plan refusal already showed its dialog.
+          if (!isStorageUploadBlocked(uploadError)) {
+            console.error("Failed to upload new iteration:", uploadError);
+            showToast("Couldn't upload the new version. Please try again.", "error");
+          }
+          return;
         }
+        const filePath = upload.path;
+        imageUrl = upload.publicUrl;
 
         // Create iteration record
-        const { data: iterData } = await supabase.from("iterations").insert({
+        const { data: iterData, error: iterError } = await supabase.from("iterations").insert({
           id: newId,
           creative_id: creativeId,
           version: newVersion,
@@ -1040,9 +1114,13 @@ export function RevueCanvas({
           created_by: authUser.id,
         }).select("id").single();
 
-        if (iterData) {
-          newId = iterData.id;
+        if (iterError || !iterData) {
+          console.error("Failed to save new iteration:", iterError);
+          await upload.discard();
+          showToast("Couldn't save the new version. Please try again.", "error");
+          return;
         }
+        newId = iterData.id;
 
         // For PDFs, read page count and persist so pager renders immediately.
         // Reads via the range proxy, so only small chunks download.
@@ -1057,9 +1135,7 @@ export function RevueCanvas({
 
           // Await web-copy linearization before the iteration becomes active.
           // Original bytes stay at filePath; `.web.pdf` is optional for viewing.
-          if (uploadData) {
-            await requestPdfLinearization("revue-assets", filePath);
-          }
+          await requestPdfLinearization("revue-assets", filePath);
         }
 
         // Update creative's iteration count
@@ -1473,6 +1549,11 @@ export function RevueCanvas({
       />
 
       {/* Bottom-left toast notification */}
+      <QcLimitDialog
+        block={qcPlanBlock}
+        onClose={() => setQcPlanBlock(null)}
+      />
+
       {toast && (
         <div className="fixed bottom-6 left-6 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div

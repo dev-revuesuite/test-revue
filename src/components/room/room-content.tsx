@@ -42,7 +42,12 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 import { NewClientOnboarding, type ClientFormData } from "@/components/studio/new-client-onboarding"
-import { uploadClientBrandImages } from "@/lib/upload-client-brand-images"
+import {
+  discardClientAssetUploads,
+  uploadClientAsset,
+  uploadClientBrandImages,
+  type ClientAssetUploads,
+} from "@/lib/upload-client-brand-images"
 import { isPdfFile } from "@/lib/media-type"
 import { usePreviewBackfill } from "@/hooks/use-preview-backfill"
 import { downloadReference, downloadAllReferences } from "@/lib/download-references"
@@ -80,6 +85,9 @@ import {
   isProjectReadyToComplete,
 } from "@/lib/project-completion"
 import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipeline-status"
+import { useTrialExpired, useWhenWritable } from "@/contexts/plan-features-context"
+import { runIfWritable } from "@/lib/trial-guard"
+import { showTrialExpiredDialog } from "@/lib/upload-with-quota"
 
 // Types
 interface Deliverable {
@@ -467,7 +475,10 @@ function TeamMembersModal({ open, onOpenChange, team, projectName, orgMembers, o
   }
 
   const assignedIds = new Set(team.map(t => t.id))
-  const assigned = orgMembers.filter(m => assignedIds.has(m.id))
+  // Everyone already on the team stays listed (and removable), even if they
+  // aren't offered anymore (e.g. a client added before clients were excluded).
+  const orgMemberById = new Map(orgMembers.map(m => [m.id, m]))
+  const assigned = team.map(t => orgMemberById.get(t.id) ?? { id: t.id, name: t.name, email: "", avatar: t.avatar })
   const available = orgMembers.filter(m => !assignedIds.has(m.id))
 
   return (
@@ -566,6 +577,9 @@ export function RoomContent({
   const canManageProjectTeam = isOrgOwner || canAddTeamMember
   const canUploadCreatives =
     userRole !== "client" && canManageProject
+  /** After the free trial, editing actions show the upgrade dialog instead of a form. */
+  const whenWritable = useWhenWritable()
+  const trialExpired = useTrialExpired()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [selectedProject, setSelectedProject] = useState<Project | null>(
@@ -1075,22 +1089,29 @@ export function RoomContent({
     if (!organizationId) return
     const d = data
 
+    // Uploads go through the app server (permission + storage limit);
+    // collected so they can be removed if saving the client fails.
+    const assetUploads: ClientAssetUploads = []
+
     // Upload logo if a new file was selected
     let logoUrl: string | null = d.logoPreview || null
     if (d.logo) {
-      const ext = (d.logo.name.split(".").pop() || "").replace(/[^A-Za-z0-9]+/g, "")
-      const path = `${organizationId}/${Date.now()}-logo${ext ? `.${ext}` : ""}`
-      const { error: uploadErr } = await supabase.storage.from("client-assets").upload(path, d.logo)
-      if (!uploadErr) {
-        logoUrl = supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl
-      }
+      const uploadedLogoUrl = await uploadClientAsset(
+        supabase,
+        "client_logo",
+        organizationId,
+        d.logo,
+        assetUploads
+      )
+      if (uploadedLogoUrl) logoUrl = uploadedLogoUrl
     }
 
     // Upload new brand images (File objects from file picker)
     const brandImageUrls = await uploadClientBrandImages(
       supabase,
       organizationId,
-      d.brandImages
+      d.brandImages,
+      assetUploads
     )
 
     // Upload custom fonts
@@ -1099,14 +1120,18 @@ export function RoomContent({
       .map((f) => ({ label: f.label, font_name: f.font, font_url: null as string | null }))
 
     for (const customFont of d.customFonts) {
-      const safeName = customFont.name.replace(/[^A-Za-z0-9._-]+/g, "-")
-      const path = `${organizationId}/${Date.now()}-${safeName}`
-      const { error: fontErr } = await supabase.storage.from("client-assets").upload(path, customFont.file)
-      if (!fontErr) {
+      const fontUrl = await uploadClientAsset(
+        supabase,
+        "font",
+        organizationId,
+        customFont.file,
+        assetUploads
+      )
+      if (fontUrl) {
         fontsJson.push({
           label: customFont.name,
           font_name: customFont.name,
-          font_url: supabase.storage.from("client-assets").getPublicUrl(path).data.publicUrl,
+          font_url: fontUrl,
         })
       }
     }
@@ -1137,6 +1162,7 @@ export function RoomContent({
 
     if (error) {
       console.error("Failed to update client:", error)
+      await discardClientAssetUploads(assetUploads)
       return
     }
 
@@ -1220,7 +1246,7 @@ export function RoomContent({
             <button
               type="button"
               aria-label="Edit Client"
-              onClick={() => setEditClientOpen(true)}
+              onClick={whenWritable(() => setEditClientOpen(true))}
               className="group flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#5C6ECD]/20 bg-white/80 hover:bg-white hover:border-[#5C6ECD]/40 hover:shadow-sm transition-all"
             >
               <Settings className="w-4 h-4 text-[#5C6ECD] group-hover:rotate-90 transition-transform duration-300" />
@@ -1343,7 +1369,7 @@ export function RoomContent({
                     {data.status !== "completed" && (
                       <Button
                         variant="outline"
-                        onClick={() => setCompleteProjectOpen(true)}
+                        onClick={whenWritable(() => setCompleteProjectOpen(true))}
                         size="sm"
                         className="border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10"
                       >
@@ -1351,7 +1377,7 @@ export function RoomContent({
                         Complete project
                       </Button>
                     )}
-                    <Button variant="outline" onClick={() => setIsEditing(true)} size="sm"><Pencil className="w-4 h-4 mr-2" />Edit</Button>
+                    <Button variant="outline" onClick={whenWritable(() => setIsEditing(true))} size="sm"><Pencil className="w-4 h-4 mr-2" />Edit</Button>
                   </>
                 ) : null}
               </div>
@@ -1384,7 +1410,7 @@ export function RoomContent({
                       </div>
                     </div>
                     {canManageProject && (
-                      <Button variant="outline" size="sm" onClick={() => setAddDeliverableOpen(true)}>
+                      <Button variant="outline" size="sm" onClick={whenWritable(() => setAddDeliverableOpen(true))}>
                         <Plus className="w-4 h-4 mr-2" />
                         Add Deliverable
                       </Button>
@@ -1440,7 +1466,7 @@ export function RoomContent({
                       </div>
                     </div>
                     {userRole !== "client" && (
-                      <Button variant="outline" size="sm" onClick={openBrandColorsEditor}>
+                      <Button variant="outline" size="sm" onClick={whenWritable(openBrandColorsEditor)}>
                         <Pencil className="w-4 h-4 mr-2" />
                         Edit Colors
                       </Button>
@@ -1516,7 +1542,7 @@ export function RoomContent({
                       <Button
                         size="sm"
                         className="bg-[#5C6ECD] hover:bg-[#4a5bb8] text-white shadow-md shadow-[#5C6ECD]/20"
-                        onClick={() => setAddCreativeOpen(true)}
+                        onClick={whenWritable(() => setAddCreativeOpen(true))}
                       >
                         <Upload className="w-4 h-4 mr-2" />
                         Upload Creative
@@ -1676,7 +1702,7 @@ export function RoomContent({
                           {userRole === "client" ? "No creative assets have been uploaded yet." : "Upload your first creative asset to start collaborating with your team."}
                         </p>
                         {canUploadCreatives && (
-                          <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8] shadow-lg shadow-[#5C6ECD]/20" onClick={() => setAddCreativeOpen(true)}>
+                          <Button className="bg-[#5C6ECD] hover:bg-[#4a5bb8] shadow-lg shadow-[#5C6ECD]/20" onClick={whenWritable(() => setAddCreativeOpen(true))}>
                             <Upload className="w-4 h-4 mr-2" />
                             Upload Creative
                           </Button>
@@ -1702,7 +1728,7 @@ export function RoomContent({
                     Team ({selectedProject.team.length})
                   </h3>
                   {canManageProjectTeam && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setTeamModalOpen(true)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={whenWritable(() => setTeamModalOpen(true))}>
                       <Plus className="w-3.5 h-3.5" />
                     </Button>
                   )}
@@ -1824,7 +1850,8 @@ export function RoomContent({
       </div>
 
       <AssetsDrawer open={assetsDrawerOpen} onOpenChange={setAssetsDrawerOpen} client={client} />
-      {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} orgMembers={orgMembers} onToggleMember={async (member) => {
+      {selectedProject && <TeamMembersModal open={teamModalOpen} onOpenChange={setTeamModalOpen} team={selectedProject.team} projectName={selectedProject.name} orgMembers={orgMembers} onToggleMember={(member) => runIfWritable(trialExpired, async () => {
+        // Viewing the team is allowed after the trial; changing it is not.
         const isAssigned = selectedProject.team.some(t => t.id === member.id)
         if (isAssigned) {
           // Remove
@@ -1840,7 +1867,7 @@ export function RoomContent({
           setEditData({ ...selectedProject, team: updatedTeam })
           await supabase.from("project_members").upsert({ project_id: selectedProject.id, member_id: member.id, role: "member" }, { onConflict: "project_id,member_id" })
         }
-      }} />}
+      }, showTrialExpiredDialog)} />}
 
       {/* Add Deliverable Modal */}
       <Dialog open={addDeliverableOpen} onOpenChange={setAddDeliverableOpen}>

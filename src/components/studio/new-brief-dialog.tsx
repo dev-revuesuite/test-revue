@@ -1,6 +1,8 @@
 "use client"
 
 import { publicPath } from "@/lib/base-path"
+import { usePlanFeature } from "@/contexts/plan-features-context"
+import { PlanLock } from "@/components/plans/plan-lock"
 
 import * as React from "react"
 import { useState, useRef, useEffect, useCallback } from "react"
@@ -358,6 +360,9 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
   }
 
   const [formData, setFormData] = useState<BriefFormData>(initialFormData)
+  // Productive Mode depends on the plan; Free briefs use Creative.
+  const productiveAllowed = usePlanFeature("productive_mode")
+  const selectedWorkmode: "productive" | "creative" = productiveAllowed ? formData.workmode : "creative"
   const [errors, setErrors] = useState<BriefFormErrors>({})
 
   // NEW: State for client users
@@ -512,7 +517,7 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
       setDropdownOpen(null)
       setIsCreating(true)
       try {
-        await onComplete(formData)
+        await onComplete({ ...formData, workmode: selectedWorkmode })
       } finally {
         setIsCreating(false)
       }
@@ -1069,15 +1074,21 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, workmode: "productive" }))}
+                          onClick={() => {
+                            if (!productiveAllowed) return
+                            setFormData(prev => ({ ...prev, workmode: "productive" }))
+                          }}
+                          disabled={!productiveAllowed}
+                          aria-disabled={!productiveAllowed}
                           className={cn(
                             "relative p-5 border-2 rounded-xl text-left transition-all group",
-                            formData.workmode === "productive"
+                            !productiveAllowed && "opacity-60 cursor-not-allowed",
+                            selectedWorkmode === "productive"
                               ? "border-[#5C6ECD] bg-[#5C6ECD]/5 shadow-lg shadow-[#5C6ECD]/10"
                               : "border-[#e5e5e5] dark:border-[#444] hover:border-[#5C6ECD]/50 hover:bg-[#5C6ECD]/5"
                           )}
                         >
-                          {formData.workmode === "productive" && (
+                          {selectedWorkmode === "productive" && (
                             <div className="absolute top-3 right-3 w-5 h-5 bg-[#5C6ECD] flex items-center justify-center rounded-full">
                               <Check className="w-3 h-3 text-white" />
                             </div>
@@ -1085,34 +1096,35 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                           <div className="flex items-center gap-3 mb-3">
                             <div className={cn(
                               "w-10 h-10 flex items-center justify-center rounded-lg transition-colors",
-                              formData.workmode === "productive"
+                              selectedWorkmode === "productive"
                                 ? "bg-[#5C6ECD]"
                                 : "bg-[#e5e5e5] dark:bg-[#333] group-hover:bg-[#5C6ECD]/20"
                             )}>
-                              <Zap className={cn("w-5 h-5 transition-colors", formData.workmode === "productive" ? "text-white" : "text-[#666] group-hover:text-[#5C6ECD]")} />
+                              <Zap className={cn("w-5 h-5 transition-colors", selectedWorkmode === "productive" ? "text-white" : "text-[#666] group-hover:text-[#5C6ECD]")} />
                             </div>
                             <h4 className="text-base font-semibold text-[#1a1a1a] dark:text-white">Productive</h4>
                           </div>
                           <p className="text-xs text-[#666] dark:text-[#999] leading-relaxed">Structured workflows for deadline-driven projects.</p>
+                          {!productiveAllowed && <PlanLock className="mt-3" />}
                         </button>
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, workmode: "creative" }))}
                           className={cn(
                             "relative p-5 border-2 rounded-xl text-left transition-all group overflow-hidden",
-                            formData.workmode === "creative"
+                            selectedWorkmode === "creative"
                               ? "border-transparent bg-gradient-to-br from-[#A259FF] via-[#FF7262] to-[#DBFE52] shadow-lg"
                               : "border-[#e5e5e5] dark:border-[#444] hover:border-[#A259FF]/50"
                           )}
                         >
-                          {formData.workmode !== "creative" && (
+                          {selectedWorkmode !== "creative" && (
                             <div className="absolute inset-0 bg-gradient-to-br from-[#A259FF]/0 via-[#FF7262]/0 to-[#DBFE52]/0 group-hover:from-[#A259FF]/5 group-hover:via-[#FF7262]/5 group-hover:to-[#DBFE52]/5 transition-all rounded-xl" />
                           )}
-                          {formData.workmode === "creative" && (
+                          {selectedWorkmode === "creative" && (
                             <div className="absolute inset-[2px] bg-white dark:bg-[#0a0a0a] rounded-[10px]" />
                           )}
                           <div className="relative">
-                            {formData.workmode === "creative" && (
+                            {selectedWorkmode === "creative" && (
                               <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-[#A259FF] to-[#FF7262] flex items-center justify-center rounded-full">
                                 <Check className="w-3 h-3 text-white" />
                               </div>
@@ -1120,15 +1132,15 @@ export function NewBriefDialog({ open, onClose, onComplete, clientDirectory = []
                             <div className="flex items-center gap-3 mb-3">
                               <div className={cn(
                                 "w-10 h-10 flex items-center justify-center rounded-lg transition-all",
-                                formData.workmode === "creative"
+                                selectedWorkmode === "creative"
                                   ? "bg-gradient-to-br from-[#A259FF] to-[#FF7262]"
                                   : "bg-[#e5e5e5] dark:bg-[#333] group-hover:bg-gradient-to-br group-hover:from-[#A259FF]/20 group-hover:to-[#FF7262]/20"
                               )}>
-                                <Sparkles className={cn("w-5 h-5 transition-colors", formData.workmode === "creative" ? "text-white" : "text-[#666] group-hover:text-[#A259FF]")} />
+                                <Sparkles className={cn("w-5 h-5 transition-colors", selectedWorkmode === "creative" ? "text-white" : "text-[#666] group-hover:text-[#A259FF]")} />
                               </div>
                               <h4 className={cn(
                                 "text-base font-semibold",
-                                formData.workmode === "creative"
+                                selectedWorkmode === "creative"
                                   ? "bg-gradient-to-r from-[#A259FF] to-[#FF7262] bg-clip-text text-transparent"
                                   : "text-[#1a1a1a] dark:text-white"
                               )}>Creative</h4>

@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Download,
+  Lock,
   ChevronRight,
   ChevronDown,
   Plus,
@@ -24,8 +25,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { usePermissions } from "@/contexts/permission-context";
+import { usePlanFeature } from "@/contexts/plan-features-context";
+import { PLAN_LOCK_LABEL } from "@/lib/plan-features";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TrialAvatarBadge } from "@/components/plans/trial-avatar-badge";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -79,7 +83,7 @@ export function CommunicationHeader({
   approveDisabled = false,
   isApproving = false,
   onDownload,
-  downloadDisabled = false,
+  downloadDisabled: downloadDisabledProp = false,
   downloadWithAiBoxesDisabled = false,
   clientId = "",
   clientName = "",
@@ -94,6 +98,10 @@ export function CommunicationHeader({
   const [isDark, setIsDark] = useState(false);
   const [currentUser, setCurrentUser] = useState({ name: "", email: "", avatar: "" });
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Downloads and exports depend on the plan (Free can view and share, not download).
+  const downloadsIncluded = usePlanFeature("image_export");
+  const downloadDisabled = downloadDisabledProp || !downloadsIncluded;
 
   const handleDownload = async (mode: CreativeDownloadMode) => {
     if (!onDownload || downloadDisabled || isDownloading) return
@@ -309,14 +317,16 @@ export function CommunicationHeader({
                 variant="outline"
                 size="icon"
                 disabled={downloadDisabled || isDownloading || !onDownload}
-                aria-label="Download creative"
-                title="Download creative"
+                aria-label={downloadsIncluded ? "Download creative" : `Download: ${PLAN_LOCK_LABEL}`}
+                title={downloadsIncluded ? "Download creative" : `Downloads: ${PLAN_LOCK_LABEL}`}
                 className="h-9 w-9 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-[#444] hover:bg-gray-50 dark:hover:bg-[#333] disabled:opacity-50"
               >
                 {isDownloading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
+                ) : downloadsIncluded ? (
                   <Download className="w-4 h-4" />
+                ) : (
+                  <Lock className="w-4 h-4" />
                 )}
               </Button>
             </DropdownMenuTrigger>
@@ -388,12 +398,14 @@ export function CommunicationHeader({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center justify-center">
-                <Avatar className="h-9 w-9 ring-2 ring-gray-200 dark:ring-[#444] hover:ring-blue-500 transition-all cursor-pointer">
-                  <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
-                  <AvatarFallback className="bg-[#ff7eb3] text-white text-sm font-semibold">
-                    {getInitials(currentUser.name)}
-                  </AvatarFallback>
-                </Avatar>
+                <TrialAvatarBadge>
+                  <Avatar className="h-9 w-9 ring-2 ring-gray-200 dark:ring-[#444] hover:ring-blue-500 transition-all cursor-pointer">
+                    <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+                    <AvatarFallback className="bg-[#ff7eb3] text-white text-sm font-semibold">
+                      {getInitials(currentUser.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </TrialAvatarBadge>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 p-1.5 bg-white dark:bg-[#2a2a2a] border-gray-200 dark:border-[#444]" align="end" sideOffset={8}>
@@ -442,7 +454,7 @@ export function CommunicationHeader({
                   Organisations
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => router.push("/account?tab=billing")}
+                  onClick={() => router.push("/account?tab=plan")}
                   className="gap-3 py-2 px-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] rounded dark:text-white"
                 >
                   <CreditCard className="w-4 h-4 text-gray-500 dark:text-gray-400" />

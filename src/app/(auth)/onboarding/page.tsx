@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { OnboardingForm } from "@/components/onboarding/onboarding-form"
+import { getMyGuestSeatWaitlist } from "@/lib/guest-seat-waitlist"
+import { GuestSeatWaitingScreen } from "@/components/onboarding/guest-seat-waiting-screen"
 
 export default async function OnboardingPage() {
   const supabase = await createClient()
@@ -87,6 +89,15 @@ export default async function OnboardingPage() {
 
     if (ownedOrg) {
       detectedRole = "admin"
+    }
+  }
+
+  // A client who signed up while the company's guest reviewer seats were full,
+  // with no access anywhere yet: show the waiting screen, not the role choice.
+  if (!detectedRole) {
+    const waitingFor = await getMyGuestSeatWaitlist(supabase)
+    if (waitingFor.length > 0) {
+      return <GuestSeatWaitingScreen organizationNames={waitingFor} />
     }
   }
 

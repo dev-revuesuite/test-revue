@@ -4,10 +4,8 @@ import { getMediaTypeFromFile, isPdfFile } from "@/lib/media-type"
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count"
 import { requestCreativePreview } from "@/lib/request-creative-preview"
 import { requestPdfLinearization } from "@/lib/request-pdf-linearization"
-import {
-  CreativeFileUploadError,
-  uploadCreativeFileWithProgress,
-} from "@/lib/upload-creative-file"
+import { CreativeFileUploadError } from "@/lib/upload-creative-file"
+import { uploadWithQuota } from "@/lib/upload-with-quota"
 import { touchClientActivityByProjectId } from "@/lib/touch-client-activity"
 import {
   deriveProjectBriefStatusFromCreatives,
@@ -51,20 +49,18 @@ export async function processCreativeUpload(
 
   await ensureProjectMemberAccess(supabase, projectId, user.id)
 
-  const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, "-")
-  const path = `${projectId}/${Date.now()}-${safeName}`
-
-  const thumbnailUrl = await uploadCreativeFileWithProgress(
-    supabase,
-    path,
+  // Through the app server: checks permission and the plan's storage limit.
+  const upload = await uploadWithQuota(supabase, {
+    category: "design",
     file,
-    {
-      onProgress: (percent) => {
-        options.onUploadProgress?.(Math.min(percent, 90))
-      },
-      signal: options.signal,
-    }
-  )
+    target: { projectId },
+    onProgress: (percent) => {
+      options.onUploadProgress?.(Math.min(percent, 90))
+    },
+    signal: options.signal,
+  })
+  const path = upload.path
+  const thumbnailUrl = upload.publicUrl
 
   options.onPhaseChange?.("processing")
   options.onUploadProgress?.(92)
@@ -82,6 +78,7 @@ export async function processCreativeUpload(
 
   if (error || !inserted) {
     console.error("Creative insert failed:", error)
+    await upload.discard()
     throw new CreativeFileUploadError(
       "Could not save the creative. Please try again."
     )
@@ -102,6 +99,7 @@ export async function processCreativeUpload(
   } catch (iterationError) {
     console.error("Creative iteration failed:", iterationError)
     await supabase.from("creatives").delete().eq("id", inserted.id)
+    await upload.discard()
     throw new CreativeFileUploadError(
       "Could not save the creative iteration. Please try again."
     )

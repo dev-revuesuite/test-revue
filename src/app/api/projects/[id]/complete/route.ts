@@ -27,7 +27,10 @@ export async function POST(
     return Response.json(result)
   } catch (error) {
     if (error instanceof CompleteProjectError) {
-      return Response.json({ error: error.message }, { status: error.status })
+      return Response.json(
+        { error: error.message, code: error.code },
+        { status: error.status }
+      )
     }
 
     console.error("Complete project failed:", error)

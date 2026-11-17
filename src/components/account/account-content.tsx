@@ -30,6 +30,8 @@ import {
 import { appRoute } from "@/lib/base-path"
 import { createClient } from "@/lib/supabase/client"
 import { RolesTab } from "@/components/account/roles-tab"
+import { PlanTab } from "@/components/account/plan-tab"
+import { isStorageUploadBlocked, uploadWithQuota } from "@/lib/upload-with-quota"
 import {
   inviteInternalMember,
   removeOrganizationMembers,
@@ -88,15 +90,19 @@ interface AccountContentProps {
   isOrgOwner?: boolean
   currentUserId?: string | null
   orgRoles?: OrgRoleOption[]
+  /** Team member with no role yet: they can't use the organization's pages. */
+  noRoleAssigned?: boolean
+  /** Shown to a client waiting for a guest reviewer seat. */
+  guestSeatNotice?: string | null
 }
 
-type TabType = "profile" | "settings" | "team" | "roles" | "organisations"
+type TabType = "profile" | "settings" | "team" | "roles" | "plan" | "organisations"
 
 // mockTeamMembers removed — now uses real data from props
 
 // mockOrganisations removed — now uses real data from props
 
-export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId, isOrgOwner = false, currentUserId = null, orgRoles = [] }: AccountContentProps) {
+export function AccountContent({ user, defaultTab = "profile", organization, teamMembers = [], profileData, organizationId, isOrgOwner = false, currentUserId = null, orgRoles = [], noRoleAssigned = false, guestSeatNotice = null }: AccountContentProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
 
@@ -105,6 +111,9 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
     { id: "settings", label: "Settings" },
     { id: "team", label: "Team" },
     ...(isOrgOwner ? [{ id: "roles" as TabType, label: "Roles" }] : []),
+    ...(isOrgOwner && organizationId
+      ? [{ id: "plan" as TabType, label: "Plan & Usage" }]
+      : []),
     { id: "organisations", label: "Organisations" },
   ]
 
@@ -120,6 +129,24 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
         <h1 className="text-2xl font-semibold text-foreground mb-6">
           {user.name}&apos;s account
         </h1>
+
+        {noRoleAssigned ? (
+          <div
+            role="status"
+            className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-foreground"
+          >
+            You don&apos;t have a role in this organization yet. Ask your organization admin to assign you a role.
+          </div>
+        ) : null}
+
+        {guestSeatNotice ? (
+          <div
+            role="status"
+            className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-foreground"
+          >
+            {guestSeatNotice}
+          </div>
+        ) : null}
 
         {/* Tabs - Notion style */}
         <div className="border-b border-border mb-8">
@@ -158,6 +185,9 @@ export function AccountContent({ user, defaultTab = "profile", organization, tea
           )}
           {activeTab === "roles" && organizationId ? (
             <RolesTab organizationId={organizationId} isOrgOwner={isOrgOwner} />
+          ) : null}
+          {activeTab === "plan" && isOrgOwner && organizationId ? (
+            <PlanTab organizationId={organizationId} />
           ) : null}
           {activeTab === "organisations" && (
             <OrganisationsTab initialOrg={organization} isOrgOwner={isOrgOwner} />
@@ -1619,20 +1649,16 @@ function OrganisationsTab({
       setActionError(null)
       try {
         const supabase = createClient()
-        const ext = (file.name.split(".").pop() || "").replace(/[^A-Za-z0-9]+/g, "")
-        const path = `org-logos/${org.id}/${Date.now()}-logo${ext ? `.${ext}` : ""}`
-        const { error: uploadErr } = await supabase.storage
-          .from("client-assets")
-          .upload(path, file)
-        if (uploadErr) {
-          setActionError(uploadErr.message || "Logo upload failed.")
-          return
-        }
-        const { data: urlData } = supabase.storage
-          .from("client-assets")
-          .getPublicUrl(path)
-        await persistOrg({ logo: urlData.publicUrl })
+        // Through the app server: permission check and the 5 MB logo limit.
+        const upload = await uploadWithQuota(supabase, {
+          category: "org_logo",
+          file,
+          target: { organizationId: org.id },
+        })
+        await persistOrg({ logo: upload.publicUrl })
       } catch (err) {
+        // A plan refusal (e.g. logo over 5 MB) already showed its dialog.
+        if (isStorageUploadBlocked(err)) return
         setActionError(err instanceof Error ? err.message : "Logo upload failed.")
       } finally {
         setIsLogoBusy(false)

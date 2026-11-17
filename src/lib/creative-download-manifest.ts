@@ -119,8 +119,22 @@ async function assertCanDownloadProject(
     .eq("id", project.client_id)
     .single()
 
+
   if (!client || client.organization_id !== organizationId) {
     throw new CreativeDownloadError("Project not found", 404)
+  }
+
+  // Downloads depend on the plan (Free can view and share, not download).
+  const { data: downloadsIncluded, error: featureError } = await supabase.rpc(
+    "org_has_feature",
+    { p_organization_id: client.organization_id, p_key: "image_export" }
+  )
+  // PGRST202: plan features not deployed yet, keep today's behaviour.
+  if (featureError && featureError.code !== "PGRST202") {
+    throw new CreativeDownloadError("Could not check your plan. Please try again.", 500)
+  }
+  if (!featureError && downloadsIncluded !== true) {
+    throw new CreativeDownloadError("Downloads are available on Plus.", 402)
   }
 
   const clientName = client.name || ""

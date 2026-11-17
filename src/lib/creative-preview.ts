@@ -6,6 +6,7 @@ import {
   downloadCreativeFile,
 } from "@/lib/creative-storage"
 import { isPdfUrl } from "@/lib/media-type"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { renderPdfPage } from "@/lib/pdf-render-server"
 
 /**
@@ -142,7 +143,10 @@ export async function generateCreativePreview(
   })
 
   const path = previewStoragePath(creativeId)
-  const { error: uploadError } = await supabase.storage
+  // Users can't write `previews/*` (storage policies); the caller was
+  // authorized above, so the server writes it with the service role.
+  const admin = createAdminClient()
+  const { error: uploadError } = await admin.storage
     .from(CREATIVES_BUCKET)
     .upload(path, rendered.imageBuffer, {
       contentType: rendered.mimeType,

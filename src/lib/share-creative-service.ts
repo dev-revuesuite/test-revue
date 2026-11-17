@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { appRoute } from "@/lib/base-path"
 import { getUserRole } from "@/lib/get-user-role"
+import { TRIAL_EXPIRED_CODE, TRIAL_EXPIRED_MESSAGE } from "@/lib/plans"
 import { PermissionDeniedError, requirePermission } from "@/lib/require-permission"
+import { isOrgTrialExpired } from "@/lib/trial"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status"
 import type {
@@ -15,7 +17,8 @@ import type {
 export class ShareCreativeError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code?: string
   ) {
     super(message)
     this.name = "ShareCreativeError"
@@ -412,6 +415,11 @@ export async function sendShareInvites(
     projectId,
     creativeId
   )
+
+  // Viewing share options stays allowed after the trial; sending doesn't.
+  if (await isOrgTrialExpired(supabase, context.organizationId)) {
+    throw new ShareCreativeError(TRIAL_EXPIRED_MESSAGE, 402, TRIAL_EXPIRED_CODE)
+  }
 
   const candidateResponse = await getShareCandidates(
     supabase,

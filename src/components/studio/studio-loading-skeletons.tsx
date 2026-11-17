@@ -145,6 +145,19 @@ export function AppHeaderLoadingSkeleton() {
   )
 }
 
+/** App frame only, shown before a route's own loading screen is known. */
+export function AppLayoutLoadingShell() {
+  return (
+    <div className="flex h-svh flex-col">
+      <AppHeaderLoadingSkeleton />
+      <div className="flex flex-1 overflow-hidden">
+        <AppSidebarSkeleton />
+        <main className="flex-1 bg-background" />
+      </div>
+    </div>
+  )
+}
+
 /** Studio-only full-page loading shell for route transitions and initial page load. */
 export function AppPageLoadingShell() {
   return (

@@ -152,10 +152,22 @@ export function SignupForm({
 
       {/* Header */}
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-3xl font-bold">Create account</h1>
-        <p className="text-muted-foreground text-base">
-          Enter your details below to sign up.
-        </p>
+        {/* Invited people join someone else's organization, so no trial copy for them. */}
+        {searchParams.get("token") ? (
+          <>
+            <h1 className="text-3xl font-bold">Create account</h1>
+            <p className="text-muted-foreground text-base">
+              Enter your details below to sign up.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-3xl font-bold">Start your 14-day free trial</h1>
+            <p className="text-muted-foreground text-base">
+              No card needed. Create your account to get started.
+            </p>
+          </>
+        )}
       </div>
 
       {error && (

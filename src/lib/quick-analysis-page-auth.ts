@@ -104,6 +104,9 @@ export async function getQuickAnalysisTeamMembers(organizationId: string) {
     .from("organization_members")
     .select("id, name, email, avatar_url, role")
     .eq("organization_id", organizationId)
+    // Assignable people only: joined team members, never clients or pending invites.
+    .neq("role", "client")
+    .not("user_id", "is", null)
     .order("name")
 
   return (

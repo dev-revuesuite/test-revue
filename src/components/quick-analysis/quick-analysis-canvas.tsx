@@ -25,6 +25,11 @@ import { ZoomControls } from "@/components/communication/zoom-controls"
 import { PdfPagePager } from "@/components/communication/pdf-page-pager"
 import { QuickAnalysisHeader } from "@/components/quick-analysis/quick-analysis-header"
 import { QuickAnalysisOpening } from "@/components/quick-analysis/quick-analysis-opening"
+import {
+  isQcPlanBlockCode,
+  QcLimitDialog,
+  type QcPlanBlock,
+} from "@/components/plans/qc-limit-dialog"
 
 function aiSuggestionPageNumber(s: AISuggestion): number {
   return s.pageNumber ?? 1
@@ -70,6 +75,7 @@ export function QuickAnalysisCanvas({
     null
   )
   const [fileReady, setFileReady] = useState(false)
+  const [qcPlanBlock, setQcPlanBlock] = useState<QcPlanBlock | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isPdf = mediaType === "pdf"
@@ -79,7 +85,10 @@ export function QuickAnalysisCanvas({
     (message: string, tone: "info" | "error" = "info") => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
       setToast({ message, tone })
-      toastTimerRef.current = setTimeout(() => setToast(null), 3200)
+      toastTimerRef.current = setTimeout(
+        () => setToast(null),
+        tone === "error" ? 6000 : 3200
+      )
     },
     []
   )
@@ -176,9 +185,17 @@ export function QuickAnalysisCanvas({
           pageNumber?: number
           analysisType?: AIAnalysisType
           error?: string
+          code?: string
         }
 
         if (!response.ok) {
+          if (payload.code && isQcPlanBlockCode(payload.code)) {
+            setQcPlanBlock({
+              code: payload.code,
+              message: payload.error || "QC runs aren't available right now.",
+            })
+            return
+          }
           throw new Error(payload.error || "AI analysis failed")
         }
 
@@ -392,6 +409,11 @@ export function QuickAnalysisCanvas({
       />
 
       {!fileReady && <QuickAnalysisOpening />}
+
+      <QcLimitDialog
+        block={qcPlanBlock}
+        onClose={() => setQcPlanBlock(null)}
+      />
 
       {toast && (
         <div className="fixed bottom-6 left-6 z-[100] animate-in fade-in slide-in-from-bottom-2 duration-300">

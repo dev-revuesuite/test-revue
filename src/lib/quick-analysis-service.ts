@@ -22,6 +22,7 @@ import {
   type ParsedInferenceSuggestion,
 } from "@/lib/inference-response-parser"
 import type { PersistedAiAnalysisType } from "@/lib/map-ai-suggestion-rows"
+import { QcUsageError, withQcRun } from "@/lib/plan-usage-service"
 import {
   mapQuickAnalysisSuggestionRow,
   type QuickAnalysisSuggestionRow,
@@ -47,7 +48,8 @@ export class QuickAnalysisServiceError extends Error {
   constructor(
     message: string,
     readonly status: number = 500,
-    readonly cause?: unknown
+    readonly cause?: unknown,
+    readonly code?: string
   ) {
     super(message)
     this.name = "QuickAnalysisServiceError"
@@ -285,6 +287,41 @@ export async function runQuickAnalysis(
     clientImage
   )
 
+  // One QC run per check per page; refunded if the check fails before its results are saved.
+  return withQcRun(
+    supabase,
+    {
+      userId,
+      organizationId: analysis.organization_id,
+      source: "quick",
+      refId: quickAnalysisId,
+      pageNumber,
+      analysisType,
+    },
+    (markSaved) =>
+      analyzeAndSaveRun(
+        supabase,
+        userId,
+        { quickAnalysisId, analysisType, pageNumber },
+        analysis,
+        image,
+        markSaved
+      )
+  )
+}
+
+async function analyzeAndSaveRun(
+  supabase: SupabaseClient,
+  userId: string,
+  {
+    quickAnalysisId,
+    analysisType,
+    pageNumber,
+  }: Omit<RunQuickAnalysisInput, "clientImage">,
+  analysis: QuickAnalysisForRun,
+  image: PreparedAnalysisImage,
+  markSaved: () => void
+): Promise<RunQuickAnalysisResult> {
   console.log("[Quick AI Analysis] Prepared image", {
     quickAnalysisId,
     analysisType,
@@ -402,6 +439,9 @@ export async function runQuickAnalysis(
     }
   }
 
+  // The run and its suggestions are stored: the QC run is now used.
+  markSaved()
+
   const suggestions = await fetchSuggestionsForRun(supabase, run.id)
 
   return {
@@ -451,6 +491,14 @@ export function toQuickAnalysisServiceError(
   }
   if (error instanceof AiAnalysisClientImageError) {
     return new QuickAnalysisServiceError(error.message, error.status, error)
+  }
+  if (error instanceof QcUsageError) {
+    return new QuickAnalysisServiceError(
+      error.message,
+      error.status,
+      error,
+      error.code
+    )
   }
 
   return new QuickAnalysisServiceError(

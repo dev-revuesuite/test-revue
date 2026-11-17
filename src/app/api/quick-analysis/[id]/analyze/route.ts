@@ -87,7 +87,10 @@ export async function POST(
       status: serviceError.status,
     })
     return Response.json(
-      { error: serviceError.message },
+      {
+        error: serviceError.message,
+        code: serviceError.code,
+      },
       { status: serviceError.status }
     )
   }

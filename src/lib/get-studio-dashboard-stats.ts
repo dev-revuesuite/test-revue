@@ -4,6 +4,7 @@ import {
   isCreativeQcPendingStage,
   normalizeCreativePipelineStatus,
 } from "@/lib/creative-pipeline-status"
+import { fetchProjectsForClients } from "@/lib/get-client-teams"
 
 export interface StudioDashboardStats {
   feedback: number
@@ -76,12 +77,9 @@ export async function getStudioDashboardStats(
     return emptyStats
   }
 
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id")
-    .in("client_id", clientIds)
+  const projects = await fetchProjectsForClients(supabase, clientIds)
 
-  const projectIds = projects?.map((project) => project.id) ?? []
+  const projectIds = projects.map((project) => project.id)
   if (projectIds.length === 0) {
     return emptyStats
   }

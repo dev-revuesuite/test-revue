@@ -13,10 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import {
-  buildQuickAnalysisStoragePath,
-} from "@/lib/quick-analysis-access"
-import { QUICK_ANALYSIS_BUCKET } from "@/lib/quick-analysis-storage"
+import { isStorageUploadBlocked, uploadWithQuota } from "@/lib/upload-with-quota"
 import { getMediaTypeFromFile, isPdfFile } from "@/lib/media-type"
 import { getPdfPageCountFromUrl } from "@/lib/pdf-page-count"
 import { apiPath } from "@/lib/base-path"
@@ -59,19 +56,13 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
     try {
       const quickAnalysisId = crypto.randomUUID()
       const mediaType = getMediaTypeFromFile(file)
-      const storagePath = buildQuickAnalysisStoragePath(
-        organizationId,
-        quickAnalysisId,
-        file.name
-      )
-
-      const { error: uploadError } = await supabase.storage
-        .from(QUICK_ANALYSIS_BUCKET)
-        .upload(storagePath, file)
-
-      if (uploadError) {
-        throw new Error(uploadError.message || "Failed to upload file")
-      }
+      // Through the app server: checks permission and the plan's storage limit.
+      const upload = await uploadWithQuota(supabase, {
+        category: "quick",
+        file,
+        target: { organizationId, quickAnalysisId },
+      })
+      const storagePath = upload.path
 
       let pageCount: number | null = mediaType === "pdf" ? null : 1
 
@@ -98,6 +89,7 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
       })
 
       if (!response.ok) {
+        await upload.discard()
         const payload = (await response.json().catch(() => null)) as {
           error?: string
         } | null
@@ -110,6 +102,8 @@ export function QuickAnalysisUpload({ organizationId }: QuickAnalysisUploadProps
       router.push(`/quick-analysis/${quickAnalysisId}`)
     } catch (error) {
       setPhase("idle")
+      // A plan refusal already showed its dialog.
+      if (isStorageUploadBlocked(error)) return
       setErrorMessage(
         error instanceof Error ? error.message : "Upload failed. Please try again."
       )

@@ -5,11 +5,14 @@ import { getUserRole } from "@/lib/get-user-role"
 import { PermissionDeniedError, requirePermission } from "@/lib/require-permission"
 import { advanceCreativePipelineStatus } from "@/lib/update-creative-pipeline-status"
 import { tryAutoCompleteProject } from "@/lib/complete-project-service"
+import { TRIAL_EXPIRED_CODE, TRIAL_EXPIRED_MESSAGE } from "@/lib/plans"
+import { isOrgTrialExpired } from "@/lib/trial"
 
 export class ApproveCreativeError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code?: string
   ) {
     super(message)
     this.name = "ApproveCreativeError"
@@ -106,6 +109,10 @@ export async function approveCreative(
       }
       throw error
     }
+  }
+
+  if (await isOrgTrialExpired(supabase, organizationId)) {
+    throw new ApproveCreativeError(TRIAL_EXPIRED_MESSAGE, 402, TRIAL_EXPIRED_CODE)
   }
 
   if (!canApproveCreative(creative.status)) {

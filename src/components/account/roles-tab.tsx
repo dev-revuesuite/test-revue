@@ -14,6 +14,8 @@ import {
 } from "@/lib/organization-roles-service"
 import type { PermissionKey } from "@/lib/permissions"
 import { RoleForm, type RoleFormValues } from "@/components/account/role-form"
+import { usePlanFeature } from "@/contexts/plan-features-context"
+import { PlanLock } from "@/components/plans/plan-lock"
 
 interface RolesTabProps {
   organizationId: string
@@ -22,6 +24,8 @@ interface RolesTabProps {
 
 export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
   const router = useRouter()
+  // Custom roles depend on the plan; existing roles stay assignable either way.
+  const canCustomizeRoles = usePlanFeature("role_based_permissions")
   const [roles, setRoles] = React.useState<OrganizationRole[]>([])
   const [loading, setLoading] = React.useState(true)
   const [showForm, setShowForm] = React.useState(false)
@@ -123,7 +127,9 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
             Create custom roles and assign permissions for your team.
           </p>
         </div>
-        {isOrgOwner ? (
+        {isOrgOwner && !canCustomizeRoles ? (
+          <PlanLock />
+        ) : isOrgOwner ? (
           <button
             onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#DBFE52] text-black rounded-lg text-sm font-medium hover:bg-[#c9ec48] transition-colors"
@@ -166,16 +172,20 @@ export function RolesTab({ organizationId, isOrgOwner }: RolesTabProps) {
                     {(role.member_count ?? 0) !== 1 ? "s" : ""}
                   </p>
                 </div>
-                {isOrgOwner ? (
+                {isOrgOwner && role.is_system ? (
+                  <span className="text-xs text-muted-foreground">Built-in</span>
+                ) : isOrgOwner ? (
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingRole(role)}
-                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-                      title="Edit Role"
-                      aria-label={`Edit ${role.title}`}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
+                    {canCustomizeRoles ? (
+                      <button
+                        onClick={() => setEditingRole(role)}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                        title="Edit Role"
+                        aria-label={`Edit ${role.title}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    ) : null}
                     <button
                       onClick={() => {
                         setDeletingRole(role)

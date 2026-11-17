@@ -29,6 +29,7 @@ import { useDownloadManifest } from "@/hooks/use-download-manifest"
 import { DownloadAllButton } from "@/components/master-drive/download-all-button"
 import { formatBytes } from "@/lib/download-utils"
 import { useTimezone } from "@/contexts/timezone-context"
+import { usePlanFeature } from "@/contexts/plan-features-context"
 import { formatDisplayDate } from "@/lib/timezone-preference"
 import {
   CREATIVE_PIPELINE_STATUS_LABELS,
@@ -352,7 +353,9 @@ export function MasterDriveContent({ user, organizationName, clients, projects, 
 
   // Clients may browse creatives but not bulk-download them, so don't even ask
   // for the file list on their behalf -- the route would reject it.
-  const canDownload = userRole !== "client"
+  // Downloads also depend on the plan; the manifest route refuses them on Free.
+  const downloadsIncluded = usePlanFeature("image_export")
+  const canDownload = userRole !== "client" && downloadsIncluded
 
   const { manifest, loading: manifestLoading } = useDownloadManifest(
     currentLevel === "project" ? selectedProjectId : null,

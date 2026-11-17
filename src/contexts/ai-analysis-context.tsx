@@ -44,6 +44,17 @@ interface AnalyzeResponsePayload {
   suggestions?: AISuggestion[]
   empty?: boolean
   error?: string
+  code?: string
+}
+
+class AnalyzeRequestError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string
+  ) {
+    super(message)
+    this.name = "AnalyzeRequestError"
+  }
 }
 
 function createJob(input: StartAiAnalysisInput): AiAnalysisJob {
@@ -145,7 +156,10 @@ export function AiAnalysisProvider({ children }: { children: ReactNode }) {
         const payload = (await response.json()) as AnalyzeResponsePayload
 
         if (!response.ok) {
-          throw new Error(payload.error || "AI analysis failed")
+          throw new AnalyzeRequestError(
+            payload.error || "AI analysis failed",
+            payload.code
+          )
         }
 
         const suggestions = payload.suggestions ?? []
@@ -173,6 +187,8 @@ export function AiAnalysisProvider({ children }: { children: ReactNode }) {
         updateJob(jobId, {
           status: "failed",
           error: message,
+          errorCode:
+            error instanceof AnalyzeRequestError ? error.code : undefined,
           finishedAt: Date.now(),
         })
 
@@ -253,6 +269,7 @@ export function AiAnalysisProvider({ children }: { children: ReactNode }) {
       updateJob(jobId, {
         status: "queued",
         error: undefined,
+        errorCode: undefined,
         suggestions: [],
         startedAt: Date.now(),
         finishedAt: undefined,

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, getAuthUser } from "@/lib/supabase/server"
 import { RoomPageShell } from "@/components/room/room-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
 import { getActiveOrganization, getUserOrganizations } from "@/lib/get-active-organization"
@@ -21,9 +21,8 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
   const supabase = await createClient()
   const { client: clientId } = await searchParams
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Shares the layout's validated auth lookup for this request.
+  const user = await getAuthUser()
 
   if (!user) {
     redirect("/login")
@@ -58,8 +57,19 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     avatar: profile?.avatar_url || user.user_metadata?.avatar_url || "",
   }
 
-  // Fetch client directory, team members, client data, and (if client) orgMember in parallel
-  const [allClientsResult, orgMembersResult, clientResult, orgMemberResult] = await Promise.all([
+  const projectsSelect =
+    "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
+
+  const fetchClientProjects = () =>
+    supabase
+      .from("projects")
+      .select(projectsSelect)
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+
+  // Fetch client directory, team members, client data, and (if client) orgMember in parallel.
+  // Team roles see every project, so their list can load in the same round.
+  const [allClientsResult, orgMembersResult, clientResult, orgMemberResult, teamProjectsResult] = await Promise.all([
     organization
       ? supabase
           .from("clients")
@@ -71,6 +81,9 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
           .from("organization_members")
           .select("id, name, email, avatar_url, role")
           .eq("organization_id", organization.id)
+          // Assignable people only: joined team members, never clients or pending invites.
+          .neq("role", "client")
+          .not("user_id", "is", null)
           .order("name")
       : Promise.resolve({ data: [] as Array<{ id: string; name: string | null; email: string | null; avatar_url: string | null; role: string | null }> | null }),
     supabase
@@ -87,6 +100,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
           .eq("role", "client")
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    userRole === "client" ? Promise.resolve(null) : fetchClientProjects(),
   ])
 
   const allClients = allClientsResult.data
@@ -133,9 +147,6 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     brand_colors: unknown
   }
 
-  const projectsSelect =
-    "id,name,project_type,description,start_date,end_date,created_at,brief_status,workmode,references_data,external_links,budget,project_deliverables,brand_colors"
-
   let projects: ProjectData[] | null = null
 
   if (userRole === "client" && orgMember) {
@@ -147,11 +158,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
 
     const accessibleIds = (accessibleProjectIds || []).map(p => p.project_id)
 
-    const { data: allProjectsData } = await supabase
-      .from("projects")
-      .select(projectsSelect)
-      .eq("client_id", clientId)
-      .order("created_at", { ascending: false })
+    const { data: allProjectsData } = await fetchClientProjects()
 
     if (!allProjectsData || allProjectsData.length === 0) {
       projects = []
@@ -172,11 +179,7 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     }
   } else {
     // For non-client users (admin, manager, etc.), show all projects
-    const { data: projectsData } = await supabase
-      .from("projects")
-      .select(projectsSelect)
-      .eq("client_id", clientId)
-      .order("created_at", { ascending: false })
+    const { data: projectsData } = teamProjectsResult ?? (await fetchClientProjects())
     projects = projectsData
   }
 
@@ -186,8 +189,11 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     projectIds.length > 0
       ? supabase
           .from("creatives")
-          .select("*")
+          .select("id,project_id,name,type,thumbnail_url,preview_url,updated_at,feedback_count,iteration,status,iterations(media_type,page_count,version)")
           .in("project_id", projectIds)
+          // Only each creative's newest version.
+          .order("version", { referencedTable: "iterations", ascending: false })
+          .limit(1, { referencedTable: "iterations" })
       : Promise.resolve({ data: [] as Array<Record<string, unknown>> | null }),
     projectIds.length > 0
       ? supabase
@@ -207,24 +213,18 @@ export default async function RoomPage({ searchParams }: RoomPageProps) {
     return acc
   }, {})
 
-  const creativeIds = (allCreatives || []).map((c) => c.id)
-  const { data: iterationsMeta } = creativeIds.length > 0
-    ? await supabase
-        .from("iterations")
-        .select("creative_id, media_type, page_count, version")
-        .in("creative_id", creativeIds)
-        .order("version", { ascending: false })
-    : { data: [] }
-
   const iterationMetaByCreative: Record<
     string,
     { mediaType: string | null; pageCount: number | null }
   > = {}
-  for (const row of iterationsMeta || []) {
-    if (!iterationMetaByCreative[row.creative_id]) {
-      iterationMetaByCreative[row.creative_id] = {
-        mediaType: row.media_type ?? null,
-        pageCount: row.page_count ?? null,
+  for (const creative of allCreatives || []) {
+    const newest = (
+      creative.iterations as { media_type: string | null; page_count: number | null }[] | undefined
+    )?.[0]
+    if (newest) {
+      iterationMetaByCreative[creative.id] = {
+        mediaType: newest.media_type ?? null,
+        pageCount: newest.page_count ?? null,
       }
     }
   }

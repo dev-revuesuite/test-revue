@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { cache } from "react"
 
 const BATCH_SIZE = 100
 
@@ -117,30 +118,33 @@ function toSummary(members: AggregatedMember[]): ClientTeamSummary {
   }
 }
 
-async function fetchProjects(
-  supabase: SupabaseClient,
-  clientIds: string[]
-): Promise<ProjectRow[]> {
-  if (clientIds.length === 0) return []
+/** Shared by the Studio stats and team lookups; pass the same array to reuse the result. */
+export const fetchProjectsForClients = cache(
+  async (
+    supabase: SupabaseClient,
+    clientIds: string[]
+  ): Promise<ProjectRow[]> => {
+    if (clientIds.length === 0) return []
 
-  const batches = await Promise.all(
-    Array.from({ length: Math.ceil(clientIds.length / BATCH_SIZE) }, (_, index) => {
-      const batch = clientIds.slice(index * BATCH_SIZE, index * BATCH_SIZE + BATCH_SIZE)
-      return supabase
-        .from("projects")
-        .select("id, client_id, account_manager")
-        .in("client_id", batch)
+    const batches = await Promise.all(
+      Array.from({ length: Math.ceil(clientIds.length / BATCH_SIZE) }, (_, index) => {
+        const batch = clientIds.slice(index * BATCH_SIZE, index * BATCH_SIZE + BATCH_SIZE)
+        return supabase
+          .from("projects")
+          .select("id, client_id, account_manager")
+          .in("client_id", batch)
+      })
+    )
+
+    return batches.flatMap((result) => {
+      if (result.error) {
+        console.error("Failed to fetch projects for Studio:", result.error)
+        return []
+      }
+      return (result.data ?? []) as ProjectRow[]
     })
-  )
-
-  return batches.flatMap((result) => {
-    if (result.error) {
-      console.error("Failed to fetch projects for client teams:", result.error)
-      return []
-    }
-    return (result.data ?? []) as ProjectRow[]
-  })
-}
+  }
+)
 
 async function fetchProjectMembers(
   supabase: SupabaseClient,
@@ -208,7 +212,7 @@ export async function getClientTeamsForStudio(
     return summaries
   }
 
-  const projects = await fetchProjects(supabase, clientIds)
+  const projects = await fetchProjectsForClients(supabase, clientIds)
   if (projects.length === 0) {
     return summaries
   }

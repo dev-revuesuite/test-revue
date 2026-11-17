@@ -78,10 +78,25 @@ export function LoginForm({
         })
       : Promise.resolve({ error: null as null })
 
-    const [{ data: profile }, linkResult] = await Promise.all([
+    // Client contacts are linked at login too, so a client who was waiting for
+    // a guest reviewer seat gets access once one frees up. Errors are ignored:
+    // linking must never block login.
+    const clientLinkPromise = user.email
+      ? supabase.rpc("link_user_to_client", {
+          p_user_id: user.id,
+          p_email: user.email,
+        })
+      : Promise.resolve({ error: null as null })
+
+    const [{ data: profile }, linkResult, clientLinkResult] = await Promise.all([
       profilePromise,
       linkPromise,
+      clientLinkPromise,
     ])
+
+    if (clientLinkResult.error) {
+      console.error("link_user_to_client failed:", clientLinkResult.error.message)
+    }
 
     if (linkResult.error) {
       console.error(

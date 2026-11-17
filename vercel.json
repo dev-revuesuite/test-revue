@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/qc-tool/api/cron/iteration-retention",
+      "schedule": "30 20 * * *"
+    }
+  ]
+}

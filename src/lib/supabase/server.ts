@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 
-export async function createClient() {
+/**
+ * One client per server render, so `cache()`-wrapped data helpers that take the
+ * client as an argument share results between layouts and pages.
+ */
+export const createClient = cache(async () => {
   const cookieStore = await cookies()
 
   return createServerClient(
@@ -26,4 +31,16 @@ export async function createClient() {
       },
     }
   )
-}
+})
+
+/**
+ * The JWT-validated user (a network call to Supabase Auth), looked up once per
+ * server render.
+ */
+export const getAuthUser = cache(async () => {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
+})

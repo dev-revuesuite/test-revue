@@ -122,6 +122,36 @@ async function readBoundedResponseBody(
   return Buffer.concat(chunks)
 }
 
+/**
+ * Bucket + object path of a creative or iteration file URL on this project's
+ * Supabase storage (`creatives` or `revue-assets`). Null for anything else,
+ * including URLs from another host.
+ */
+export function parseCreativeStorageObject(
+  fileUrl: string
+): { bucket: string; path: string } | null {
+  try {
+    const url = new URL(fileUrl)
+    const storageOrigin = getSupabaseStorageOrigin()
+    if (!storageOrigin || url.origin !== storageOrigin) return null
+
+    for (const bucket of ALLOWED_BUCKETS) {
+      for (const kind of ["public", "sign"]) {
+        const marker = `/storage/v1/object/${kind}/${bucket}/`
+        const idx = url.pathname.indexOf(marker)
+        if (idx !== -1) {
+          const path = decodeURIComponent(url.pathname.slice(idx + marker.length))
+          return path ? { bucket, path } : null
+        }
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
 export function parseCreativesStoragePath(imageUrl: string): string | null {
   try {
     const url = new URL(imageUrl)

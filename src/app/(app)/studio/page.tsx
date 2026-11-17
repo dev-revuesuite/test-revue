@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, getAuthUser } from "@/lib/supabase/server"
 import { StudioPageShell } from "@/components/studio/studio-page-shell"
 import { getUserRole } from "@/lib/get-user-role"
 import { getUserPermissions } from "@/lib/get-user-permissions"
@@ -10,19 +10,14 @@ import {
 } from "@/lib/get-active-organization"
 import { getStudioDashboardStats } from "@/lib/get-studio-dashboard-stats"
 import { getClientTeamsForStudio } from "@/lib/get-client-teams"
-import { backfillCreativePipelineForOrganization } from "@/lib/backfill-creative-pipeline"
 
 export const dynamic = "force-dynamic"
 
 export default async function StudioPage() {
   const supabase = await createClient()
 
-  // getUser() makes a network call to Supabase Auth to validate the JWT — this
-  // is what Supabase recommends (getSession() reads unauthenticated cookie
-  // data and emits a security warning).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Shares the layout's validated auth lookup for this request.
+  const user = await getAuthUser()
 
   if (!user) {
     redirect("/login")
@@ -67,6 +62,9 @@ export default async function StudioPage() {
           .from("organization_members")
           .select("id, name, email, avatar_url, role")
           .eq("organization_id", organization.id)
+          // Assignable people only: joined team members, never clients or pending invites.
+          .neq("role", "client")
+          .not("user_id", "is", null)
           .not("name", "is", null)
           .not("email", "is", null)
           .order("name"),
@@ -109,14 +107,6 @@ export default async function StudioPage() {
   }
 
   const clientIds = clients?.map((client) => client.id) ?? []
-
-  if (organization?.id) {
-    try {
-      await backfillCreativePipelineForOrganization(supabase, organization.id)
-    } catch (backfillError) {
-      console.error("Pipeline backfill failed:", backfillError)
-    }
-  }
 
   const [dashboardStats, clientTeams] = await Promise.all([
     getStudioDashboardStats(supabase, clientIds),

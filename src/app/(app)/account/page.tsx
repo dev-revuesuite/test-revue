@@ -10,10 +10,12 @@ import { getUserRole } from "@/lib/get-user-role"
 import { fetchOrganizationRoles } from "@/lib/organization-roles-service"
 import { isOrgOwner as checkIsOrgOwner } from "@/lib/is-org-owner"
 import { ensureOrganizationOwnerMember } from "@/lib/ensure-organization-owner-member"
+import { getUserPermissions } from "@/lib/get-user-permissions"
+import { getMyGuestSeatWaitlist, guestSeatWaitlistMessage } from "@/lib/guest-seat-waitlist"
 
-type TabType = "profile" | "settings" | "team" | "roles" | "organisations"
+type TabType = "profile" | "settings" | "team" | "roles" | "plan" | "organisations"
 
-const validTabs: TabType[] = ["profile", "settings", "team", "roles", "organisations"]
+const validTabs: TabType[] = ["profile", "settings", "team", "roles", "plan", "organisations"]
 
 export default async function AccountPage({
   searchParams,
@@ -30,6 +32,9 @@ export default async function AccountPage({
   if (!user) {
     redirect("/login")
   }
+
+  // Independent of everything below; started now so it runs in parallel.
+  const guestSeatWaitlistPromise = getMyGuestSeatWaitlist(supabase)
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -154,12 +159,21 @@ export default async function AccountPage({
   const tabParam = params.tab as TabType | undefined
   const defaultTab: TabType =
     tabParam && validTabs.includes(tabParam)
-      ? tabParam === "roles" && !isOrgOwner
+      ? (tabParam === "roles" || tabParam === "plan") && !isOrgOwner
         ? "profile"
         : tabParam
       : "profile"
 
   const { role: userRole } = userRoleResult
+
+  // Access on hold at another organization (its guest reviewer seats are full).
+  const guestSeatNotice = guestSeatWaitlistMessage(await guestSeatWaitlistPromise)
+
+  // A team member (not owner, not client) without any permission has no role yet.
+  const noRoleAssigned =
+    organization && !isOrgOwner && userRole !== "client"
+      ? (await getUserPermissions(supabase, user.id, organization.id)).permissions.size === 0
+      : false
 
   return (
     <OrgSwitchProvider currentOrgId={organization?.id}>
@@ -186,6 +200,8 @@ export default async function AccountPage({
                 organizationId={organization?.id ?? null}
                 isOrgOwner={isOrgOwner}
                 currentUserId={user.id}
+                noRoleAssigned={noRoleAssigned}
+                guestSeatNotice={guestSeatNotice}
                 orgRoles={orgRoles.map((r) => ({
                   id: r.id,
                   title: r.title,

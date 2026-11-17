@@ -16,12 +16,18 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { isStorageUploadBlocked, uploadWithQuota } from "@/lib/upload-with-quota"
 import { useOrgSwitch } from "@/contexts/org-switch-context"
 
 interface NewOrganizationDialogProps {
   open: boolean
   onClose: () => void
+  /** The database refused: the free plan's 1 organization is already used. */
+  onLimitReached?: () => void
 }
+
+/** Raised by the organizations insert trigger (free plan: 1 organization). */
+const FREE_ORG_LIMIT_HINT = "FREE_ORG_LIMIT"
 
 const STEPS = [
   { num: 1, label: "Workspace Info" },
@@ -223,6 +229,7 @@ function StepHero({
 export function NewOrganizationDialog({
   open,
   onClose,
+  onLimitReached,
 }: NewOrganizationDialogProps) {
   const { performOrgSwitch } = useOrgSwitch()
 
@@ -327,16 +334,19 @@ export function NewOrganizationDialog({
 
       let logoUrl: string | null = null
       if (logoFile) {
-        const ext = logoFile.name.split(".").pop()
-        const path = `org-logos/${user.id}/${Date.now()}-logo.${ext}`
-        const { error: uploadErr } = await supabase.storage
-          .from("client-assets")
-          .upload(path, logoFile)
-        if (!uploadErr) {
-          const { data: urlData } = supabase.storage
-            .from("client-assets")
-            .getPublicUrl(path)
-          logoUrl = urlData.publicUrl
+        // Through the app server (5 MB logo limit). The organization doesn't
+        // exist yet, so the logo goes in the user's own folder, as before.
+        try {
+          const upload = await uploadWithQuota(supabase, {
+            category: "org_logo",
+            file: logoFile,
+            target: {},
+          })
+          logoUrl = upload.publicUrl
+        } catch (uploadErr) {
+          if (!isStorageUploadBlocked(uploadErr)) {
+            console.error("Failed to upload organization logo:", uploadErr)
+          }
         }
       }
 
@@ -356,6 +366,13 @@ export function NewOrganizationDialog({
         })
         .select("id")
         .single()
+
+      if (orgError?.hint === FREE_ORG_LIMIT_HINT && onLimitReached) {
+        setIsCreating(false)
+        onClose()
+        onLimitReached()
+        return
+      }
 
       if (orgError || !newOrg) {
         setError(orgError?.message || "Failed to create organization")

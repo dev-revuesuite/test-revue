@@ -11,6 +11,7 @@ import {
   Download,
   HelpCircle,
   Loader2,
+  Lock,
   LogOut,
   Settings,
   Shield,
@@ -19,8 +20,11 @@ import {
   Zap,
 } from "lucide-react"
 import { usePermissions } from "@/contexts/permission-context"
+import { usePlanFeature } from "@/contexts/plan-features-context"
+import { PLAN_LOCK_LABEL } from "@/lib/plan-features"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { TrialAvatarBadge } from "@/components/plans/trial-avatar-badge"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,13 +53,16 @@ interface QuickAnalysisHeaderProps {
 export function QuickAnalysisHeader({
   fileName,
   onDownload,
-  downloadDisabled = false,
+  downloadDisabled: downloadDisabledProp = false,
   downloadWithAiBoxesDisabled = false,
   user,
 }: QuickAnalysisHeaderProps) {
   const { isOrgOwner } = usePermissions()
   const router = useRouter()
   const [isDownloading, setIsDownloading] = useState(false)
+  // Downloads and exports depend on the plan (Free can view, not download).
+  const downloadsIncluded = usePlanFeature("image_export")
+  const downloadDisabled = downloadDisabledProp || !downloadsIncluded
   const [isDark, setIsDark] = useState(false)
 
   const getInitials = (name: string) =>
@@ -144,14 +151,16 @@ export function QuickAnalysisHeader({
                 variant="outline"
                 size="icon"
                 disabled={downloadDisabled || isDownloading}
-                aria-label="Download"
-                title="Download"
+                aria-label={downloadsIncluded ? "Download" : `Download: ${PLAN_LOCK_LABEL}`}
+                title={downloadsIncluded ? "Download" : `Downloads: ${PLAN_LOCK_LABEL}`}
                 className="h-9 w-9 border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-[#444] dark:text-gray-300 dark:hover:bg-[#333]"
               >
                 {isDownloading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+                ) : downloadsIncluded ? (
                   <Download className="h-4 w-4" />
+                ) : (
+                  <Lock className="h-4 w-4" />
                 )}
               </Button>
             </DropdownMenuTrigger>
@@ -183,12 +192,14 @@ export function QuickAnalysisHeader({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" className="flex items-center justify-center">
-                <Avatar className="h-9 w-9 ring-2 ring-gray-200 hover:ring-blue-500 dark:ring-[#444]">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="bg-[#ff7eb3] text-sm font-semibold text-white">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
+                <TrialAvatarBadge>
+                  <Avatar className="h-9 w-9 ring-2 ring-gray-200 hover:ring-blue-500 dark:ring-[#444]">
+                    <AvatarImage src={user.avatar} alt={user.name} />
+                    <AvatarFallback className="bg-[#ff7eb3] text-sm font-semibold text-white">
+                      {getInitials(user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </TrialAvatarBadge>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -245,7 +256,7 @@ export function QuickAnalysisHeader({
                   Organisations
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => router.push(appRoute("/account?tab=billing"))}
+                  onClick={() => router.push(appRoute("/account?tab=plan"))}
                   className="cursor-pointer gap-3 rounded px-2 py-2 text-sm dark:text-white"
                 >
                   <CreditCard className="h-4 w-4 text-gray-500 dark:text-gray-400" />

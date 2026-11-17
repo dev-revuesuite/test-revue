@@ -5,8 +5,10 @@ import {
   isProjectReadyToComplete,
   type ProjectCompletionBlockers,
 } from "@/lib/project-completion"
+import { TRIAL_EXPIRED_CODE, TRIAL_EXPIRED_MESSAGE } from "@/lib/plans"
 import { PermissionDeniedError, requirePermission } from "@/lib/require-permission"
 import { touchClientActivity } from "@/lib/touch-client-activity"
+import { isOrgTrialExpired } from "@/lib/trial"
 
 type ProjectRow = {
   id: string
@@ -73,7 +75,8 @@ async function markProjectCompleted(
 export class CompleteProjectError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code?: string
   ) {
     super(message)
     this.name = "CompleteProjectError"
@@ -112,6 +115,19 @@ export async function tryAutoCompleteProject(
 
   if (!isProjectReadyToComplete(blockers)) {
     return { completed: false, briefStatus: null }
+  }
+
+  // Runs when a Room is opened: after the trial it quietly does nothing
+  // (the database would refuse the status change).
+  if (project.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("organization_id")
+      .eq("id", project.client_id)
+      .maybeSingle()
+    if (await isOrgTrialExpired(supabase, client?.organization_id)) {
+      return { completed: false, briefStatus: null }
+    }
   }
 
   const didComplete = await markProjectCompleted(supabase, project)
@@ -163,6 +179,10 @@ export async function completeProject(
 
   if (!client || client.organization_id !== organizationId) {
     throw new CompleteProjectError("Project not found", 404)
+  }
+
+  if (await isOrgTrialExpired(supabase, organizationId)) {
+    throw new CompleteProjectError(TRIAL_EXPIRED_MESSAGE, 402, TRIAL_EXPIRED_CODE)
   }
 
   if (blockers.totalCreatives === 0) {

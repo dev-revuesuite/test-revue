@@ -39,6 +39,8 @@ export interface AiAnalysisJob {
   /** Populated when status is "done" (present but empty for "empty"). */
   suggestions: AISuggestion[]
   error?: string
+  /** Machine-readable error code from the API, e.g. QC_LIMIT_REACHED. */
+  errorCode?: string
   startedAt: number
   finishedAt?: number
   /**

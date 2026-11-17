@@ -1,7 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, Download, Loader2 } from "lucide-react"
+import { ChevronDown, Download, Loader2, Lock } from "lucide-react"
+
+import { PlanLock } from "@/components/plans/plan-lock"
+import { usePlanFeature } from "@/contexts/plan-features-context"
+import { PLAN_LOCK_LABEL } from "@/lib/plan-features"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -62,6 +66,8 @@ export function DownloadAllButton({
 
   const isDownloading = progress !== null
   const hasFiles = (manifest?.creatives.length ?? 0) > 0
+  // Downloads depend on the plan (the manifest route refuses them too).
+  const downloadsIncluded = usePlanFeature("image_export")
 
   const run = async (filter: CreativeFilter) => {
     if (!manifest) return
@@ -114,6 +120,18 @@ export function DownloadAllButton({
     }
 
     void run(filter)
+  }
+
+  if (!downloadsIncluded) {
+    return (
+      <div className="flex items-center gap-2">
+        <Button variant="outline" disabled className="gap-2" title={`Downloads: ${PLAN_LOCK_LABEL}`}>
+          <Lock className="w-4 h-4" />
+          Download
+        </Button>
+        <PlanLock />
+      </div>
+    )
   }
 
   return (

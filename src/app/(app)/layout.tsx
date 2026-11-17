@@ -3,29 +3,54 @@ import { PermissionProviderShell } from "@/components/permission-provider-shell"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TimezoneProvider } from "@/contexts/timezone-context"
 import { CreativeUploadShell } from "@/components/uploads/creative-upload-shell"
+import { PlanLimitDialogHost } from "@/components/plans/plan-limit-dialog-host"
 import { appFontClassName } from "@/lib/fonts"
 import { getActiveOrganization } from "@/lib/get-active-organization"
 import { getRequestTimeZone } from "@/lib/get-request-timezone"
 import { getUserPermissions } from "@/lib/get-user-permissions"
+import { ALL_PLAN_FEATURES_INCLUDED, getPlanFeatures } from "@/lib/plan-features"
+import { PlanFeaturesProvider } from "@/contexts/plan-features-context"
+import { TrialReminders } from "@/components/plans/trial-reminders"
+import { getOrgTrialStatus, NO_TRIAL } from "@/lib/trial"
 import type { PermissionKey } from "@/lib/permissions"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, getAuthUser } from "@/lib/supabase/server"
 import { parseTimezonePreference } from "@/lib/timezone-preference"
+import { AppLayoutLoadingShell } from "@/components/studio/studio-loading-skeletons"
+import { Suspense } from "react"
 
-export default async function AppLayout({
+export default function AppLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <div className={appFontClassName}>
+        {/* Paint the loading shell before the auth and permission lookups finish. */}
+        <Suspense fallback={<AppLayoutLoadingShell />}>
+          <AppProviders>{children}</AppProviders>
+        </Suspense>
+      </div>
+    </ThemeProvider>
+  )
+}
+
+async function AppProviders({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getAuthUser()
 
   let permissionKeys: PermissionKey[] = []
   let isOrgOwner = false
   let customRoleTitle: string | null = null
   let timezonePreference = "system"
   let resolvedTimeZone = "UTC"
+  let planFeatures = ALL_PLAN_FEATURES_INCLUDED
+  let trial = NO_TRIAL
 
   if (user) {
     const [organization, prefsResult] = await Promise.all([
@@ -42,11 +67,13 @@ export default async function AppLayout({
     )
     resolvedTimeZone = await getRequestTimeZone(timezonePreference)
     if (organization) {
-      const permissionsResult = await getUserPermissions(
-        supabase,
-        user.id,
-        organization.id
-      )
+      const [permissionsResult, features, trialStatus] = await Promise.all([
+        getUserPermissions(supabase, user.id, organization.id),
+        getPlanFeatures(supabase, organization.id),
+        getOrgTrialStatus(supabase, organization.id),
+      ])
+      planFeatures = features
+      trial = trialStatus
       permissionKeys = [...permissionsResult.permissions]
       isOrgOwner = permissionsResult.isOrgOwner
       customRoleTitle = permissionsResult.customRoleTitle
@@ -54,29 +81,24 @@ export default async function AppLayout({
   }
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="light"
-      enableSystem
-      disableTransitionOnChange
+    <TimezoneProvider
+      preference={timezonePreference}
+      resolvedTimeZone={resolvedTimeZone}
     >
-      <TimezoneProvider
-        preference={timezonePreference}
-        resolvedTimeZone={resolvedTimeZone}
+      <PermissionProviderShell
+        permissionKeys={permissionKeys}
+        isOrgOwner={isOrgOwner}
+        customRoleTitle={customRoleTitle}
       >
-        <PermissionProviderShell
-          permissionKeys={permissionKeys}
-          isOrgOwner={isOrgOwner}
-          customRoleTitle={customRoleTitle}
-        >
-          <div className={appFontClassName}>
-            <CreativeUploadShell>
-              <NavigationPathTracker />
-              {children}
-            </CreativeUploadShell>
-          </div>
-        </PermissionProviderShell>
-      </TimezoneProvider>
-    </ThemeProvider>
+        <PlanFeaturesProvider features={planFeatures} trial={trial}>
+          <CreativeUploadShell>
+            <NavigationPathTracker />
+            <PlanLimitDialogHost />
+            <TrialReminders />
+            {children}
+          </CreativeUploadShell>
+        </PlanFeaturesProvider>
+      </PermissionProviderShell>
+    </TimezoneProvider>
   )
 }

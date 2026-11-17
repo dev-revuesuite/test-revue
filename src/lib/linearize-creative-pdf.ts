@@ -4,6 +4,8 @@ import {
   CREATIVES_BUCKET,
   CREATIVE_FILE_CACHE_CONTROL,
 } from "@/lib/creative-storage"
+import { checkStoragePathAccess } from "@/lib/storage-path-access"
+import { createAdminClient } from "@/lib/supabase/admin"
 import {
   isPdfAlreadyLinearized,
   linearizePdfBuffer,
@@ -93,6 +95,15 @@ export async function linearizeCreativePdfInStorage(
 
   const webStoragePath = toWebPdfStoragePath(storagePath)
 
+  // The caller must be allowed to write the original's folder. Users can't
+  // write `.web.pdf` copies themselves (storage policies), so once that is
+  // confirmed the server writes the copy with the service role.
+  const access = await checkStoragePathAccess(supabase, bucket, storagePath)
+  if (access === "denied") {
+    throw new PdfLinearizeError("Not allowed to process this file", 403)
+  }
+  const writer = access === "allowed" ? createAdminClient() : supabase
+
   const { data: blob, error: downloadError } = await supabase.storage
     .from(bucket)
     .download(storagePath)
@@ -172,7 +183,7 @@ export async function linearizeCreativePdfInStorage(
     }
   }
 
-  const { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await writer.storage
     .from(bucket)
     .upload(webStoragePath, output, {
       upsert: true,

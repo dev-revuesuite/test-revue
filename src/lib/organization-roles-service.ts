@@ -29,6 +29,8 @@ export interface OrganizationRole {
   description: string
   permission_keys: PermissionKey[]
   member_count?: number
+  /** Built-in role (Full Access): assignable, never editable or deletable. */
+  is_system?: boolean
 }
 
 export async function fetchOrganizationRoles(
@@ -37,7 +39,8 @@ export async function fetchOrganizationRoles(
 ): Promise<OrganizationRole[]> {
   const { data: roles, error } = await supabase
     .from("organization_roles")
-    .select("id, organization_id, title, description")
+    // "*" so the built-in flag (is_system) is included once the plans v5 migration is applied.
+    .select("*")
     .eq("organization_id", organizationId)
     .order("title")
 

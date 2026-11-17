@@ -10,6 +10,11 @@ export type NotificationType =
   | "client_created"
   | "client_added_to_project"
   | "ai_suggestions"
+  | "iterations_scheduled_deletion"
+  | "guest_seat_waiting"
+  | "trial_ending"
+  | "trial_ended"
+  | "trial_started"
 
 export interface NotificationRow {
   id: string

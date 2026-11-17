@@ -32,7 +32,17 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { touchClientActivity } from "@/lib/touch-client-activity"
 import { assignProjectTeamMembers } from "@/lib/ensure-project-member-access"
-import { uploadClientBrandImages } from "@/lib/upload-client-brand-images"
+import {
+  discardClientAssetUploads,
+  uploadClientAsset,
+  uploadClientBrandImages,
+  type ClientAssetUploads,
+} from "@/lib/upload-client-brand-images"
+import {
+  isStorageUploadBlocked,
+  reportTrialExpired,
+  uploadWithQuota,
+} from "@/lib/upload-with-quota"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -55,12 +65,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { TrialAvatarBadge } from "@/components/plans/trial-avatar-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { OrgSwitcher } from "@/components/org-switcher"
 import { NewClientOnboarding } from "@/components/studio/new-client-onboarding"
 import { NewBriefDialog } from "@/components/studio/new-brief-dialog"
 import { NewOrganizationDialog } from "@/components/studio/new-org-dialog"
+import { OrgLimitDialog } from "@/components/plans/org-limit-dialog"
 import { useNotifications } from "@/hooks/use-notifications"
 import { useMessages } from "@/hooks/use-messages"
 import { NotificationList } from "@/components/notifications/notification-list"
@@ -72,6 +84,7 @@ import {
 import type { NotificationItem } from "@/types/notifications"
 import type { MessageItem } from "@/types/messages"
 import { usePermission, usePermissions } from "@/contexts/permission-context"
+import { useWhenWritable } from "@/contexts/plan-features-context"
 import { fetchOrganizationRoles } from "@/lib/organization-roles-service"
 import { inviteInternalMember } from "@/lib/team-member-service"
 
@@ -192,6 +205,7 @@ export function StudioHeader({
   const [newMemberRoleId, setNewMemberRoleId] = React.useState("")
   const [orgRoles, setOrgRoles] = React.useState<{ id: string; title: string }[]>([])
   const [addingMember, setAddingMember] = React.useState(false)
+  const [addMemberError, setAddMemberError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!addMemberModalOpen || !organizationId) return
@@ -214,26 +228,111 @@ export function StudioHeader({
   const [newClientDialogOpen, setNewClientDialogOpen] = React.useState(false)
   // New brief dialog state
   const [newBriefDialogOpen, setNewBriefDialogOpen] = React.useState(false)
+
+  // New Brief loads its own client and project-manager lists when it opens, so
+  // it works on every page (some pages pass empty lists to the header).
+  const [briefLists, setBriefLists] = React.useState<{
+    organizationId: string
+    clients: { id: string; name: string; logoUrl?: string }[]
+    team: OrgMember[]
+  } | null>(null)
+
+  React.useEffect(() => {
+    if (!newBriefDialogOpen || !organizationId) return
+    let cancelled = false
+    const supabase = createClient()
+    void Promise.all([
+      supabase
+        .from("clients")
+        .select("id, name, logo_url")
+        .eq("organization_id", organizationId)
+        .order("name"),
+      supabase
+        .from("organization_members")
+        .select("id, name, email, avatar_url, role")
+        .eq("organization_id", organizationId)
+        // Assignable people only: joined team members, never clients or pending invites.
+        .neq("role", "client")
+        .not("user_id", "is", null)
+        .order("name"),
+    ]).then(([clientsResult, membersResult]) => {
+      if (cancelled) return
+      if (clientsResult.error || membersResult.error) {
+        console.error("Failed to load brief lists:", clientsResult.error ?? membersResult.error)
+        return
+      }
+      setBriefLists({
+        organizationId,
+        clients: (clientsResult.data ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          logoUrl: c.logo_url || undefined,
+        })),
+        team: (membersResult.data ?? [])
+          .filter((m) => m.name?.trim() && m.email?.trim())
+          .map((m) => ({
+            id: m.id,
+            name: m.name || "",
+            email: m.email || "",
+            avatar: m.avatar_url || "",
+            role: m.role || "",
+          })),
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [newBriefDialogOpen, organizationId])
+
+  // Fresh lists for the current organization; the page's props until loaded.
+  const loadedBriefLists =
+    briefLists && briefLists.organizationId === organizationId ? briefLists : null
+  const briefClientDirectory = loadedBriefLists?.clients ?? clientDirectory
+  const briefTeamMembers = loadedBriefLists?.team ?? teamMembers
   const [newOrgDialogOpen, setNewOrgDialogOpen] = React.useState(false)
+  const [orgLimitDialogOpen, setOrgLimitDialogOpen] = React.useState(false)
+
+  // Free plan: 1 organization. Ask the database first so the user sees the
+  // upgrade message instead of filling in the form for nothing. Any error
+  // (e.g. the function isn't deployed yet) opens the form; the database
+  // still enforces the limit on insert.
+  const openNewOrgDialog = React.useCallback(async () => {
+    const supabase = createClient()
+    const { data, error } = await supabase.rpc("can_create_organization")
+    if (!error && data === false) {
+      setOrgLimitDialogOpen(true)
+    } else {
+      setNewOrgDialogOpen(true)
+    }
+  }, [])
 
   React.useEffect(() => {
     const isDarkMode = document.documentElement.classList.contains("dark")
     setIsDark(isDarkMode)
   }, [])
 
+  // After the free trial, creating things shows the upgrade dialog instead of a form.
+  const whenWritable = useWhenWritable()
+  const openNewClientDialog = React.useMemo(
+    () => whenWritable(() => setNewClientDialogOpen(true)),
+    [whenWritable]
+  )
+  const openNewBriefDialog = React.useMemo(
+    () => whenWritable(() => setNewBriefDialogOpen(true)),
+    [whenWritable]
+  )
+
   // Listen for custom event to open Add Client dialog
   React.useEffect(() => {
-    const handler = () => setNewClientDialogOpen(true)
-    window.addEventListener("revue:open-add-client", handler)
-    return () => window.removeEventListener("revue:open-add-client", handler)
-  }, [])
+    window.addEventListener("revue:open-add-client", openNewClientDialog)
+    return () => window.removeEventListener("revue:open-add-client", openNewClientDialog)
+  }, [openNewClientDialog])
 
   // Listen for custom event to open Add Brief/Project dialog
   React.useEffect(() => {
-    const handler = () => setNewBriefDialogOpen(true)
-    window.addEventListener("revue:open-add-brief", handler)
-    return () => window.removeEventListener("revue:open-add-brief", handler)
-  }, [])
+    window.addEventListener("revue:open-add-brief", openNewBriefDialog)
+    return () => window.removeEventListener("revue:open-add-brief", openNewBriefDialog)
+  }, [openNewBriefDialog])
 
   const toggleTheme = () => {
     const newIsDark = !isDark
@@ -297,6 +396,7 @@ export function StudioHeader({
   const handleAddTeamMember = async () => {
     if (!organizationId || !newMemberName.trim() || !newMemberRoleId) return
     setAddingMember(true)
+    setAddMemberError(null)
     try {
       const supabase = createClient()
       const { error } = await inviteInternalMember(supabase, {
@@ -307,6 +407,7 @@ export function StudioHeader({
       })
       if (error) {
         console.error("Failed to add team member:", error)
+        setAddMemberError(error)
         return
       }
       setAddMemberModalOpen(false)
@@ -316,6 +417,7 @@ export function StudioHeader({
       window.location.reload()
     } catch (err) {
       console.error("Failed to add team member:", err)
+      setAddMemberError("Failed to add team member. Please try again.")
     } finally {
       setAddingMember(false)
     }
@@ -324,7 +426,7 @@ export function StudioHeader({
   const ensureClientId = async (clientName: string) => {
     if (!organizationId || !clientName.trim()) return null
 
-    const existing = clientDirectory.find((client) => client.name === clientName)
+    const existing = briefClientDirectory.find((client) => client.name === clientName)
     if (existing) return existing.id
 
     const supabase = createClient()
@@ -339,7 +441,7 @@ export function StudioHeader({
       .single()
 
     if (error) {
-      console.error("Failed to create client:", error)
+      if (!reportTrialExpired(error)) console.error("Failed to create client:", error)
       return null
     }
 
@@ -424,7 +526,10 @@ export function StudioHeader({
         {canAddTeamMember ? (
           <Button
             variant="outline"
-            onClick={() => setAddMemberModalOpen(true)}
+            onClick={whenWritable(() => {
+              setAddMemberError(null)
+              setAddMemberModalOpen(true)
+            })}
             className="h-10 px-4 gap-2 text-sm font-medium border-[#d9d9d9] dark:border-[#444] text-[#1a1a1a] dark:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] hover:border-[#bbb] dark:hover:border-[#555] rounded-lg"
           >
             <UserPlus className="w-4 h-4" />
@@ -446,7 +551,7 @@ export function StudioHeader({
             <DropdownMenuContent align="end" sideOffset={8} className="w-48 p-1.5">
               {canAddClient ? (
                 <DropdownMenuItem
-                  onClick={() => setNewClientDialogOpen(true)}
+                  onClick={openNewClientDialog}
                   className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
                 >
                   <Users className="w-4 h-4 text-[#5C6ECD]" />
@@ -455,7 +560,7 @@ export function StudioHeader({
               ) : null}
               {canAddBrief ? (
                 <DropdownMenuItem
-                  onClick={() => setNewBriefDialogOpen(true)}
+                  onClick={openNewBriefDialog}
                   className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
                 >
                   <FolderOpen className="w-4 h-4 text-[#10b981]" />
@@ -464,7 +569,7 @@ export function StudioHeader({
               ) : null}
               {isOrgOwner ? (
                 <DropdownMenuItem
-                  onClick={() => setNewOrgDialogOpen(true)}
+                  onClick={() => void openNewOrgDialog()}
                   className="gap-3 py-2.5 px-3 text-sm cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded-lg"
                 >
                   <Building2 className="w-4 h-4 text-[#f59e0b]" />
@@ -590,12 +695,14 @@ export function StudioHeader({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center justify-center ml-1">
-              <Avatar className="h-10 w-10 ring-2 ring-[#e6e6e6] dark:ring-[#444] hover:ring-[#5C6ECD] transition-all">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="bg-[#ff7eb3] text-white text-sm font-semibold">
-                  {getInitials(user.name)}
-                </AvatarFallback>
-              </Avatar>
+              <TrialAvatarBadge>
+                <Avatar className="h-10 w-10 ring-2 ring-[#e6e6e6] dark:ring-[#444] hover:ring-[#5C6ECD] transition-all">
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarFallback className="bg-[#ff7eb3] text-white text-sm font-semibold">
+                    {getInitials(user.name)}
+                  </AvatarFallback>
+                </Avatar>
+              </TrialAvatarBadge>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56 p-1.5" align="end" sideOffset={8}>
@@ -636,7 +743,7 @@ export function StudioHeader({
                 Team
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => router.push("/account?tab=billing")}
+                onClick={() => router.push("/account?tab=plan")}
                 className="gap-3 py-2 px-2 text-sm text-[#1a1a1a] dark:text-white cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded"
               >
                 <CreditCard className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
@@ -815,6 +922,14 @@ export function StudioHeader({
                 ))}
               </select>
             </div>
+            {addMemberError ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {addMemberError}
+              </div>
+            ) : null}
           </div>
 
           {/* Footer */}
@@ -850,28 +965,28 @@ export function StudioHeader({
           }
 
           const supabase = createClient()
+          // Uploads go through the app server (permission + storage limit);
+          // collected so they can be removed if saving the client fails.
+          const assetUploads: ClientAssetUploads = []
 
           // Upload logo to storage if provided
           let logoUrl: string | null = null
           if (data.logo) {
-            const ext = data.logo.name.split(".").pop()
-            const path = `${organizationId}/${Date.now()}-logo.${ext}`
-            const { error: uploadErr } = await supabase.storage
-              .from("client-assets")
-              .upload(path, data.logo)
-            if (!uploadErr) {
-              const { data: urlData } = supabase.storage
-                .from("client-assets")
-                .getPublicUrl(path)
-              logoUrl = urlData.publicUrl
-            }
+            logoUrl = await uploadClientAsset(
+              supabase,
+              "client_logo",
+              organizationId,
+              data.logo,
+              assetUploads
+            )
           }
 
           // Upload brand images to storage and collect URLs
           const brandImageUrls = await uploadClientBrandImages(
             supabase,
             organizationId,
-            data.brandImages
+            data.brandImages,
+            assetUploads
           )
 
           // Upload custom fonts and build full fonts array
@@ -880,18 +995,18 @@ export function StudioHeader({
             .map((f) => ({ label: f.label, font_name: f.font, font_url: null as string | null }))
 
           for (const customFont of data.customFonts) {
-            const path = `${organizationId}/${Date.now()}-${customFont.name}`
-            const { error: fontErr } = await supabase.storage
-              .from("client-assets")
-              .upload(path, customFont.file)
-            if (!fontErr) {
-              const { data: fontUrl } = supabase.storage
-                .from("client-assets")
-                .getPublicUrl(path)
+            const fontUrl = await uploadClientAsset(
+              supabase,
+              "font",
+              organizationId,
+              customFont.file,
+              assetUploads
+            )
+            if (fontUrl) {
               fontsJson.push({
                 label: customFont.name,
                 font_name: customFont.name,
-                font_url: fontUrl.publicUrl,
+                font_url: fontUrl,
               })
             }
           }
@@ -931,7 +1046,8 @@ export function StudioHeader({
           }).select("id").single()
 
           if (error) {
-            console.error("Failed to create client:", error)
+            if (!reportTrialExpired(error)) console.error("Failed to create client:", error)
+            await discardClientAssetUploads(assetUploads)
             return
           }
 
@@ -955,8 +1071,8 @@ export function StudioHeader({
       <NewBriefDialog
         open={newBriefDialogOpen}
         onClose={() => setNewBriefDialogOpen(false)}
-        clientDirectory={clientDirectory}
-        teamMembers={teamMembers}
+        clientDirectory={briefClientDirectory}
+        teamMembers={briefTeamMembers}
         organizationId={organizationId}
         onComplete={async (data) => {
           const projectName = data.projectName?.trim() || "Untitled Project"
@@ -973,22 +1089,28 @@ export function StudioHeader({
 
           const supabase = createClient()
 
-          // Upload reference files to storage
+          // Upload reference files through the app server (permission +
+          // storage limit); removed again if the project can't be saved.
+          const refUploads: ClientAssetUploads = []
           const referencesJson = []
           for (const ref of data.references.filter(r => r.type === "file")) {
             if (!ref.name.trim() && (!ref.files || ref.files.length === 0)) continue
             const fileUrls: string[] = []
             if (ref.files) {
               for (const file of ref.files) {
-                const path = `${organizationId}/${clientId}/refs/${Date.now()}-${file.name}`
-                const { error: refErr } = await supabase.storage
-                  .from("client-assets")
-                  .upload(path, file)
-                if (!refErr) {
-                  const { data: refUrl } = supabase.storage
-                    .from("client-assets")
-                    .getPublicUrl(path)
-                  fileUrls.push(refUrl.publicUrl)
+                try {
+                  const upload = await uploadWithQuota(supabase, {
+                    category: "ref",
+                    file,
+                    target: { organizationId, clientId },
+                  })
+                  refUploads.push(upload)
+                  fileUrls.push(upload.publicUrl)
+                } catch (refErr) {
+                  // A plan refusal already showed its dialog.
+                  if (!isStorageUploadBlocked(refErr)) {
+                    console.error("Failed to upload reference file:", refErr)
+                  }
                 }
               }
             }
@@ -1036,7 +1158,8 @@ export function StudioHeader({
           }).select("id").single()
 
           if (error || !newProject) {
-            console.error("Failed to create project:", error)
+            if (!reportTrialExpired(error)) console.error("Failed to create project:", error)
+            await discardClientAssetUploads(refUploads)
             return
           }
 
@@ -1046,7 +1169,7 @@ export function StudioHeader({
 
           // Add manager
           if (data.accountManager) {
-            const manager = teamMembers.find(m => m.name === data.accountManager)
+            const manager = briefTeamMembers.find(m => m.name === data.accountManager)
             if (manager) {
               projectMembers.push({ project_id: newProject.id, member_id: manager.id, role: "manager" })
             }
@@ -1103,7 +1226,9 @@ export function StudioHeader({
       <NewOrganizationDialog
         open={newOrgDialogOpen}
         onClose={() => setNewOrgDialogOpen(false)}
+        onLimitReached={() => setOrgLimitDialogOpen(true)}
       />
+      <OrgLimitDialog open={orgLimitDialogOpen} onOpenChange={setOrgLimitDialogOpen} />
 
     </header>
   )

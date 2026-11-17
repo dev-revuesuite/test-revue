@@ -9,8 +9,10 @@ import {
 import {
   AiAnalysisAccessError,
   assertCanRunAiAnalysis,
+  type AiAnalysisAccessContext,
   type IterationForAnalysis,
 } from "@/lib/ai-analysis-access"
+import { QcUsageError, withQcRun } from "@/lib/plan-usage-service"
 import { downloadCreativeFile, CreativeStorageError } from "@/lib/creative-storage"
 import { updateInferenceLogSuggestionCount } from "@/lib/ai-inference-logger"
 import {
@@ -42,7 +44,8 @@ export class AiAnalysisServiceError extends Error {
   constructor(
     message: string,
     readonly status: number = 500,
-    readonly cause?: unknown
+    readonly cause?: unknown,
+    readonly code?: string
   ) {
     super(message)
     this.name = "AiAnalysisServiceError"
@@ -250,6 +253,41 @@ export async function runAiAnalysis(
     clientImage
   )
 
+  // One QC run per check per page; refunded if the check fails before its results are saved.
+  return withQcRun(
+    supabase,
+    {
+      userId,
+      organizationId: access.organizationId,
+      source: "studio",
+      refId: iterationId,
+      pageNumber,
+      analysisType,
+    },
+    (markSaved) =>
+      analyzeAndSaveRun(
+        supabase,
+        userId,
+        { iterationId, analysisType, pageNumber },
+        access,
+        image,
+        markSaved
+      )
+  )
+}
+
+async function analyzeAndSaveRun(
+  supabase: SupabaseClient,
+  userId: string,
+  {
+    iterationId,
+    analysisType,
+    pageNumber,
+  }: Omit<RunAiAnalysisInput, "clientImage">,
+  access: AiAnalysisAccessContext,
+  image: PreparedAnalysisImage,
+  markSaved: () => void
+): Promise<RunAiAnalysisResult> {
   console.log("[AI Analysis] Prepared image", {
     iterationId,
     analysisType,
@@ -385,6 +423,9 @@ export async function runAiAnalysis(
     }
   }
 
+  // The run and its suggestions are stored: the QC run is now used.
+  markSaved()
+
   const suggestions = await fetchSuggestionsForRun(supabase, run.id)
 
   if (AI_ANALYSIS_DEBUG_LOG) {
@@ -471,6 +512,14 @@ export function toServiceError(error: unknown): AiAnalysisServiceError {
   }
   if (error instanceof AiAnalysisClientImageError) {
     return new AiAnalysisServiceError(error.message, error.status, error)
+  }
+  if (error instanceof QcUsageError) {
+    return new AiAnalysisServiceError(
+      error.message,
+      error.status,
+      error,
+      error.code
+    )
   }
 
   return new AiAnalysisServiceError(

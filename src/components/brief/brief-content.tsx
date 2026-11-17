@@ -56,6 +56,11 @@ import { touchClientActivityByProjectId } from "@/lib/touch-client-activity"
 import { CreativeCardThumbnail } from "@/components/shared/creative-card-thumbnail"
 import { getMediaTypeFromUrl, isPdfFile } from "@/lib/media-type"
 import { requestPdfLinearization } from "@/lib/request-pdf-linearization"
+import {
+  isStorageUploadBlocked,
+  uploadWithQuota,
+  type UploadWithQuotaResult,
+} from "@/lib/upload-with-quota"
 import { createInitialIterationForCreative } from "@/lib/ensure-initial-iteration"
 import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipeline-status"
 
@@ -201,19 +206,29 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
     if (!projectData) return
 
     let uploadedUrl: string | null = null
+    let discardUpload: (() => Promise<void>) | null = null
     if (newCreative.file) {
-      const safeName = newCreative.file.name.replace(/[^A-Za-z0-9._-]+/g, "-")
-      const path = `${projectData.id}/${Date.now()}-${safeName}`
-      const { error: uploadError } = await supabase.storage.from("creatives").upload(path, newCreative.file)
-      if (uploadError) {
-        console.error("Failed to upload file:", uploadError)
+      // Through the app server: checks permission and the plan's storage limit.
+      let upload: UploadWithQuotaResult
+      try {
+        upload = await uploadWithQuota(supabase, {
+          category: "design",
+          file: newCreative.file,
+          target: { projectId: projectData.id },
+        })
+      } catch (uploadError) {
+        // A plan refusal already showed its dialog.
+        if (!isStorageUploadBlocked(uploadError)) {
+          console.error("Failed to upload file:", uploadError)
+        }
         return
       }
-      uploadedUrl = supabase.storage.from("creatives").getPublicUrl(path).data.publicUrl
+      uploadedUrl = upload.publicUrl
+      discardUpload = upload.discard
 
       if (isPdfFile(newCreative.file)) {
         // Await so the web copy exists before the creative is usable in Revue.
-        await requestPdfLinearization("creatives", path)
+        await requestPdfLinearization("creatives", upload.path)
       }
     }
 
@@ -230,6 +245,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
 
     if (error || !inserted) {
       console.error("Failed to add creative:", error)
+      await discardUpload?.()
       return
     }
 
@@ -249,6 +265,7 @@ export function BriefContent({ projectData: initialData }: BriefContentProps) {
       } catch (iterationError) {
         console.error("Failed to create iteration for creative:", iterationError)
         await supabase.from("creatives").delete().eq("id", inserted.id)
+        await discardUpload?.()
         return
       }
     }
