@@ -20,6 +20,7 @@ import { createClient, getAuthUser } from "@/lib/supabase/server"
 import { parseTimezonePreference } from "@/lib/timezone-preference"
 import { AppLayoutLoadingShell } from "@/components/studio/studio-loading-skeletons"
 import { Suspense } from "react"
+import { headers } from "next/headers"
 
 export default function AppLayout({
   children,
@@ -56,6 +57,8 @@ async function AppProviders({ children }: { children: React.ReactNode }) {
   let trial = NO_TRIAL
   let organizationId: string | null = null
   let paymentIssue: { graceEndsAt: string | null } | null = null
+  // Where the visit comes from (set by Vercel; absent locally). Only used to show local prices.
+  const country = (await headers()).get("x-vercel-ip-country")
 
   if (user) {
     const [organization, prefsResult] = await Promise.all([
@@ -106,6 +109,7 @@ async function AppProviders({ children }: { children: React.ReactNode }) {
             email: user?.email ?? null,
             name: (user?.user_metadata?.full_name as string | undefined) ?? null,
             paymentIssue,
+            country,
           }}
         >
           <CreativeUploadShell>

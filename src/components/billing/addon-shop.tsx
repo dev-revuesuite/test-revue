@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Check, Loader2 } from "lucide-react"
 
+import { ChargedInInrNote, CurrencySwitcher, useDisplayCurrency } from "@/components/billing/use-display-currency"
 import { Button } from "@/components/ui/button"
 import { usePermissions } from "@/contexts/permission-context"
 import { useBillingContext, useTrialExpired } from "@/contexts/plan-features-context"
@@ -45,6 +46,8 @@ export function AddonShop() {
   const { organizationId, email, name } = useBillingContext()
   const viewOnly = useTrialExpired()
   const [state, setState] = React.useState<State>({ kind: "idle" })
+  // Display only: visitors outside India see a guide price in their own currency.
+  const { currency, foreign, abroad, price: show, choose } = useDisplayCurrency()
 
   if (!isBillingEnabled() || !isOrgOwner || !organizationId || viewOnly) return null
 
@@ -81,8 +84,9 @@ export function AddonShop() {
         Add-ons
       </h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        One-time payments on top of your plan. Pay with UPI, card or netbanking.
+        One-time payments on top of your plan. Pay with {foreign ? "an international card" : "UPI, card or netbanking"}.
       </p>
+      <ChargedInInrNote currency={currency} className="mt-1 text-xs text-muted-foreground" />
 
       {state.kind === "done" || state.kind === "slow" ? (
         <p
@@ -114,7 +118,10 @@ export function AddonShop() {
                   <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
                     <span className="text-sm text-foreground">
                       {item.label}
-                      <span className="ml-2 tabular-nums text-muted-foreground">{formatInr(item.priceInr)}</span>
+                      <span className="ml-2 tabular-nums text-muted-foreground">
+                        {show(item.priceInr).main}
+                        {foreign ? ` (charged as ${formatInr(item.priceInr)})` : null}
+                      </span>
                     </span>
                     <Button size="sm" variant="outline" disabled={busy} onClick={() => void buy(item)}>
                       {working ? (
@@ -135,6 +142,7 @@ export function AddonShop() {
           </div>
         ))}
       </div>
+      {abroad ? <CurrencySwitcher currency={currency} onChange={choose} className="mt-4" /> : null}
     </section>
   )
 }

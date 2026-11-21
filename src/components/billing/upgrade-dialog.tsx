@@ -5,6 +5,7 @@ import { Check, Loader2, PartyPopper, ShieldCheck } from "lucide-react"
 
 import { useCheckout } from "@/components/billing/use-checkout"
 import { useCurrentSubscription } from "@/components/billing/use-current-subscription"
+import { ChargedInInrNote, CurrencySwitcher, useDisplayCurrency } from "@/components/billing/use-display-currency"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { PAID_PLAN_IDS, type BillingCycle, type PaidPlanId } from "@/lib/billing/billing-plans"
-import { annualSaving, formatInr, PLAN_LABELS, PLAN_PRICES_INR } from "@/lib/billing/plan-prices"
+import { formatInr, PLAN_LABELS, PLAN_PRICES_INR } from "@/lib/billing/plan-prices"
 import { useTimezone } from "@/contexts/timezone-context"
 import { formatInstantInZone } from "@/lib/timezone-preference"
 import { cn } from "@/lib/utils"
@@ -42,6 +43,8 @@ export function UpgradeDialog({
   // Razorpay's window, so it is hidden while that window is open.
   const { step, start: startCheckout, busy, paymentWindowOpen } = useCheckout()
   const { timeZone } = useTimezone()
+  // Display only: visitors outside India see a guide price in their own currency.
+  const { currency, foreign, abroad, price: show, annualSaving: showSaving, choose } = useDisplayCurrency()
 
   // What the owner has today (undefined while loading): a running plan can be
   // switched, a cancelled one with paid time left can be bought again.
@@ -133,7 +136,8 @@ export function UpgradeDialog({
             <div role="radiogroup" aria-label="Plan" className="grid gap-3 sm:grid-cols-2">
               {PAID_PLAN_IDS.map((id) => {
                 const price = PLAN_PRICES_INR[id][cycle]
-                const saving = cycle === "annual" ? annualSaving(id) : null
+                const saving =
+                  cycle === "annual" ? showSaving(PLAN_PRICES_INR[id].monthly, PLAN_PRICES_INR[id].annual) : null
                 const selected = plan === id
                 return (
                   <button
@@ -159,13 +163,16 @@ export function UpgradeDialog({
                     <p className="font-semibold text-foreground">{PLAN_LABELS[id].name}</p>
                     <p className="text-xs text-muted-foreground">{PLAN_LABELS[id].tagline}</p>
                     <p className="mt-3 text-2xl font-semibold text-foreground tabular-nums">
-                      {formatInr(price)}
+                      {show(price).main}
                       <span className="text-sm font-normal text-muted-foreground">
                         /{cycle === "monthly" ? "month" : "year"}
                       </span>
                     </p>
+                    {foreign ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">Charged as {formatInr(price)}</p>
+                    ) : null}
                     {saving ? (
-                      <p className="mt-1 text-xs font-medium text-emerald-600">Save {formatInr(saving)} a year</p>
+                      <p className="mt-1 text-xs font-medium text-emerald-600">Save {saving} a year</p>
                     ) : null}
                   </button>
                 )
@@ -196,6 +203,8 @@ export function UpgradeDialog({
               Renews automatically every {cycle === "monthly" ? "month" : "year"} until you cancel.
               {current ? null : " Your free trial ends when the paid plan starts."}
             </p>
+            <ChargedInInrNote currency={currency} className="text-xs text-muted-foreground" />
+            {abroad ? <CurrencySwitcher currency={currency} onChange={choose} /> : null}
 
             <DialogFooter className="gap-2">
               <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
@@ -213,7 +222,7 @@ export function UpgradeDialog({
                 ) : isCurrentChoice ? (
                   "This is your current plan"
                 ) : (
-                  `Continue to pay ${formatInr(PLAN_PRICES_INR[plan][cycle])}`
+                  `Continue to pay ${formatInr(PLAN_PRICES_INR[plan][cycle])}${foreign ? ` (about ${show(PLAN_PRICES_INR[plan][cycle]).main})` : ""}`
                 )}
               </Button>
             </DialogFooter>

@@ -16,9 +16,8 @@ export const PLAN_LABELS: Record<PaidPlanId, { name: string; tagline: string }> 
   business: { name: "Business", tagline: "For agencies with more clients and reviewers" },
 }
 
-export function formatInr(amount: number): string {
-  return `₹${amount.toLocaleString("en-IN")}`
-}
+// One definition of how rupees are written (display-currency.ts has no imports).
+export { formatInr } from "@/lib/billing/display-currency"
 
 /** "Save ₹4,989" for annual vs 12 × monthly, or null if there's no saving. */
 export function annualSaving(plan: PaidPlanId): number | null {

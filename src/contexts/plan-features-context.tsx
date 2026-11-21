@@ -17,6 +17,8 @@ export type BillingContextValue = {
   name: string | null
   /** Set when the owner's renewal failed and the 7-day grace period is running. */
   paymentIssue?: { graceEndsAt: string | null } | null
+  /** Two-letter country the visit came from (Vercel), for showing local prices. Null when unknown. */
+  country?: string | null
 }
 const NO_BILLING: BillingContextValue = { organizationId: null, email: null, name: null, paymentIssue: null }
 const BillingContext = React.createContext<BillingContextValue>(NO_BILLING)

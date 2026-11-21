@@ -30,9 +30,6 @@ export default async function StartPage() {
   // Already paying (or an old org without a trial): nothing to choose here.
   if (!owner || trial.status !== "trial") redirect("/studio")
 
-  return (
-    <main className="flex min-h-svh items-center justify-center bg-background px-4 py-12">
-      <StartPlanChooser trialDays={trial.daysLeft} />
-    </main>
-  )
+  // The chooser draws the whole screen (dark, like the onboarding steps before it).
+  return <StartPlanChooser trialDays={trial.daysLeft} />
 }
