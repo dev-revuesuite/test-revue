@@ -2,13 +2,14 @@
 
 import { publicPath } from "@/lib/base-path"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { isBillingEnabled } from "@/lib/billing/plan-prices"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
 import {
@@ -62,7 +63,9 @@ export function OnboardingForm({
 }: OnboardingFormProps) {
   const router = useRouter()
   const { setTheme: applyTheme } = useTheme()
-  const [step, setStep] = useState(0)
+  // If the role is pre-detected (invited user), role selection (step 0) is
+  // skipped. detectedRole comes from the server and doesn't change on this page.
+  const [step, setStep] = useState(detectedRole ? 1 : 0)
   const [role, setRole] = useState<UserRole>(detectedRole)
   const [fullName, setFullName] = useState(userName)
   const [orgName, setOrgName] = useState(organizationName)
@@ -90,14 +93,6 @@ export function OnboardingForm({
       setAnimateIn(true)
     }, 200)
   }
-
-  // If role is pre-detected (invited user), skip role selection
-  useEffect(() => {
-    if (detectedRole) {
-      setRole(detectedRole)
-      setStep(1)
-    }
-  }, [detectedRole])
 
   const handleSignOut = async () => {
     setSigningOut(true)
@@ -186,6 +181,7 @@ export function OnboardingForm({
     }
 
     // No existing membership — admin creates org
+    let createdNewOrg = false
     if (role === "admin") {
       const { data: existingOrg } = await supabase
         .from("organizations")
@@ -212,6 +208,7 @@ export function OnboardingForm({
           return
         }
         orgId = createdOrg?.id
+        createdNewOrg = Boolean(orgId)
       }
 
       if (orgId) {
@@ -233,6 +230,9 @@ export function OnboardingForm({
 
     if (role === "client") {
       router.push("/client-portal")
+    } else if (createdNewOrg && isBillingEnabled()) {
+      // New owner: "How do you want to start?" (free trial or a paid plan).
+      router.push("/start")
     } else {
       router.push("/studio")
     }

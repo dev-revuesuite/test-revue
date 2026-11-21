@@ -329,3 +329,9 @@ button:hover .btn-arrow {
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+/* Razorpay Checkout lives in its own container on <body>. A dialog that is
+   closing can briefly leave pointer-events: none on <body>; keep the payment
+   window clickable no matter what. */
+.razorpay-container {
+  pointer-events: auto !important;
+}

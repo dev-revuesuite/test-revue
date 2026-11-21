@@ -3,9 +3,14 @@
 import * as React from "react"
 import { Loader2 } from "lucide-react"
 
+import { AddonShop } from "@/components/billing/addon-shop"
+import { BillingStatusCard } from "@/components/billing/billing-status-card"
+import { PaymentHistory } from "@/components/billing/payment-history"
 import { RequestUpgradeButton } from "@/components/plans/request-upgrade-button"
 import { createClient } from "@/lib/supabase/client"
+import { useTrial } from "@/contexts/plan-features-context"
 import { useTimezone } from "@/contexts/timezone-context"
+import { planEndedCopy } from "@/lib/plan-ended-copy"
 import { formatInstantInZone } from "@/lib/timezone-preference"
 import {
   formatLimit,
@@ -80,6 +85,9 @@ function UsageMeter({
 
 export function PlanTab({ organizationId }: PlanTabProps) {
   const { timeZone } = useTimezone()
+  // A former paying customer reads "Your plan has ended", not "free trial ended".
+  const lapsed = useTrial().lapsed === true
+  const ended = planEndedCopy(lapsed)
   const [usage, setUsage] = React.useState<OrgPlanUsage | null>(null)
   const [plans, setPlans] = React.useState<PlanRow[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -156,6 +164,9 @@ export function PlanTab({ organizationId }: PlanTabProps) {
     packs.length > 0
       ? ` QC packs: ${packRemaining.toLocaleString("en-IN")} run${packRemaining === 1 ? "" : "s"} left (expires ${formatInstantInZone(packs[0].expires_at, timeZone)}). Used after the plan's runs.`
       : ""
+  // Present after billing v3: the owner's workspaces and whether limits are shared.
+  const workspaces = usage.workspaces ?? null
+  const sharedNote = workspaces?.shared ? " Shared across all your workspaces." : ""
   const storageAddons = usage.storage?.addons ?? []
   const storageAddonLabel =
     usage.storage?.configured && storageAddons.length > 0
@@ -193,6 +204,14 @@ export function PlanTab({ organizationId }: PlanTabProps) {
             Started on {formatInstantInZone(usage.plan_started_at, timeZone)}
           </p>
         ) : null}
+        {workspaces ? (
+          <p className="text-xs text-muted-foreground mt-1">
+            {workspaces.shared ? "Covers all your workspaces: " : "Workspaces: "}
+            {workspaces.used.toLocaleString("en-IN")}
+            {workspaces.limit === null ? " (unlimited)" : ` of ${workspaces.limit.toLocaleString("en-IN")} used`}
+            {workspaces.shared ? ". Limits below are shared across them." : null}
+          </p>
+        ) : null}
         {usage.trial?.status === "trial" || usage.trial?.status === "expired" ? (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <p
@@ -204,9 +223,10 @@ export function PlanTab({ organizationId }: PlanTabProps) {
               )}
             >
               {usage.trial.status === "expired"
-                ? "Free trial ended. Your organization is view-only."
+                ? ended.planTab
                 : `Free trial: ${usage.trial.days_left ?? 0} ${usage.trial.days_left === 1 ? "day" : "days"} left`}
-              {usage.trial.ends_at ? (
+              {/* For a former customer this date is when the trial stopped, not when the plan ended. */}
+              {usage.trial.ends_at && !(usage.trial.status === "expired" && lapsed) ? (
                 <span className="ml-1 font-normal text-muted-foreground">
                   ({usage.trial.status === "expired" ? "ended" : "ends"}{" "}
                   {formatInstantInZone(usage.trial.ends_at, timeZone)})
@@ -215,8 +235,16 @@ export function PlanTab({ organizationId }: PlanTabProps) {
             </p>
             <RequestUpgradeButton size="sm" />
           </div>
+        ) : plan.id === "free" ? (
+          <div className="mt-3">
+            <RequestUpgradeButton size="sm" />
+          </div>
         ) : null}
       </div>
+
+      <BillingStatusCard organizationId={organizationId} />
+      <AddonShop />
+      <PaymentHistory />
 
       <div className="grid gap-4 sm:grid-cols-2 mb-4">
         <UsageMeter
@@ -226,7 +254,7 @@ export function PlanTab({ organizationId }: PlanTabProps) {
           caption={
             qc.configured === false
               ? `Your plan has no QC allowance set up yet. Contact support.${packLabel}`
-              : `${resetLabel}. Each check on each page uses 1 run.${packLabel}`
+              : `${resetLabel}. Each check on each page uses 1 run.${sharedNote}${packLabel}`
           }
           notConfigured={qc.configured === false}
         />
@@ -234,7 +262,9 @@ export function PlanTab({ organizationId }: PlanTabProps) {
           label="Team members"
           used={members.used}
           limit={members.limit}
-          caption="Includes the owner. Clients and pending invites aren't counted."
+          caption={`Includes the owner. Clients and pending invites aren't counted.${
+            workspaces?.shared ? " Counted once per person across all your workspaces." : ""
+          }`}
         />
         {usage.guests ? (
           <UsageMeter
@@ -243,8 +273,8 @@ export function PlanTab({ organizationId }: PlanTabProps) {
             limit={usage.guests.limit}
             caption={
               usage.guests.waiting > 0
-                ? `Client users who have joined. ${usage.guests.waiting} client${usage.guests.waiting === 1 ? " is" : "s are"} waiting for a free seat.`
-                : "Client users who have joined. Invited contacts who haven't signed up aren't counted."
+                ? `Client users who have joined. ${usage.guests.waiting} client${usage.guests.waiting === 1 ? " is" : "s are"} waiting for a free seat.${sharedNote}`
+                : `Client users who have joined. Invited contacts who haven't signed up aren't counted.${sharedNote}`
             }
           />
         ) : null}
@@ -257,7 +287,7 @@ export function PlanTab({ organizationId }: PlanTabProps) {
             notConfigured={!usage.storage.configured}
             caption={
               usage.storage.configured
-                ? `Designs, versions, Quick Analysis files and client brand files. Logos aren't counted.${storageAddonLabel} 1 GB = 1,073,741,824 bytes.`
+                ? `Designs, versions, Quick Analysis files and client brand files. Logos aren't counted.${sharedNote}${storageAddonLabel} 1 GB = 1,073,741,824 bytes.`
                 : "Your plan has no storage allowance set up yet. Contact support."
             }
           />

@@ -5,6 +5,8 @@ import { isDailyJobFailure, runIsolated } from "@/lib/daily-jobs"
 import { runIterationRetention } from "@/lib/iteration-retention-service"
 import { runStorageReservationCleanup } from "@/lib/storage-reservation-cleanup"
 import { runTrialReminders } from "@/lib/trial-reminder-service"
+import { alertBillingProblem } from "@/lib/billing/billing-alert"
+import { runDailyBilling } from "@/lib/billing/daily-billing"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -44,6 +46,16 @@ export async function GET(request: Request) {
   try {
     const admin = createAdminClient()
 
+    // Billing safety check first (it touches money and access, and must not be
+    // starved of time by the housekeeping below): refresh subscriptions from
+    // Razorpay, cancel stale unpaid checkouts, end access after grace / a
+    // cancelled plan's paid period.
+    const billing = await runIsolated("Billing reconcile", () =>
+      runDailyBilling(admin, { dryRun })
+    )
+    // A billing problem must not go unnoticed: email the team (never on a dry run).
+    if (!dryRun) await alertBillingProblem(billing)
+
     // Each job is isolated: a failure is logged and the next job still runs.
     const result = await runIsolated(
       "Iteration retention",
@@ -73,12 +85,12 @@ export async function GET(request: Request) {
     if (isDailyJobFailure(result)) {
       // The other jobs ran; still report the run as failed so it gets noticed.
       return Response.json(
-        { error: "Retention run failed", storageCleanup, trialReminders },
+        { error: "Retention run failed", storageCleanup, trialReminders, billing },
         { status: 500 }
       )
     }
 
-    return Response.json({ ...result, storageCleanup, trialReminders })
+    return Response.json({ ...result, storageCleanup, trialReminders, billing })
   } catch (error) {
     console.error("[Iteration retention] Run failed", {
       error: error instanceof Error ? error.message : String(error),

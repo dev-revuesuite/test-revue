@@ -4,6 +4,7 @@ const jobs = vi.hoisted(() => ({
   retention: vi.fn(),
   storageCleanup: vi.fn(),
   trialReminders: vi.fn(),
+  billing: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -13,6 +14,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/iteration-retention-service", () => ({ runIterationRetention: jobs.retention }))
 vi.mock("@/lib/storage-reservation-cleanup", () => ({ runStorageReservationCleanup: jobs.storageCleanup }))
 vi.mock("@/lib/trial-reminder-service", () => ({ runTrialReminders: jobs.trialReminders }))
+vi.mock("@/lib/billing/daily-billing", () => ({ runDailyBilling: jobs.billing }))
 
 import { GET } from "./route"
 
@@ -32,6 +34,7 @@ describe("daily cron route", () => {
     jobs.retention.mockReset().mockResolvedValue(retentionResult)
     jobs.storageCleanup.mockReset().mockResolvedValue({ checked: 0 })
     jobs.trialReminders.mockReset().mockResolvedValue({ sent: 2 })
+    jobs.billing.mockReset().mockResolvedValue({ checked: 1, revoked: 0 })
   })
 
   afterEach(() => {
@@ -39,7 +42,7 @@ describe("daily cron route", () => {
     vi.restoreAllMocks()
   })
 
-  it("runs all three jobs when everything works", async () => {
+  it("runs all four jobs when everything works", async () => {
     const response = await GET(request())
 
     expect(response.status).toBe(200)
@@ -47,6 +50,7 @@ describe("daily cron route", () => {
       candidates: 0,
       storageCleanup: { checked: 0 },
       trialReminders: { sent: 2 },
+      billing: { checked: 1, revoked: 0 },
     })
   })
 
@@ -58,11 +62,13 @@ describe("daily cron route", () => {
 
     expect(jobs.storageCleanup).toHaveBeenCalledOnce()
     expect(jobs.trialReminders).toHaveBeenCalledOnce()
+    expect(jobs.billing).toHaveBeenCalledOnce()
     expect(response.status).toBe(500)
     expect(await response.json()).toEqual({
       error: "Retention run failed",
       storageCleanup: { checked: 0 },
       trialReminders: { sent: 2 },
+      billing: { checked: 1, revoked: 0 },
     })
   })
 
@@ -77,6 +83,25 @@ describe("daily cron route", () => {
       storageCleanup: { error: "Storage cleanup failed" },
       trialReminders: { sent: 2 },
     })
+  })
+
+  it("still runs the billing check when trial reminders fail, and vice versa", async () => {
+    jobs.trialReminders.mockRejectedValue(new Error("mail down"))
+    jobs.billing.mockRejectedValueOnce(new Error("razorpay down"))
+
+    const response = await GET(request())
+
+    expect(jobs.billing).toHaveBeenCalledOnce()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      trialReminders: { error: "Trial reminders failed" },
+      billing: { error: "Billing reconcile failed" },
+    })
+  })
+
+  it("passes dry run to the billing check", async () => {
+    await GET(new Request("http://localhost/qc-tool/api/cron/iteration-retention?dryRun=1", { headers: { authorization: `Bearer ${SECRET}` } }))
+    expect(jobs.billing).toHaveBeenCalledWith(expect.anything(), { dryRun: true })
   })
 
   it("rejects requests without the cron secret", async () => {

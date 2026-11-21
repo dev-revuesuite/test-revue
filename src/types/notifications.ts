@@ -15,6 +15,11 @@ export type NotificationType =
   | "trial_ending"
   | "trial_ended"
   | "trial_started"
+  | "billing_plan_started"
+  | "billing_payment_failed"
+  | "billing_plan_cancelled"
+  | "billing_plan_ending"
+  | "billing_plan_ended"
 
 export interface NotificationRow {
   id: string

@@ -207,8 +207,9 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
   // Fetch user profiles for all user_ids involved
   const allUserIds = new Set<string>()
   allUserIds.add(user.id)
-  for (const f of feedbacksRaw || []) allUserIds.add(f.user_id)
-  for (const r of repliesRaw || []) allUserIds.add(r.user_id)
+  // user_id is null when the author's account was deleted (shown as "Deleted user").
+  for (const f of feedbacksRaw || []) if (f.user_id) allUserIds.add(f.user_id)
+  for (const r of repliesRaw || []) if (r.user_id) allUserIds.add(r.user_id)
 
   const { data: profilesRaw } = await supabase
     .from("profiles")
@@ -276,7 +277,8 @@ export default async function RevuePage({ searchParams }: RevuePageProps) {
     ?.preferences as Record<string, unknown> | null
   const timeZone = await getRequestTimeZone(currentUserPrefs?.timezone)
 
-  const getUserDisplay = (userId: string) => {
+  const getUserDisplay = (userId: string | null) => {
+    if (!userId) return { name: "Deleted user", avatar: "D", color: "bg-gray-500" }
     const profile = profileMap[userId]
     return {
       name: userId === user.id ? "You" : (profile?.name || "User"),

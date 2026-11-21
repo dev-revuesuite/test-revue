@@ -38,8 +38,9 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest) {
     'camera=(), microphone=(), geolocation=(), interest-cohort=()'
   )
 
-  // Isolate the browsing context group
-  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+  // Isolate the browsing context group, but let popups we open keep their
+  // opener: Razorpay opens bank/3-D Secure windows that report back to it.
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
 
   // Tell shared/CDN caches to vary by auth cookie so each user gets a unique
   // RSC payload, but still allow browser re-use on rapid re-navigation.
@@ -56,7 +57,10 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest) {
   }
 
   // Content Security Policy - allow Supabase, Google Fonts, and self
-  const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
+  // Razorpay Checkout: checkout.js from checkout.razorpay.com, and the payment
+  // window is an iframe on api.razorpay.com.
+  const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://checkout.razorpay.com']
+  const frameSrc = ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com']
   const styleSrc = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com']
   const fontSrc = ["'self'", 'data:', 'https://fonts.gstatic.com']
   const imgSrc = ["'self'", 'data:', 'blob:', 'https:']
@@ -70,6 +74,7 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest) {
     `font-src ${fontSrc.join(' ')}`,
     `img-src ${imgSrc.join(' ')}`,
     `connect-src ${connectSrc.join(' ')}`,
+    `frame-src ${frameSrc.join(' ')}`,
     `frame-ancestors ${frameAncestors.join(' ')}`,
     `base-uri 'self'`,
     `form-action 'self'`,

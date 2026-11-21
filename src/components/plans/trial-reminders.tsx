@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Clock, X } from "lucide-react"
 
+import { useCloseWhenUpgradeOpens } from "@/components/billing/upgrade-dialog-host"
 import { RequestUpgradeButton } from "@/components/plans/request-upgrade-button"
 import {
   Dialog,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { usePermissions } from "@/contexts/permission-context"
 import { hasAnyPermission } from "@/lib/permissions"
 import { useTrial } from "@/contexts/plan-features-context"
+import { planEndedCopy } from "@/lib/plan-ended-copy"
 import { cn } from "@/lib/utils"
 
 /** Days left at which the pop-up and the reminder bar start showing. */
@@ -73,6 +75,7 @@ export function TrialReminders() {
 
   const [popupOpen, setPopupOpen] = React.useState(false)
   const [barVisible, setBarVisible] = React.useState(false)
+  useCloseWhenUpgradeOpens(() => setPopupOpen(false))
 
   // Storage is only readable in the browser, so decide after mount.
   React.useEffect(() => {
@@ -89,9 +92,10 @@ export function TrialReminders() {
 
   if (!active) return null
 
-  const title = expired ? "Your free trial has ended" : `Your free trial ends ${daysText(trial.daysLeft ?? 0)}`
+  const ended = planEndedCopy(trial.lapsed)
+  const title = expired ? ended.title : `Your free trial ends ${daysText(trial.daysLeft ?? 0)}`
   const body = expired
-    ? "Your work is safe and you can still view everything. To upload, run quality checks, comment or start new briefs, upgrade your plan."
+    ? ended.body
     : "Upgrade before it ends to keep uploading, running quality checks and working with clients without interruption."
 
   return (
@@ -131,7 +135,7 @@ export function TrialReminders() {
         >
           <Clock className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1">
-            {expired ? "Free trial ended. View only." : `Free trial ends ${daysText(trial.daysLeft ?? 0)}.`}
+            {expired ? ended.bar :`Free trial ends ${daysText(trial.daysLeft ?? 0)}.`}
           </span>
           <RequestUpgradeButton size="sm" />
           <button

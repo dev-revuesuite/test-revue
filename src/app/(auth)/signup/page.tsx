@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { SignupForm } from "@/components/signup-form"
 import { OnboardingLottie } from "@/components/onboarding/onboarding-lottie"
+import { RememberPlanIntent } from "@/components/billing/remember-plan-intent"
 
 export default function SignupPage() {
   return (
@@ -15,6 +16,7 @@ export default function SignupPage() {
           <Suspense>
             <SignupForm />
           </Suspense>
+          <RememberPlanIntent />
         </div>
       </div>
     </div>

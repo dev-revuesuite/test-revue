@@ -2,6 +2,7 @@
 
 import { Gauge } from "lucide-react"
 
+import { useCloseWhenUpgradeOpens } from "@/components/billing/upgrade-dialog-host"
 import { RequestUpgradeButton } from "@/components/plans/request-upgrade-button"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useTrial } from "@/contexts/plan-features-context"
+import { planEndedCopy } from "@/lib/plan-ended-copy"
 import {
   QC_LIMIT_REACHED_CODE,
   QC_NOT_CONFIGURED_CODE,
@@ -40,9 +43,15 @@ interface QcLimitDialogProps {
 
 /** Shown when a QC check is blocked by the plan (runs used up, or not set up). */
 export function QcLimitDialog({ block, onClose }: QcLimitDialogProps) {
+  useCloseWhenUpgradeOpens(() => {
+    if (block) onClose()
+  })
+  // A former paying customer reads "Your plan has ended", not "free trial".
+  const ended = planEndedCopy(useTrial().lapsed)
+  const isEnded = block?.code === TRIAL_EXPIRED_CODE
   const title =
-    block?.code === TRIAL_EXPIRED_CODE
-      ? "Your free trial has ended"
+    isEnded
+      ? ended.title
       : block?.code === QC_NOT_CONFIGURED_CODE
         ? "QC runs aren't set up"
         : "You're out of QC runs"
@@ -60,7 +69,7 @@ export function QcLimitDialog({ block, onClose }: QcLimitDialogProps) {
             <Gauge className="h-5 w-5 text-destructive" />
           </div>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{block?.message}</DialogDescription>
+          <DialogDescription>{isEnded ? ended.message : block?.message}</DialogDescription>
         </DialogHeader>
         <DialogFooter className="items-center gap-2 sm:justify-between">
           {block?.code === TRIAL_EXPIRED_CODE ? (

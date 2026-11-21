@@ -4,6 +4,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { TimezoneProvider } from "@/contexts/timezone-context"
 import { CreativeUploadShell } from "@/components/uploads/creative-upload-shell"
 import { PlanLimitDialogHost } from "@/components/plans/plan-limit-dialog-host"
+import { UpgradeDialogHost } from "@/components/billing/upgrade-dialog-host"
+import { PaymentIssueBar } from "@/components/billing/payment-issue-bar"
+import { getFailingPayment } from "@/lib/billing/failing-payment"
 import { appFontClassName } from "@/lib/fonts"
 import { getActiveOrganization } from "@/lib/get-active-organization"
 import { getRequestTimeZone } from "@/lib/get-request-timezone"
@@ -51,6 +54,8 @@ async function AppProviders({ children }: { children: React.ReactNode }) {
   let resolvedTimeZone = "UTC"
   let planFeatures = ALL_PLAN_FEATURES_INCLUDED
   let trial = NO_TRIAL
+  let organizationId: string | null = null
+  let paymentIssue: { graceEndsAt: string | null } | null = null
 
   if (user) {
     const [organization, prefsResult] = await Promise.all([
@@ -67,11 +72,14 @@ async function AppProviders({ children }: { children: React.ReactNode }) {
     )
     resolvedTimeZone = await getRequestTimeZone(timezonePreference)
     if (organization) {
-      const [permissionsResult, features, trialStatus] = await Promise.all([
+      organizationId = organization.id
+      const [permissionsResult, features, trialStatus, failingPayment] = await Promise.all([
         getUserPermissions(supabase, user.id, organization.id),
         getPlanFeatures(supabase, organization.id),
         getOrgTrialStatus(supabase, organization.id),
+        getFailingPayment(supabase, user.id),
       ])
+      paymentIssue = failingPayment
       planFeatures = features
       trial = trialStatus
       permissionKeys = [...permissionsResult.permissions]
@@ -90,11 +98,22 @@ async function AppProviders({ children }: { children: React.ReactNode }) {
         isOrgOwner={isOrgOwner}
         customRoleTitle={customRoleTitle}
       >
-        <PlanFeaturesProvider features={planFeatures} trial={trial}>
+        <PlanFeaturesProvider
+          features={planFeatures}
+          trial={trial}
+          billing={{
+            organizationId,
+            email: user?.email ?? null,
+            name: (user?.user_metadata?.full_name as string | undefined) ?? null,
+            paymentIssue,
+          }}
+        >
           <CreativeUploadShell>
             <NavigationPathTracker />
             <PlanLimitDialogHost />
             <TrialReminders />
+            <UpgradeDialogHost />
+            <PaymentIssueBar />
             {children}
           </CreativeUploadShell>
         </PlanFeaturesProvider>

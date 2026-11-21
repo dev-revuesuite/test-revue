@@ -3,9 +3,12 @@
 import * as React from "react"
 import { Clock, HardDrive } from "lucide-react"
 
+import { useCloseWhenUpgradeOpens } from "@/components/billing/upgrade-dialog-host"
 import { RequestUpgradeButton } from "@/components/plans/request-upgrade-button"
 import { Button } from "@/components/ui/button"
 import { usePermissions } from "@/contexts/permission-context"
+import { useTrial } from "@/contexts/plan-features-context"
+import { planEndedCopy } from "@/lib/plan-ended-copy"
 import {
   Dialog,
   DialogContent,
@@ -22,8 +25,8 @@ import { hasAnyPermission } from "@/lib/permissions"
 import { TRIAL_EXPIRED_CODE } from "@/lib/plans"
 import { PLAN_LIMIT_EVENT, type PlanLimitEventDetail } from "@/lib/upload-with-quota"
 
-function titleFor(code: string): string {
-  if (code === TRIAL_EXPIRED_CODE) return "Your free trial has ended"
+function titleFor(code: string, endedTitle: string): string {
+  if (code === TRIAL_EXPIRED_CODE) return endedTitle
   if (code === STORAGE_NOT_CONFIGURED_CODE) return "Storage isn't set up"
   if (code === LOGO_TOO_LARGE_CODE) return "Logo is too large"
   return "Storage full"
@@ -38,7 +41,10 @@ export function PlanLimitDialogHost() {
   const { isOrgOwner, permissions } = usePermissions()
   const isTeam = hasAnyPermission(permissions, isOrgOwner)
   const isTrial = notice?.code === TRIAL_EXPIRED_CODE
-  const message = isTrial && !isTeam ? CLIENT_TRIAL_MESSAGE : notice?.message
+  // A former paying customer reads "Your plan has ended", not "free trial".
+  const ended = planEndedCopy(useTrial().lapsed)
+  const message = isTrial ? (isTeam ? ended.message : CLIENT_TRIAL_MESSAGE) : notice?.message
+  useCloseWhenUpgradeOpens(() => setNotice(null))
 
   React.useEffect(() => {
     const handler = (event: Event) => {
@@ -66,7 +72,7 @@ export function PlanLimitDialogHost() {
             )}
           </div>
           <DialogTitle>
-            {isTrial && !isTeam ? "Workspace is view-only" : notice ? titleFor(notice.code) : ""}
+            {isTrial && !isTeam ? "Workspace is view-only" : notice ? titleFor(notice.code, ended.title) : ""}
           </DialogTitle>
           <DialogDescription>{message}</DialogDescription>
         </DialogHeader>

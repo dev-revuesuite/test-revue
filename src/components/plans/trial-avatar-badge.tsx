@@ -5,6 +5,7 @@ import * as React from "react"
 import { usePermissions } from "@/contexts/permission-context"
 import { hasAnyPermission } from "@/lib/permissions"
 import { useTrial } from "@/contexts/plan-features-context"
+import { planEndedCopy } from "@/lib/plan-ended-copy"
 import { cn } from "@/lib/utils"
 
 function trialLabel(daysLeft: number | null): string {
@@ -27,7 +28,8 @@ export function TrialAvatarBadge({ children }: { children: React.ReactNode }) {
   }
 
   const expired = trial.status === "expired"
-  const label = expired ? "Trial ended" : trialLabel(trial.daysLeft)
+  const endedBadge = planEndedCopy(trial.lapsed).badge
+  const label = expired ? endedBadge : trialLabel(trial.daysLeft)
 
   return (
     <span className="relative inline-flex" title={label}>
@@ -47,7 +49,7 @@ export function TrialAvatarBadge({ children }: { children: React.ReactNode }) {
           expired ? "bg-red-600 text-white" : "bg-amber-300 text-amber-950"
         )}
       >
-        {expired ? "Trial ended" : "Free trial"}
+        {expired ? endedBadge : "Free trial"}
       </span>
       <span className="sr-only">{label}</span>
     </span>

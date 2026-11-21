@@ -133,6 +133,15 @@ export interface OrgPlanUsage {
     next_delete_at: string | null
   }
   enforced: boolean
+  /** The owner's workspaces. Missing until billing v3 (account plans) is applied. */
+  workspaces?: {
+    /** Workspaces the owner has created */
+    used: number
+    /** null = unlimited */
+    limit: number | null
+    /** QC runs, storage, members and guests are counted across all of them */
+    shared: boolean
+  }
 }
 
 export interface PlanFeatureDefinition {
