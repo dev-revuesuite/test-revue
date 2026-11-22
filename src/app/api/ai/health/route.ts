@@ -5,7 +5,6 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const HEALTH_TIMEOUT_MS = 5_000
-const EXPECTED_MESSAGE = "Hello World!"
 
 /**
  * Proxies a lightweight ping to the inference API so the browser never talks
@@ -34,7 +33,9 @@ export async function GET() {
   const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS)
 
   try {
-    const response = await fetch(`${baseUrl}/hello/`, {
+    // gateway-contract.md §2: GET /health/ answers 200 {"status": "ok"} when the
+    // service can take requests, 503 {"status": "unavailable"} when it cannot.
+    const response = await fetch(`${baseUrl}/health/`, {
       method: "GET",
       signal: controller.signal,
       cache: "no-store",
@@ -52,12 +53,12 @@ export async function GET() {
       return Response.json({ healthy: false })
     }
 
-    const message =
-      body && typeof body === "object" && "message" in body
-        ? (body as { message: unknown }).message
+    const status =
+      body && typeof body === "object" && "status" in body
+        ? (body as { status: unknown }).status
         : undefined
 
-    return Response.json({ healthy: message === EXPECTED_MESSAGE })
+    return Response.json({ healthy: status === "ok" })
   } catch {
     return Response.json({ healthy: false })
   } finally {
