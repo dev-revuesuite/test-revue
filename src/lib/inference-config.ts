@@ -1,4 +1,5 @@
-const DEFAULT_INFERENCE_TIMEOUT_MS = 180_000
+// gateway-contract.md §8: one call may take up to 280 s (route maxDuration is 300 s).
+const DEFAULT_INFERENCE_TIMEOUT_MS = 280_000
 const DEFAULT_PDF_ANALYSIS_RENDER_SCALE = 2
 const DEFAULT_ANALYSIS_IMAGE_MIN_WIDTH_PX = 1600
 const DEFAULT_ANALYSIS_IMAGE_MAX_WIDTH_PX = 2400
@@ -17,6 +18,22 @@ export function getInferenceApiBaseUrl(): string {
     throw new Error("INFERENCE_API_BASE_URL is not configured")
   }
   return trimTrailingSlash(baseUrl)
+}
+
+export interface RevueApiKey {
+  keyName: string
+  secret: string
+}
+
+/**
+ * The key the REVUE page-check API gave us (gateway-contract.md §5).
+ * Returns null when either value is missing; requests are then sent unsigned.
+ */
+export function getRevueApiKey(): RevueApiKey | null {
+  const keyName = process.env.REVUE_KEY_NAME?.trim()
+  const secret = process.env.REVUE_KEY_SECRET?.trim()
+  if (!keyName || !secret) return null
+  return { keyName, secret }
 }
 
 export function getInferenceApiTimeoutMs(): number {

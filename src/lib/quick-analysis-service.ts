@@ -358,7 +358,8 @@ async function analyzeAndSaveRun(
       throw new QuickAnalysisServiceError(
         error.message,
         error.status ?? 502,
-        error
+        error,
+        error.code
       )
     }
     throw error
@@ -486,7 +487,8 @@ export function toQuickAnalysisServiceError(
     return new QuickAnalysisServiceError(
       error.message,
       error.status ?? 502,
-      error
+      error,
+      error.code
     )
   }
   if (error instanceof AiAnalysisClientImageError) {

@@ -331,7 +331,8 @@ async function analyzeAndSaveRun(
       throw new AiAnalysisServiceError(
         error.message,
         error.status ?? 502,
-        error
+        error,
+        error.code
       )
     }
     throw error
@@ -507,7 +508,8 @@ export function toServiceError(error: unknown): AiAnalysisServiceError {
     return new AiAnalysisServiceError(
       error.message,
       error.status ?? 502,
-      error
+      error,
+      error.code
     )
   }
   if (error instanceof AiAnalysisClientImageError) {

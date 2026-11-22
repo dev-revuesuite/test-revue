@@ -10,6 +10,8 @@ import type { RunQuickAnalysisInput } from "@/types/quick-analysis"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
+// gateway-contract.md §9: the REVUE page-check API runs in Mumbai.
+export const preferredRegion = "bom1"
 
 function isPersistedAnalysisType(
   value: unknown
