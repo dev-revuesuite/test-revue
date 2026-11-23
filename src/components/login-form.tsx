@@ -2,6 +2,8 @@
 
 import { authRedirectUrl, withBasePath } from "@/lib/base-path"
 import { applyThemePreference } from "@/lib/theme-preference"
+import { linkPendingInvites } from "@/lib/link-pending-invites"
+import { acceptInviteToken } from "@/lib/complete-signup"
 import {
   persistResolvedTimeZone,
   resolveTimeZone,
@@ -18,13 +20,16 @@ import { Separator } from "@/components/ui/separator"
 
 export function LoginForm({
   logo,
+  defaultEmail = "",
   className,
   ...props
 }: React.ComponentProps<"div"> & {
   logo?: ReactNode
+  /** Pre-filled from ?email= (invite links). */
+  defaultEmail?: string
 }) {
   const router = useRouter()
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(defaultEmail)
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -51,7 +56,20 @@ export function LoginForm({
       password,
     })
 
+    // Set when they came from an invite link ("I already have an account").
+    const inviteToken = new URLSearchParams(window.location.search).get("invite")
+
     if (error) {
+      // Signed up but never entered the code: send a fresh one and ask for it.
+      // A failed resend (e.g. one was sent under a minute ago) is fine: the
+      // verify page lets them ask again.
+      if (error.code === "email_not_confirmed") {
+        await supabase.auth.resend({ type: "signup", email })
+        const params = new URLSearchParams({ email })
+        if (inviteToken) params.set("token", inviteToken)
+        router.push(`/verify-email?${params.toString()}`)
+        return
+      }
       setError(error.message)
       setLoading(false)
       return
@@ -71,39 +89,17 @@ export function LoginForm({
       .eq("id", user.id)
       .maybeSingle()
 
-    const linkPromise = user.email
-      ? supabase.rpc("link_user_to_org_member", {
-          p_user_id: user.id,
-          p_email: user.email,
-        })
-      : Promise.resolve({ error: null as null })
+    // The invite link they came from (if any) is accepted first, so its
+    // workspace becomes the active one.
+    await acceptInviteToken(supabase, inviteToken)
 
-    // Client contacts are linked at login too, so a client who was waiting for
-    // a guest reviewer seat gets access once one frees up. Errors are ignored:
-    // linking must never block login.
-    const clientLinkPromise = user.email
-      ? supabase.rpc("link_user_to_client", {
-          p_user_id: user.id,
-          p_email: user.email,
-        })
-      : Promise.resolve({ error: null as null })
-
-    const [{ data: profile }, linkResult, clientLinkResult] = await Promise.all([
+    // Team and client invites are linked at login too, so a client who was
+    // waiting for a guest reviewer seat gets access once one frees up.
+    // Linking never blocks login.
+    const [{ data: profile }] = await Promise.all([
       profilePromise,
-      linkPromise,
-      clientLinkPromise,
+      linkPendingInvites(supabase, user),
     ])
-
-    if (clientLinkResult.error) {
-      console.error("link_user_to_client failed:", clientLinkResult.error.message)
-    }
-
-    if (linkResult.error) {
-      console.error(
-        "link_user_to_org_member failed:",
-        linkResult.error.message
-      )
-    }
 
     if (!profile || !profile.onboarded) {
       router.push("/onboarding")

@@ -88,6 +88,7 @@ import { syncProjectBriefStatusFromCreatives } from "@/lib/update-creative-pipel
 import { useTrialExpired, useWhenWritable } from "@/contexts/plan-features-context"
 import { runIfWritable } from "@/lib/trial-guard"
 import { showTrialExpiredDialog } from "@/lib/upload-with-quota"
+import { requestClientInvites } from "@/lib/invite-requests"
 
 // Types
 interface Deliverable {
@@ -1170,6 +1171,9 @@ export function RoomContent({
     await supabase.rpc("link_existing_users_for_client", {
       p_client_id: client.id,
     })
+    // Email invite links to contacts who don't have access yet (contacts with
+    // an open invite are not emailed again).
+    await requestClientInvites(client.id)
 
     setEditClientOpen(false)
     router.refresh()

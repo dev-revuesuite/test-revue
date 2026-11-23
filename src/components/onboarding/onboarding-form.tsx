@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { linkPendingInvites } from "@/lib/link-pending-invites"
 import { isBillingEnabled } from "@/lib/billing/plan-prices"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
@@ -135,21 +136,8 @@ export function OnboardingForm({
       return
     }
 
-    // Auto-link to organization if email was pre-added as a team member
-    await supabase.rpc("link_user_to_org_member", {
-      p_user_id: userId,
-      p_email: userEmail,
-    })
-
-    // Also try linking as client user
-    try {
-      await supabase.rpc("link_user_to_client", {
-        p_user_id: userId,
-        p_email: userEmail,
-      })
-    } catch {
-      // RPC may not exist yet, ignore
-    }
+    // Link team and client invites for this (verified) email.
+    await linkPendingInvites(supabase, { id: userId, email: userEmail })
 
     // Check if user is already linked to an org as a member
     const { data: existingMembership } = await supabase

@@ -21,6 +21,7 @@ import {
   Shield,
   Contrast,
   HelpCircle,
+  LifeBuoy,
   LogOut,
   Loader2,
 } from "lucide-react";
@@ -482,6 +483,13 @@ export function CommunicationHeader({
                 <DropdownMenuItem className="gap-3 py-2 px-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] rounded dark:text-white">
                   <HelpCircle className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                   Learning Center
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push("/help-desk")}
+                  className="gap-3 py-2 px-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] rounded dark:text-white"
+                >
+                  <LifeBuoy className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  Help Desk
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-gray-200 dark:bg-[#444]" />

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { requestMemberInvite } from "@/lib/invite-requests"
+
 export async function assertRoleBelongsToOrg(
   supabase: SupabaseClient,
   organizationId: string,
@@ -29,7 +31,7 @@ export interface InviteInternalMemberInput {
 export async function inviteInternalMember(
   supabase: SupabaseClient,
   input: InviteInternalMemberInput
-): Promise<{ memberId: string | null; error: string | null }> {
+): Promise<{ memberId: string | null; error: string | null; inviteSent?: boolean }> {
   if (!input.customRoleId) {
     return { memberId: null, error: "A role must be selected" }
   }
@@ -76,7 +78,11 @@ export async function inviteInternalMember(
     return { memberId: null, error: error?.message ?? "Failed to invite member" }
   }
 
-  return { memberId: data.id, error: null }
+  // Email the invite link. The member is added either way; a failed email can
+  // be sent again with "Resend invite" in the team list.
+  const invite = await requestMemberInvite(data.id)
+
+  return { memberId: data.id, error: null, inviteSent: invite.sent }
 }
 
 /**

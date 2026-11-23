@@ -10,6 +10,7 @@ import {
   CreditCard,
   Download,
   HelpCircle,
+  LifeBuoy,
   Loader2,
   Lock,
   LogOut,
@@ -283,6 +284,13 @@ export function QuickAnalysisHeader({
               <DropdownMenuItem className="cursor-pointer gap-3 rounded px-2 py-2 text-sm dark:text-white">
                 <HelpCircle className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 Learning Center
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push(appRoute("/help-desk"))}
+                className="cursor-pointer gap-3 rounded px-2 py-2 text-sm dark:text-white"
+              >
+                <LifeBuoy className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                Help Desk
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-gray-200 dark:bg-[#444]" />
               <DropdownMenuItem

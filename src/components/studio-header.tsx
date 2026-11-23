@@ -15,6 +15,7 @@ import {
   Search,
   Users,
   HelpCircle,
+  LifeBuoy,
   CreditCard,
   Building2,
   UserPlus,
@@ -87,6 +88,7 @@ import { usePermission, usePermissions } from "@/contexts/permission-context"
 import { useWhenWritable } from "@/contexts/plan-features-context"
 import { fetchOrganizationRoles } from "@/lib/organization-roles-service"
 import { inviteInternalMember } from "@/lib/team-member-service"
+import { requestClientInvites } from "@/lib/invite-requests"
 
 interface OrgMember {
   id: string
@@ -772,6 +774,13 @@ export function StudioHeader({
                 <HelpCircle className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
                 Learning Center
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => router.push("/help-desk")}
+                className="gap-3 py-2 px-2 text-sm text-[#1a1a1a] dark:text-white cursor-pointer hover:bg-[#f5f5f5] dark:hover:bg-[#2a2a2a] rounded"
+              >
+                <LifeBuoy className="w-4 h-4 text-[#7a7a7a] dark:text-[#999]" />
+                Help Desk
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="bg-[#e6e6e6] dark:bg-[#333]" />
             <DropdownMenuItem
@@ -1056,6 +1065,8 @@ export function StudioHeader({
             await supabase.rpc("link_existing_users_for_client", {
               p_client_id: newClient.id,
             })
+            // Email invite links to contacts who don't have access yet.
+            await requestClientInvites(newClient.id)
           }
 
           setNewClientDialogOpen(false)

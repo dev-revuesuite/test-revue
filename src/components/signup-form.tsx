@@ -11,6 +11,7 @@ import { PasswordInput } from "@/components/password-input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
+import { completeSignup } from "@/lib/complete-signup"
 import Image from "next/image"
 
 export function SignupForm({
@@ -21,6 +22,7 @@ export function SignupForm({
   const searchParams = useSearchParams()
   const [name, setName] = useState(() => searchParams.get("name") ?? "")
   const [email, setEmail] = useState(() => searchParams.get("email") ?? "")
+  const invitedEmail = !!searchParams.get("token") && !!searchParams.get("email")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -65,44 +67,27 @@ export function SignupForm({
       return
     }
 
-    const userId = data.user?.id
-    if (userId) {
-      await supabase.from("profiles").upsert(
-        {
-          id: userId,
-          email: data.user?.email || email,
-          full_name: name,
-          onboarded: false,
-        },
-        { onConflict: "id" }
-      )
+    // For an email that already has a verified account, Supabase returns a
+    // user with no identities and sends nothing.
+    if (data.user && data.user.identities?.length === 0) {
+      setError("An account with this email already exists. Sign in instead.")
+      setLoading(false)
+      return
+    }
 
-      const userEmail = data.user?.email || email
+    const inviteToken = searchParams.get("token")
 
-      // Auto-link to organization if email was pre-added as a team member
-      await supabase.rpc("link_user_to_org_member", {
-        p_user_id: userId,
-        p_email: userEmail,
-      })
+    // "Confirm email" is on: the account exists, but the user must enter the
+    // 6-digit code we emailed before they get a session.
+    if (!data.session) {
+      const params = new URLSearchParams({ email: data.user?.email || email })
+      if (inviteToken) params.set("token", inviteToken)
+      router.push(`/verify-email?${params.toString()}`)
+      return
+    }
 
-      // Also link as client user if applicable
-      try {
-        await supabase.rpc("link_user_to_client", {
-          p_user_id: userId,
-          p_email: userEmail,
-        })
-      } catch {
-        // RPC may not exist, ignore
-      }
-
-      // Mark invitation as accepted if token provided
-      const token = searchParams.get("token")
-      if (token) {
-        await supabase
-          .from("invitations")
-          .update({ status: "accepted" })
-          .eq("token", token)
-      }
+    if (data.user) {
+      await completeSignup(supabase, { user: data.user, fullName: name, inviteToken })
     }
 
     router.push("/onboarding")
@@ -202,7 +187,9 @@ export function SignupForm({
             placeholder="xyz@gmail.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-12 text-base"
+            // An invite is for one address: keep the invited email.
+            readOnly={invitedEmail}
+            className={cn("h-12 text-base", invitedEmail && "bg-muted cursor-not-allowed")}
             required
           />
         </div>

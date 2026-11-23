@@ -17,7 +17,9 @@ import {
   Pencil,
   ArrowUpDown,
   Loader2,
+  Mail,
 } from "lucide-react"
+import { requestMemberInvite } from "@/lib/invite-requests"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -754,6 +756,22 @@ function TeamTab({
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
   const [teamActionError, setTeamActionError] = useState<string | null>(null)
+  const [teamNotice, setTeamNotice] = useState<string | null>(null)
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null)
+
+  const resendInvite = async (member: FullTeamMember) => {
+    if (resendingInviteId) return
+    setResendingInviteId(member.id)
+    setTeamActionError(null)
+    setTeamNotice(null)
+    const { sent, error } = await requestMemberInvite(member.id)
+    setResendingInviteId(null)
+    if (sent) {
+      setTeamNotice(`Invite sent to ${member.email}.`)
+    } else {
+      setTeamActionError(error || "Couldn't send the invite. Please try again.")
+    }
+  }
   const router = useRouter()
 
   const refreshOrgRoles = React.useCallback(async () => {
@@ -937,7 +955,7 @@ function TeamTab({
   }): Promise<string | null> => {
     if (!organizationId) return "Organization not found."
     const supabase = createClient()
-    const { memberId, error } = await inviteInternalMember(supabase, {
+    const { memberId, error, inviteSent } = await inviteInternalMember(supabase, {
       organizationId,
       name: data.name,
       email: data.email,
@@ -948,7 +966,15 @@ function TeamTab({
       setTeamActionError(message)
       return message
     }
-    setTeamActionError(null)
+    if (inviteSent) {
+      setTeamActionError(null)
+      setTeamNotice(`Invite sent to ${data.email}.`)
+    } else {
+      setTeamNotice(null)
+      setTeamActionError(
+        `${data.name} was added, but the invite email couldn't be sent. Use the mail button in their row to try again.`
+      )
+    }
     const newMember = toFullMember({
       id: memberId,
       name: data.name,
@@ -969,6 +995,11 @@ function TeamTab({
 
   return (
     <div className="w-full">
+      {teamNotice && !teamActionError ? (
+        <div className="mb-4 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-foreground" role="status">
+          {teamNotice}
+        </div>
+      ) : null}
       {teamActionError ? (
         <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {teamActionError}
@@ -1109,6 +1140,21 @@ function TeamTab({
                   <div className="flex items-center gap-1">
                     {canManageTeam ? (
                       <>
+                        {isPersistedMember(member) && member.status === "inactive" && member.email ? (
+                          <button
+                            onClick={() => void resendInvite(member)}
+                            disabled={resendingInviteId === member.id}
+                            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors disabled:opacity-50"
+                            title="Resend invite"
+                            aria-label={`Resend invite to ${member.email}`}
+                          >
+                            {resendingInviteId === member.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Mail className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : null}
                         {isPersistedMember(member) ? (
                           <button
                             onClick={() => setEditingMember(member)}

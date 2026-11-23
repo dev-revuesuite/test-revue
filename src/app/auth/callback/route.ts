@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { absoluteAppUrl, appRoute } from '@/lib/base-path'
+import { linkPendingInvites } from '@/lib/link-pending-invites'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,21 +44,7 @@ async function resolvePostSignInRedirect(
     { onConflict: 'id', ignoreDuplicates: true }
   )
 
-  if (user.email) {
-    await supabase.rpc('link_user_to_org_member', {
-      p_user_id: user.id,
-      p_email: user.email,
-    })
-
-    try {
-      await supabase.rpc('link_user_to_client', {
-        p_user_id: user.id,
-        p_email: user.email,
-      })
-    } catch {
-      // RPC may not exist, ignore
-    }
-  }
+  await linkPendingInvites(supabase, user)
 
   const { data: profile } = await supabase
     .from('profiles')
