@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { createClient } from "@/lib/supabase/client"
 import { completeSignup } from "@/lib/complete-signup"
+import { CAPTCHA_FAILED_MESSAGE, isCaptchaFailure, useCaptcha } from "@/components/use-captcha"
 import Image from "next/image"
 
 export function SignupForm({
@@ -26,6 +27,7 @@ export function SignupForm({
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const captcha = useCaptcha()
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +51,15 @@ export function SignupForm({
     setError(null)
     setLoading(true)
 
+    let captchaToken: string | undefined
+    try {
+      captchaToken = await captcha.getToken()
+    } catch (captchaError) {
+      setError((captchaError as Error).message)
+      setLoading(false)
+      return
+    }
+
     const supabase = createClient()
 
     const { data, error } = await supabase.auth.signUp({
@@ -58,11 +69,12 @@ export function SignupForm({
         data: {
           full_name: name,
         },
+        captchaToken,
       },
     })
 
     if (error) {
-      setError(error.message)
+      setError(isCaptchaFailure(error) ? CAPTCHA_FAILED_MESSAGE : error.message)
       setLoading(false)
       return
     }
@@ -207,6 +219,8 @@ export function SignupForm({
             required
           />
         </div>
+
+        {captcha.widget}
 
         <Button
           type="submit"

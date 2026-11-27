@@ -4,6 +4,7 @@ import { authRedirectUrl, withBasePath } from "@/lib/base-path"
 import { applyThemePreference } from "@/lib/theme-preference"
 import { linkPendingInvites } from "@/lib/link-pending-invites"
 import { acceptInviteToken } from "@/lib/complete-signup"
+import { CAPTCHA_FAILED_MESSAGE, isCaptchaFailure, useCaptcha } from "@/components/use-captcha"
 import {
   persistResolvedTimeZone,
   resolveTimeZone,
@@ -33,6 +34,7 @@ export function LoginForm({
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const captcha = useCaptcha()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,12 +50,22 @@ export function LoginForm({
     setError(null)
     setLoading(true)
 
+    let captchaToken: string | undefined
+    try {
+      captchaToken = await captcha.getToken()
+    } catch (captchaError) {
+      setError((captchaError as Error).message)
+      setLoading(false)
+      return
+    }
+
     const { createClient } = await import("@/lib/supabase/client")
     const supabase = createClient()
 
     const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      options: { captchaToken },
     })
 
     // Set when they came from an invite link ("I already have an account").
@@ -64,13 +76,15 @@ export function LoginForm({
       // A failed resend (e.g. one was sent under a minute ago) is fine: the
       // verify page lets them ask again.
       if (error.code === "email_not_confirmed") {
-        await supabase.auth.resend({ type: "signup", email })
+        // Each request needs its own security-check token.
+        const resendToken = await captcha.getToken().catch(() => undefined)
+        await supabase.auth.resend({ type: "signup", email, options: { captchaToken: resendToken } })
         const params = new URLSearchParams({ email })
         if (inviteToken) params.set("token", inviteToken)
         router.push(`/verify-email?${params.toString()}`)
         return
       }
-      setError(error.message)
+      setError(isCaptchaFailure(error) ? CAPTCHA_FAILED_MESSAGE : error.message)
       setLoading(false)
       return
     }
@@ -203,6 +217,8 @@ export function LoginForm({
             Forgot password?
           </a>
         </div>
+
+        {captcha.widget}
 
         <Button
           type="submit"

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { publicPath, withBasePath } from "@/lib/base-path"
 import { completeSignup } from "@/lib/complete-signup"
 import { createClient } from "@/lib/supabase/client"
+import { CAPTCHA_FAILED_MESSAGE, isCaptchaFailure, useCaptcha } from "@/components/use-captcha"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,7 @@ export function VerifyEmailForm({
   const [resending, setResending] = useState(false)
   // A code was just sent when the user arrives here, so start with the wait.
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS)
+  const captcha = useCaptcha()
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -75,16 +77,28 @@ export function VerifyEmailForm({
     setNotice(null)
     setResending(true)
 
+    let captchaToken: string | undefined
+    try {
+      captchaToken = await captcha.getToken()
+    } catch (captchaError) {
+      setError((captchaError as Error).message)
+      setResending(false)
+      return
+    }
+
     const supabase = createClient()
     const { error: resendError } = await supabase.auth.resend({
       type: "signup",
       email,
+      options: { captchaToken },
     })
 
     setResending(false)
     if (resendError) {
       setError(
-        resendError.status === 429
+        isCaptchaFailure(resendError)
+          ? CAPTCHA_FAILED_MESSAGE
+          : resendError.status === 429
           ? "Please wait a minute before asking for another code."
           : "We couldn't send a new code. Please try again in a minute."
       )
@@ -172,6 +186,8 @@ export function VerifyEmailForm({
                 required
               />
             </div>
+
+            {captcha.widget}
 
             <Button
               type="submit"

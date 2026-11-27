@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { CAPTCHA_FAILED_MESSAGE, isCaptchaFailure, useCaptcha } from "@/components/use-captcha"
 import Image from "next/image"
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react"
 
@@ -21,6 +22,7 @@ export function ForgotPasswordForm({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const captcha = useCaptcha()
 
   useEffect(() => {
     if (searchParams.get("error") === "link_expired") {
@@ -38,6 +40,15 @@ export function ForgotPasswordForm({
     setError(null)
     setLoading(true)
 
+    let captchaToken: string | undefined
+    try {
+      captchaToken = await captcha.getToken()
+    } catch (captchaError) {
+      setError((captchaError as Error).message)
+      setLoading(false)
+      return
+    }
+
     try {
       const supabase = createClient()
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -45,10 +56,11 @@ export function ForgotPasswordForm({
           "/auth/callback?next=/update-password",
           window.location.origin
         ),
+        captchaToken,
       })
 
       if (error) {
-        setError(error.message)
+        setError(isCaptchaFailure(error) ? CAPTCHA_FAILED_MESSAGE : error.message)
         setLoading(false)
         return
       }
@@ -181,6 +193,8 @@ export function ForgotPasswordForm({
             autoFocus
           />
         </div>
+
+        {captcha.widget}
 
         <Button
           type="submit"

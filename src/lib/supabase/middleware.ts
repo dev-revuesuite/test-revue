@@ -58,9 +58,11 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest) {
 
   // Content Security Policy - allow Supabase, Google Fonts, and self
   // Razorpay Checkout: checkout.js from checkout.razorpay.com, and the payment
-  // window is an iframe on api.razorpay.com.
-  const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://checkout.razorpay.com']
-  const frameSrc = ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com']
+  // window is an iframe on api.razorpay.com. Cloudflare Turnstile (the
+  // security check on the auth forms) is a script plus an iframe.
+  const turnstile = 'https://challenges.cloudflare.com'
+  const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://checkout.razorpay.com', turnstile]
+  const frameSrc = ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', turnstile]
   const styleSrc = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com']
   const fontSrc = ["'self'", 'data:', 'https://fonts.gstatic.com']
   const imgSrc = ["'self'", 'data:', 'blob:', 'https:']
